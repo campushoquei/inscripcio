@@ -22,6 +22,14 @@ const DEFAULT_GROUPS = [
   { color: "taronja", label: "Taronja", min: 10, max: 11 },
   { color: "verd", label: "Verd", min: 12, max: 14 }
 ];
+// Ordre de visualització fix dels grups a tot el panell.
+const GROUP_ORDER = ["blau", "vermell", "taronja", "verd"];
+function orderGroups(groups) {
+  return (groups || []).slice().sort((a, b) => {
+    const ia = GROUP_ORDER.indexOf(a.color), ib = GROUP_ORDER.indexOf(b.color);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
 
 // ---- Estat ----
 const state = {
@@ -165,7 +173,7 @@ async function loadAll(spin) {
     }
     state.overview = ov;
     state.list = list;
-    state.groups = (ov.groups && ov.groups.length) ? ov.groups : DEFAULT_GROUPS.slice();
+    state.groups = orderGroups((ov.groups && ov.groups.length) ? ov.groups : DEFAULT_GROUPS);
     renderOverview();
     renderWeekFilter();
     renderGroupFilter();
@@ -506,8 +514,8 @@ async function saveGroupsConfig() {
   }));
   try {
     const out = await api("admin_set_groups_config", { config });
-    state.groups = (out.groups && out.groups.length) ? out.groups
-      : config.map((c) => ({ ...c, label: GROUP_LABEL[c.color] || c.color }));
+    state.groups = orderGroups((out.groups && out.groups.length) ? out.groups
+      : config.map((c) => ({ ...c, label: GROUP_LABEL[c.color] || c.color })));
     toast("Intervals desats.");
     renderGroups();
     renderGroupFilter();

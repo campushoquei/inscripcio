@@ -727,9 +727,9 @@ function computeEstat(paid, registered) {
 function defaultGroups() {
   return [
     { color: "blau",    label: "Blau",    min: 4,  max: 6 },
-    { color: "verd",    label: "Verd",    min: 7,  max: 8 },
-    { color: "taronja", label: "Taronja", min: 9,  max: 10 },
-    { color: "vermell", label: "Vermell", min: 11, max: 99 }
+    { color: "vermell", label: "Vermell", min: 7,  max: 9 },
+    { color: "taronja", label: "Taronja", min: 10, max: 11 },
+    { color: "verd",    label: "Verd",    min: 12, max: 14 }
   ];
 }
 // Llegeix la config de grups de l'Ajustes (clau "grups_edats"):
