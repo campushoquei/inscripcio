@@ -243,6 +243,7 @@ body.adm {
 .search input { width: 100%; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 14px 10px 38px; font-family: inherit; font-size: .9rem; color: var(--ink); transition: border-color .15s ease; }
 .search input:focus { outline: 0; border-color: var(--blue); }
 .filters { display: flex; gap: 9px; flex-wrap: wrap; }
+.table-count { padding: 9px 20px 0; font-size: .8rem; color: var(--ink-soft); font-weight: 600; }
 .table-scroll { overflow-x: auto; }
 .dtable { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .dtable th { text-align: left; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); font-weight: 700; padding: 13px 16px; border-bottom: 1.5px solid var(--line); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--card); }

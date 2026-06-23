@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2yS4-90ziGdsU9Z_cfCK6-FlJVzFTN-sKvxSIm1UlvcpWJspZyik4Y95GSCRSSAeOA/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const DEMO_PIN = "1234";
@@ -32,7 +32,7 @@ const state = {
   list: [],
   filtered: [],
   sort: { key: "ts", dir: "desc" },
-  filters: { q: "", week: "", status: "" },
+  filters: { q: "", week: "", status: "", group: "", swim: "" },
   groups: DEFAULT_GROUPS.slice(),
   groupWeek: ""
 };
@@ -40,6 +40,9 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const eur = (n) => `${Math.round(Number(n) || 0).toLocaleString("ca-ES")} €`;
+// Normalitza per cercar: minúscules i sense accents (josé → jose).
+const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
+const norm = (s) => String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(DIACRITICS, "");
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -51,6 +54,9 @@ function init() {
   $("search").addEventListener("input", (e) => { state.filters.q = e.target.value.toLowerCase(); applyFilters(); });
   $("filter-week").addEventListener("change", (e) => { state.filters.week = e.target.value; applyFilters(); });
   $("filter-status").addEventListener("change", (e) => { state.filters.status = e.target.value; applyFilters(); });
+  $("filter-group").addEventListener("change", (e) => { state.filters.group = e.target.value; applyFilters(); });
+  $("filter-swim").addEventListener("change", (e) => { state.filters.swim = e.target.value; applyFilters(); });
+  $("clear-filters").addEventListener("click", clearFilters);
   $("export-btn").addEventListener("click", exportCsv);
   $("groups-config-btn").addEventListener("click", toggleGroupsConfig);
   $("drawer-close").addEventListener("click", closeDrawer);
@@ -162,6 +168,7 @@ async function loadAll(spin) {
     state.groups = (ov.groups && ov.groups.length) ? ov.groups : DEFAULT_GROUPS.slice();
     renderOverview();
     renderWeekFilter();
+    renderGroupFilter();
     applyFilters();
     renderGroups();
   } catch (err) {
@@ -503,9 +510,10 @@ async function saveGroupsConfig() {
       : config.map((c) => ({ ...c, label: GROUP_LABEL[c.color] || c.color }));
     toast("Intervals desats.");
     renderGroups();
+    renderGroupFilter();
     renderAges();
     renderOccupancy();
-    renderTable();
+    applyFilters();
   } catch (err) { toast("No s'ha pogut desar: " + err.message, true); }
 }
 
@@ -523,19 +531,69 @@ function renderWeekFilter() {
   sel.value = state.filters.week;
 }
 
+function renderGroupFilter() {
+  const groups = state.groups || DEFAULT_GROUPS;
+  const sel = $("filter-group");
+  sel.innerHTML = `<option value="">Tots els grups</option>` +
+    groups.map((g) => `<option value="${esc(g.color)}">${esc(g.label)}</option>`).join("");
+  if (state.filters.group && !groups.some((g) => g.color === state.filters.group)) state.filters.group = "";
+  sel.value = state.filters.group;
+}
+
+// Text de cerca que cobreix TOTS els camps de la fila (capçalera + detall).
+function rowHaystack(r) {
+  const parts = [r.nom, r.tutor, r.email, r.telefon, r.id, r.setmanes, r.descompte, r.estat, r.edat];
+  (r.detall || []).forEach((d) => parts.push(d.value));
+  return norm(parts.join(" "));
+}
+
 function applyFilters() {
-  const { q, week, status } = state.filters;
+  const { q, week, status, group, swim } = state.filters;
+  const nq = norm(q);
   state.filtered = state.list.filter((r) => {
     if (status && r.estat !== status) return false;
     if (week && !(r.weekIds || []).includes(week)) return false;
-    if (q) {
-      const hay = `${r.nom} ${r.tutor} ${r.email} ${r.telefon}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+    if (group) {
+      // Si hi ha setmana triada, mirem el grup d'aquella setmana; si no, qualsevol setmana.
+      const match = week ? groupColorOf(r, week) === group : (r.weekIds || []).some((w) => groupColorOf(r, w) === group);
+      if (!match) return false;
     }
+    if (swim) {
+      const isSwim = r.sapNedar && /^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
+      if (swim === "si" && !isSwim) return false;
+      if (swim === "no" && isSwim) return false;
+    }
+    if (nq && !rowHaystack(r).includes(nq)) return false;
     return true;
   });
   sortRows();
   renderTable();
+  updateFilterMeta();
+}
+
+// Comptador de resultats + visibilitat del botó "Esborra filtres".
+function updateFilterMeta() {
+  const f = state.filters;
+  const active = !!(f.q || f.week || f.status || f.group || f.swim);
+  const countEl = $("table-count");
+  if (countEl) {
+    countEl.hidden = false;
+    countEl.textContent = active
+      ? `${state.filtered.length} de ${state.list.length} inscripcions`
+      : `${state.list.length} inscripcions`;
+  }
+  const clear = $("clear-filters");
+  if (clear) clear.hidden = !active;
+}
+
+function clearFilters() {
+  state.filters = { q: "", week: "", status: "", group: "", swim: "" };
+  $("search").value = "";
+  $("filter-week").value = "";
+  $("filter-status").value = "";
+  $("filter-group").value = "";
+  $("filter-swim").value = "";
+  applyFilters();
 }
 
 function toggleSort(key) {

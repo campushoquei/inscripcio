@@ -107,7 +107,7 @@
         <div class="table-toolbar">
           <div class="search">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input id="search" type="search" placeholder="Cerca nom, tutor, correu…" />
+            <input id="search" type="search" placeholder="Cerca per qualsevol camp (nom, població, NIF…)" />
           </div>
           <div class="filters">
             <select id="filter-week" aria-label="Filtra per setmana"><option value="">Totes les setmanes</option></select>
@@ -117,12 +117,23 @@
               <option value="Parcial">Parcial</option>
               <option value="Pendent">Pendent</option>
             </select>
+            <select id="filter-group" aria-label="Filtra per grup"><option value="">Tots els grups</option></select>
+            <select id="filter-swim" aria-label="Filtra per saber nedar">
+              <option value="">Nedar (tots)</option>
+              <option value="si">Sap nedar</option>
+              <option value="no">No sap nedar</option>
+            </select>
+            <button class="btn btn--ghost btn--sm" id="clear-filters" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              Esborra
+            </button>
             <button class="btn btn--ghost btn--sm" id="export-btn">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
               CSV
             </button>
           </div>
         </div>
+        <div class="table-count" id="table-count" hidden></div>
         <div class="table-scroll">
           <table class="dtable" id="table">
             <thead>
