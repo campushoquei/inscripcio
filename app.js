@@ -6,7 +6,7 @@
 
 // 🔧 Enganxa aquí la URL del teu Apps Script (acaba en /exec).
 // Buida = MODE DEMO amb dades d'exemple.
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2yS4-90ziGdsU9Z_cfCK6-FlJVzFTN-sKvxSIm1UlvcpWJspZyik4Y95GSCRSSAeOA/exec";
 
 // 🔧 Quin formulari es mostra. Es llegeix de la URL: ...index.html?form=primavera
 // Buit = formulari per defecte (les files del full sense columna "form").
@@ -130,8 +130,8 @@ async function init() {
   returningDismissed = loadReturningDismissed();
   els.retry.addEventListener("click", load);
   els.form.addEventListener("submit", onSubmit);
-  els.form.addEventListener("input", () => { scheduleDraftSave(); updateProgress(); updateAllPrices(); });
-  els.form.addEventListener("change", () => { scheduleDraftSave(); updateProgress(); updateAllPrices(); });
+  els.form.addEventListener("input", () => { scheduleDraftSave(); scheduleUiUpdate(); });
+  els.form.addEventListener("change", () => { scheduleDraftSave(); scheduleUiUpdate(); });
   els.another.addEventListener("click", resetForNew);
   els.returningClose.addEventListener("click", dismissReturning);
   if (els.returningToggle) els.returningToggle.addEventListener("click", toggleReturning);
@@ -321,17 +321,49 @@ function initHeroSlider() {
     pill.innerHTML = (icon ? "<span class=\"hero-pill__icon\" aria-hidden=\"true\">" + icon + "</span>" : "")
       + "<span>" + escapeHtml(f.nombre || f.id) + "</span>";
     pill.setAttribute("aria-pressed", String(i === currentFormIdx));
-    pill.addEventListener("click", function() { switchHeroForm(i); });
+    pill.addEventListener("click", function() {
+      // Si l'usuari ha lliscat per fer scroll dels pills, no ho considerem un clic
+      if (nav._dragged) return;
+      switchHeroForm(i);
+    });
     nav.appendChild(pill);
   });
 
-  // Swipe tàctil (init once)
+  // Detecció de drag dins de la barra de pills: distingeix scroll horitzontal d'un clic (init once)
+  if (!nav.dataset.dragInit) {
+    nav.dataset.dragInit = "1";
+    let startX = 0, startY = 0;
+    nav.addEventListener("touchstart", function(e) {
+      nav._dragged = false;
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    }, { passive: true });
+    nav.addEventListener("touchmove", function(e) {
+      if (Math.abs(e.touches[0].clientX - startX) > 8 || Math.abs(e.touches[0].clientY - startY) > 8) {
+        nav._dragged = true;
+      }
+    }, { passive: true });
+    // Anul·la el clic sintètic que el navegador dispara just després d'un drag
+    nav.addEventListener("click", function(e) {
+      if (nav._dragged) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+  }
+
+  // Swipe tàctil del hero per canviar de formulari (init once)
   if (!hero.dataset.swipeInit) {
     hero.dataset.swipeInit = "1";
-    hero.addEventListener("touchstart", function(e) { heroTouchStartX = e.touches[0].clientX; }, { passive: true });
+    let startY = 0;
+    hero.addEventListener("touchstart", function(e) {
+      // Si el toc comença dins de la barra de pills, és per fer-hi scroll: ignorem el swipe del hero
+      if (e.target.closest("#hero-nav")) { heroTouchStartX = null; return; }
+      heroTouchStartX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, { passive: true });
     hero.addEventListener("touchend", function(e) {
+      if (heroTouchStartX == null) return;
       const dx = e.changedTouches[0].clientX - heroTouchStartX;
-      if (Math.abs(dx) < 40) return;
+      const dy = e.changedTouches[0].clientY - startY;
+      // Només swipe clarament horitzontal (un scroll vertical no ha de canviar de formulari)
+      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
       switchHeroForm(dx < 0
         ? (currentFormIdx + 1) % allForms.length
         : (currentFormIdx - 1 + allForms.length) % allForms.length);
@@ -1034,6 +1066,18 @@ function scheduleDraftSave() {
   if (draftSaveTimer) clearTimeout(draftSaveTimer);
   draftSaveTimer = setTimeout(saveDraftFromForm, 250);
 }
+// Coalesça progrés + preus en una sola actualització per frame: així escriure ràpid
+// (o un checkbox que dispara input+change alhora) no recalcula tot el formulari N cops.
+let uiUpdateScheduled = false;
+function scheduleUiUpdate() {
+  if (uiUpdateScheduled) return;
+  uiUpdateScheduled = true;
+  requestAnimationFrame(() => {
+    uiUpdateScheduled = false;
+    updateProgress();
+    updateAllPrices();
+  });
+}
 function saveDraftFromForm() {
   draftSaveTimer = null;
   if (!CONFIG || els.form.hidden) return;
@@ -1516,7 +1560,7 @@ function updateChildPriceDisplay(childIdx) {
 function updateTotalPriceCard() {
   const card = document.getElementById("price-total-card");
   if (!card) return;
-  if (!hasPriceConfig()) { card.innerHTML = ""; return; }
+  if (!hasPriceConfig()) { if (card._lastHtml !== "") { card.innerHTML = ""; card._lastHtml = ""; } return; }
 
   const weekConfig = {};
   (CONFIG.weeks || []).forEach((w) => { weekConfig[w.id] = w; });
@@ -1540,7 +1584,7 @@ function updateTotalPriceCard() {
     return { name, isRDB, isFN, weekBreakdown, total, childIdx };
   }).filter((c) => c.weekBreakdown.length > 0);
 
-  if (!children.length) { card.innerHTML = ""; return; }
+  if (!children.length) { if (card._lastHtml !== "") { card.innerHTML = ""; card._lastHtml = ""; } return; }
 
   const grandTotal = children.reduce((s, c) => s + c.total, 0);
   const hasMulti = children.length > 1;
@@ -1575,13 +1619,15 @@ function updateTotalPriceCard() {
       <span class="price-total__amount">${grandTotal} €</span>
     </div>` : "";
 
-  card.innerHTML = `<div class="price-total-card">
+  const html = `<div class="price-total-card">
     <div class="price-total__header">
       <span class="price-total__icon" aria-hidden="true">€</span>
       <span class="price-total__title">Preu final</span>
     </div>
     ${childrenHtml}${grandHtml}
   </div>`;
+  // Evita reparsejar el DOM si el resultat és idèntic (p. ex. en escriure camps que no afecten el preu)
+  if (card._lastHtml !== html) { card.innerHTML = html; card._lastHtml = html; }
 }
 
 function updateAllPrices() {
