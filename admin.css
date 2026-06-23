@@ -26,6 +26,10 @@
 }
 
 * { box-sizing: border-box; }
+/* L'atribut [hidden] ha de guanyar sempre: algunes regles (.login, .drawer…)
+   fixen display:grid/flex, que altrament anul·larien l'atribut i deixarien
+   l'element visible encara que el JS el marqui com a amagat. */
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body.adm {
   margin: 0;

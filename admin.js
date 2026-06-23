@@ -74,6 +74,9 @@ async function onLogin(e) {
   $("login-note").textContent = "";
   try {
     const out = await api("admin_login");
+    // El login vàlid sempre porta la llista de formularis. Si no hi és, el backend
+    // desplegat és l'antic (sense panell) i acceptaria qualsevol codi: ho bloquegem.
+    if (!out.forms) throw new Error("not-deployed");
     sessionStorage.setItem(PIN_KEY, pin);
     state.forms = out.forms || [];
     if (out.settings && out.settings.nombre_campus) {
@@ -84,7 +87,9 @@ async function onLogin(e) {
     state.pin = "";
     $("login-note").textContent = err.message === "unauthorized"
       ? "Codi incorrecte. Torna-ho a provar."
-      : "No s'ha pogut connectar. Comprova la configuració.";
+      : err.message === "not-deployed"
+        ? "El servidor encara no té el panell. Publica una versió nova de l'Apps Script."
+        : "No s'ha pogut connectar. Comprova la configuració.";
     $("pin").select();
   } finally {
     btn.classList.remove("is-loading"); btn.disabled = false;
@@ -125,6 +130,11 @@ async function loadAll(spin) {
   renderKpisSkeleton();
   try {
     const [ov, ls] = await Promise.all([api("admin_overview"), api("admin_list")]);
+    // Si el backend respon ok però sense estructura de panell, és que l'Apps Script
+    // desplegat encara és l'antic (sense els endpoints d'admin). Avisem clarament.
+    if (!ov || !ov.kpis) {
+      throw new Error("El servidor no respon com a panell. Cal publicar una VERSIÓ NOVA del desplegament de l'Apps Script (Gestiona desplegaments → edita → Versió nova).");
+    }
     state.overview = ov;
     state.list = ls.rows || [];
     renderOverview();

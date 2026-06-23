@@ -22,6 +22,7 @@ const MAX_TOTAL_MB = 12;
 const LOAD_HINTS = [
   "📋 Preparant la teva inscripció",
   "🏑 Buscant la millor línia de passada",
+  "🛼 Fent els últims ajustos als patins",
   "✨ Donant els últims retocs",
 ];
 let _hintTimer = null;
@@ -39,7 +40,7 @@ function startHintCycle() {
       phraseIdx = (phraseIdx + 1) % LOAD_HINTS.length;
     }
     render();
-  }, 1000);
+  }, 600);
 }
 function stopHintCycle() {
   clearInterval(_hintTimer);
@@ -59,7 +60,7 @@ const DEMO_CONFIG = {
     club: "El plaer de jugar!",
     temporada: "2026",
     lema: "Inscripcions obertes",
-    hero_titulo: "Casal d'Hoquei d'Estiu",
+    hero_titulo: "Campus d'Hoquei Riudebitlles",
     intro: "Del 29 de juny al 31 de juliol. Completa la inscripció, tria les setmanes i adjunta la targeta sanitària.",
     email_contacto: "coordinaciocpriudebitlles@gmail.com",
     email_asunto: "Inscripció rebuda · Casal Hoquei Estiu 2026",
