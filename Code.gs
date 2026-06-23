@@ -255,6 +255,7 @@ function saveRow(id, payload, data) {
   plan.push("Preu");
   plan.push("Descompte");
   plan.push("Estat");
+  plan.push("Setmanes pagades");
 
   // capçalera actual; afegeix les columnes que faltin (al final)
   var lastCol = sheet.getLastColumn();
@@ -282,6 +283,7 @@ function saveRow(id, payload, data) {
     if (col === "Preu") return payload.preu != null ? payload.preu : "";
     if (col === "Descompte") return payload.descompte || "";
     if (col === "Estat") return payload.estat || "Pendent";
+    if (col === "Setmanes pagades") return payload.pagat_setmanes || "";
     if (selectedIsWeek(col, weeks)) return selected[col] ? 1 : 0;
     var fieldId = fieldIdForColumn(col, fields, labelById);
     if (fieldId && data[fieldId] != null) return data[fieldId];
@@ -658,10 +660,11 @@ function handleAdmin(p) {
     if (!form) { var g = readSettings(""); form = str(g.form_defecto); }
     switch (p.action) {
       case "admin_login":      return { ok: true, forms: adminForms(), settings: { nombre_campus: str(readSettings("").nombre_campus), club: str(readSettings("").club) } };
-      case "admin_overview":   return adminOverview(form);
-      case "admin_list":       return adminList(form);
-      case "admin_set_status": return adminSetStatus(form, p.id, p.estat);
-      case "admin_resend":     return adminResend(form, p.id);
+      case "admin_overview":    return adminOverview(form);
+      case "admin_list":        return adminList(form);
+      case "admin_set_status":  return adminSetStatus(form, p.id, p.estat);
+      case "admin_set_payment": return adminSetPayment(form, p.id, p.weeks);
+      case "admin_resend":      return adminResend(form, p.id);
       default:                 return { ok: false, error: "unknown action" };
     }
   } catch (err) {
@@ -686,6 +689,23 @@ function readSubmissionRows(form) {
   return { header: header, rows: rows, sheet: sheet };
 }
 
+// Setmanes per a les quals s'ha registrat el jugador/a (columnes 1/0).
+function rowRegisteredWeeks(row, weekIds) {
+  return weekIds.filter(function (id) { return Number(row[id]) === 1; });
+}
+// Setmanes ja pagades (de la columna "Setmanes pagades"), netes de duplicats.
+function rowPaidWeeks(row, registered) {
+  var raw = str(row["Setmanes pagades"]);
+  if (!raw) return [];
+  var paid = raw.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  return paid.filter(function (w) { return registered.indexOf(w) !== -1; });
+}
+// Estat derivat de quantes setmanes registrades estan pagades.
+function computeEstat(paid, registered) {
+  if (!registered || !registered.length) return "Pendent";
+  if (!paid || !paid.length) return "Pendent";
+  return paid.length >= registered.length ? "Pagat" : "Parcial";
+}
 function adminRowEstat(row) { return str(row.Estat) || "Pendent"; }
 function adminRowName(row, form) {
   var v = pickFirstValue(row, [/^nom_jugador$/i]);
@@ -717,18 +737,24 @@ function adminOverview(form) {
   var rows = data.rows;
   var weeksCfg = readWeeks(form);
 
+  var weekIds = weeksCfg.map(function (w) { return w.id; });
   var ingressosTotal = 0, ingressosCobrats = 0, preuComptats = 0;
   var families = {}, enviaments = {};
-  var perDay = {}, ages = {}, payments = { Pagat: 0, Pendent: 0 };
+  var perDay = {}, ages = {}, payments = { Pagat: 0, Parcial: 0, Pendent: 0 };
   var discounts = { rdb: 0, fn: 0, germa: 0, cap: 0 };
 
   rows.forEach(function (row) {
     var preu = num(row.Preu) || 0;
     ingressosTotal += preu;
     if (preu > 0) preuComptats++;
-    var estat = adminRowEstat(row);
-    if (estat === "Pagat") { ingressosCobrats += preu; payments.Pagat++; }
+    // Pagament per setmanes: estat derivat i ingressos cobrats proporcionals.
+    var registered = rowRegisteredWeeks(row, weekIds);
+    var paid = rowPaidWeeks(row, registered);
+    var estat = computeEstat(paid, registered);
+    if (estat === "Pagat") payments.Pagat++;
+    else if (estat === "Parcial") payments.Parcial++;
     else payments.Pendent++;
+    if (registered.length) ingressosCobrats += preu * (paid.length / registered.length);
 
     var fk = buildFamilyKey(row); if (fk) families[fk] = true;
     enviaments[adminBaseId(row.ID)] = true;
@@ -794,6 +820,7 @@ function adminList(form) {
   var labels = fieldLabels(form);
   var childGroup = childGroupForForm(form);
   var groups = fieldGroups(form);
+  var weekIds = readWeeks(form).map(function (w) { return w.id; });
 
   var rows = data.rows.map(function (row) {
     var detail = [];
@@ -802,6 +829,8 @@ function adminList(form) {
       if (v == null || v === "") return;
       detail.push({ label: labels[f.id] || f.id, value: String(v), grup: groups[f.id] || "", esJugador: groups[f.id] === childGroup });
     });
+    var registered = rowRegisteredWeeks(row, weekIds);
+    var paid = rowPaidWeeks(row, registered);
     return {
       id: str(row.ID),
       baseId: adminBaseId(row.ID),
@@ -814,10 +843,11 @@ function adminList(form) {
       telefon: pickFirstValue(row, [/telefon|telefono|mobil|movil/i]),
       edat: (num(row.Edat) != null ? num(row.Edat) : ""),
       setmanes: str(row.Setmanes),
-      weekIds: data.header.filter(function (h) { return /^[A-Z]\d+$/.test(h) && Number(row[h]) === 1; }),
+      weekIds: registered,
+      paidWeeks: paid,
       preu: num(row.Preu) || 0,
       descompte: str(row.Descompte),
-      estat: adminRowEstat(row),
+      estat: computeEstat(paid, registered),
       fitxers: adminFileUrls(row),
       detall: detail
     };
@@ -826,22 +856,49 @@ function adminList(form) {
   return { ok: true, form: form, rows: rows };
 }
 
-// Marca una fila com a Pagat / Pendent.
-function adminSetStatus(form, id, estat) {
-  estat = (str(estat) === "Pagat") ? "Pagat" : "Pendent";
+// Garanteix que existeix una columna; retorna el seu índex (1-based).
+function ensureColumn(sheet, header, name) {
+  var col = header.indexOf(name) + 1;
+  if (col === 0) {
+    col = header.length + 1;
+    sheet.getRange(1, col, 1, 1).setValue(name);
+    header.push(name);
+  }
+  return col;
+}
+
+// Defineix quines setmanes estan pagades d'una fila i recalcula l'estat
+// (Pagat / Parcial / Pendent). És l'operació base del pagament per setmanes.
+function adminSetPayment(form, id, weeks) {
   var data = readSubmissionRows(form);
   var sheet = data.sheet;
   if (!sheet) return { ok: false, error: "sheet not found" };
-  var col = data.header.indexOf("Estat") + 1;
-  if (col === 0) {
-    col = data.header.length + 1;
-    sheet.getRange(1, col, 1, 1).setValue("Estat");
-  }
+  var weekIds = readWeeks(form).map(function (w) { return w.id; });
   var target = null;
   data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
   if (!target) return { ok: false, error: "row not found" };
-  sheet.getRange(target.__row, col, 1, 1).setValue(estat);
-  return { ok: true, id: id, estat: estat };
+
+  var registered = rowRegisteredWeeks(target, weekIds);
+  // Només acceptem setmanes en què realment està inscrit.
+  var paid = (weeks || []).map(String).filter(function (w) { return registered.indexOf(w) !== -1; });
+  var estat = computeEstat(paid, registered);
+
+  var paidCol = ensureColumn(sheet, data.header, "Setmanes pagades");
+  var estatCol = ensureColumn(sheet, data.header, "Estat");
+  sheet.getRange(target.__row, paidCol, 1, 1).setValue(paid.join(", "));
+  sheet.getRange(target.__row, estatCol, 1, 1).setValue(estat);
+  return { ok: true, id: id, estat: estat, paidWeeks: paid };
+}
+
+// Compat: marcar com a Pagat = totes les setmanes; Pendent = cap.
+function adminSetStatus(form, id, estat) {
+  var data = readSubmissionRows(form);
+  var weekIds = readWeeks(form).map(function (w) { return w.id; });
+  var target = null;
+  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
+  if (!target) return { ok: false, error: "row not found" };
+  var registered = rowRegisteredWeeks(target, weekIds);
+  return adminSetPayment(form, id, (str(estat) === "Pagat") ? registered : []);
 }
 
 // Reenvia el correu de confirmació d'una fila concreta.

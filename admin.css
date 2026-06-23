@@ -223,9 +223,24 @@ body.adm {
 .estat__dot { width: 8px; height: 8px; border-radius: 50%; }
 .estat--pagat { background: var(--ok-soft); color: #15803D; border-color: #bbf7d0; }
 .estat--pagat .estat__dot { background: var(--ok); }
+.estat--parcial { background: var(--blue-soft); color: var(--blue-deep); border-color: #c7d8f7; }
+.estat--parcial .estat__dot { background: var(--blue); }
 .estat--pendent { background: var(--warn-soft); color: #b45309; border-color: #fde68a; }
 .estat--pendent .estat__dot { background: var(--warn); }
 .estat:hover { filter: brightness(.97); box-shadow: 0 2px 6px rgba(14,42,99,.12); }
+button.estat { cursor: pointer; }
+span.estat { cursor: default; }
+
+/* Píndola de setmana pagada a la taula */
+.wpill--paid { background: var(--ok-soft); color: #15803d; position: relative; }
+.wpill--paid::after { content: "✓"; margin-left: 3px; font-size: .7em; }
+
+/* Pagaments per setmana (calaix de detall) */
+.pay-actions { margin-bottom: 10px; }
+.pay-weeks { display: flex; flex-direction: column; gap: 8px; }
+.pay-week { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.pay-week__lbl { font-size: .9rem; color: var(--ink); }
+.pay-week .estat { flex: 0 0 auto; }
 
 .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .row-actions .iconbtn { width: 32px; height: 32px; border-radius: 8px; }

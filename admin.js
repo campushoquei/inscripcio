@@ -165,27 +165,35 @@ const ICONS = {
 };
 
 function renderOverview() {
-  const k = state.overview.kpis;
-  const cards = [
-    { icon: ICONS.players, value: k.jugadors, label: "Jugadors/es inscrits", sub: `${k.enviaments} inscripcions enviades`, accent: "#1F5AE0", soft: "#E5EDFC" },
-    { icon: ICONS.family, value: k.families, label: "Famílies", sub: `${k.preu_mitja ? eur(k.preu_mitja) + " de mitjana" : ""}`, accent: "#7C3AED", soft: "#EDE7FB" },
-    { icon: ICONS.euro, value: k.ingressos_total, unit: "€", label: "Ingressos totals", sub: `${eur(k.ingressos_cobrats)} cobrats`, accent: "#16A34A", soft: "#DCFCE7", money: true },
-    { icon: ICONS.clock, value: k.ingressos_pendents, unit: "€", label: "Pendents de cobrar", sub: `${state.overview.payments.Pendent} inscripcions`, accent: "#D97706", soft: "#FEF3C7", money: true }
-  ];
-  $("kpis").innerHTML = cards.map((c) => `
-    <div class="kpi" style="--accent:${c.accent};--accent-soft:${c.soft}">
-      <div class="kpi__icon">${c.icon}</div>
-      <div class="kpi__value" data-count="${c.value}" data-money="${c.money ? 1 : 0}">0${c.unit ? `<span class="unit">${c.unit}</span>` : ""}</div>
-      <div class="kpi__label">${esc(c.label)}</div>
-      <div class="kpi__sub">${esc(c.sub)}</div>
-    </div>`).join("");
-  document.querySelectorAll(".kpi__value[data-count]").forEach((el) => countUp(el));
-
+  renderKpis(true);
   renderOccupancy();
   renderTimeline();
   renderPayments();
   renderAges();
   renderDiscounts();
+}
+
+// animate=true → compte enrere des de 0 (càrrega inicial); false → valor directe
+// (actualitzacions, p. ex. en marcar pagat, sense reanimar tot el dashboard).
+function renderKpis(animate) {
+  const k = state.overview.kpis;
+  const cards = [
+    { icon: ICONS.players, value: k.jugadors, label: "Jugadors/es inscrits", sub: `${k.enviaments} inscripcions enviades`, accent: "#1F5AE0", soft: "#E5EDFC" },
+    { icon: ICONS.family, value: k.families, label: "Famílies", sub: `${k.preu_mitja ? eur(k.preu_mitja) + " de mitjana" : ""}`, accent: "#7C3AED", soft: "#EDE7FB" },
+    { icon: ICONS.euro, value: k.ingressos_total, unit: "€", label: "Ingressos totals", sub: `${eur(k.ingressos_cobrats)} cobrats`, accent: "#16A34A", soft: "#DCFCE7", money: true },
+    { icon: ICONS.clock, value: k.ingressos_pendents, unit: "€", label: "Pendents de cobrar", sub: `${state.overview.payments.Pendent} pendents${state.overview.payments.Parcial ? " · " + state.overview.payments.Parcial + " parcials" : ""}`, accent: "#D97706", soft: "#FEF3C7", money: true }
+  ];
+  $("kpis").innerHTML = cards.map((c) => {
+    const shown = animate ? "0" : (c.money ? Math.round(c.value).toLocaleString("ca-ES") : Math.round(c.value));
+    return `
+    <div class="kpi" style="--accent:${c.accent};--accent-soft:${c.soft}">
+      <div class="kpi__icon">${c.icon}</div>
+      <div class="kpi__value" data-count="${c.value}" data-money="${c.money ? 1 : 0}">${shown}${c.unit ? `<span class="unit">${c.unit}</span>` : ""}</div>
+      <div class="kpi__label">${esc(c.label)}</div>
+      <div class="kpi__sub">${esc(c.sub)}</div>
+    </div>`;
+  }).join("");
+  if (animate) document.querySelectorAll(".kpi__value[data-count]").forEach((el) => countUp(el));
 }
 
 function countUp(el) {
@@ -280,23 +288,26 @@ function fmtDayShort(iso) {
    RENDER — Pagaments (donut)
    ============================================================ */
 function renderPayments() {
-  const p = state.overview.payments || { Pagat: 0, Pendent: 0 };
-  const total = p.Pagat + p.Pendent;
+  const p = state.overview.payments || { Pagat: 0, Parcial: 0, Pendent: 0 };
+  const total = (p.Pagat || 0) + (p.Parcial || 0) + (p.Pendent || 0);
   const segs = [
-    { name: "Pagat", val: p.Pagat, color: "#16A34A" },
-    { name: "Pendent", val: p.Pendent, color: "#D97706" }
+    { name: "Pagat", val: p.Pagat || 0, color: "#16A34A" },
+    { name: "Parcial", val: p.Parcial || 0, color: "#1F5AE0" },
+    { name: "Pendent", val: p.Pendent || 0, color: "#D97706" }
   ];
   const r = 52, c = 2 * Math.PI * r, cx = 70, cy = 70;
   let offset = 0;
   const circles = total === 0
     ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#EEF3FB" stroke-width="18"/>`
-    : segs.map((s) => {
+    : segs.filter((s) => s.val > 0).map((s) => {
         const len = (s.val / total) * c;
         const el = `<circle class="donut__seg" cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(c - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" stroke-linecap="butt"/>`;
         offset += len;
         return el;
       }).join("");
-  const pctPaid = total ? Math.round((p.Pagat / total) * 100) : 0;
+  // El centre mostra el % d'INGRESSOS cobrats (no de fitxes), més útil amb pagaments parcials.
+  const k = state.overview.kpis || {};
+  const pctPaid = k.ingressos_total ? Math.round((k.ingressos_cobrats / k.ingressos_total) * 100) : 0;
   $("chart-payments").innerHTML = `<div class="donut"><svg width="140" height="140" viewBox="0 0 140 140">
     ${circles}
     <g transform="rotate(90 70 70)"><text class="donut__center" x="70" y="70" text-anchor="middle" font-size="26" fill="#0E2A63">${pctPaid}%</text>
@@ -347,6 +358,10 @@ function renderWeekFilter() {
   const sel = $("filter-week");
   sel.innerHTML = `<option value="">Totes les setmanes</option>` +
     weeks.map((w) => `<option value="${esc(w.id)}">${esc(w.etiqueta || w.id)}</option>`).join("");
+  // Si la setmana filtrada ja no existeix (canvi de formulari), netegem el filtre
+  // perquè el desplegable i l'estat no quedin desincronitzats.
+  if (state.filters.week && !weeks.some((w) => w.id === state.filters.week)) state.filters.week = "";
+  sel.value = state.filters.week;
 }
 
 function applyFilters() {
@@ -391,15 +406,17 @@ function renderTable() {
   const rows = state.filtered;
   $("table-empty").hidden = rows.length > 0;
   tbody.innerHTML = rows.map((r, i) => {
-    const pills = (r.weekIds || []).map((w) => `<span class="wpill">${esc(w)}</span>`).join("");
-    const estatCls = r.estat === "Pagat" ? "estat--pagat" : "estat--pendent";
+    const pills = (r.weekIds || []).map((w) => {
+      const isPaid = (r.paidWeeks || []).includes(w);
+      return `<span class="wpill${isPaid ? " wpill--paid" : ""}" title="${isPaid ? "Pagada" : "Pendent"}">${esc(w)}</span>`;
+    }).join("");
     return `<tr data-i="${i}">
       <td>${esc(fmtDate(r.ts))}</td>
       <td><div class="cell-name">${esc(r.nom || "—")}</div>${r.edat !== "" ? `<div class="cell-sub">${r.edat} anys</div>` : ""}</td>
       <td>${esc(r.tutor || "—")}<div class="cell-sub">${esc(r.email || "")}</div></td>
       <td class="hide-sm"><div class="weeks-pills">${pills || "—"}</div></td>
       <td class="num">${r.preu ? eur(r.preu) : "—"}</td>
-      <td><button class="estat ${estatCls}" data-toggle="${esc(r.id)}"><span class="estat__dot"></span>${r.estat}</button></td>
+      <td>${estatBadge(r, true)}</td>
       <td><div class="row-actions">
         <button class="iconbtn" data-resend="${esc(r.id)}" title="Reenviar correu" aria-label="Reenviar correu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
       </div></td>
@@ -413,9 +430,21 @@ function renderTable() {
     });
   });
   tbody.querySelectorAll("[data-toggle]").forEach((b) =>
-    b.addEventListener("click", (e) => { e.stopPropagation(); toggleStatus(b.dataset.toggle, b); }));
+    b.addEventListener("click", (e) => { e.stopPropagation(); toggleAllPaid(b.dataset.toggle); }));
   tbody.querySelectorAll("[data-resend]").forEach((b) =>
     b.addEventListener("click", (e) => { e.stopPropagation(); resend(b.dataset.resend); }));
+}
+
+// Etiqueta d'estat de pagament. clickable=true → botó que marca/desmarca totes les setmanes.
+function estatBadge(r, clickable) {
+  const reg = (r.weekIds || []).length;
+  const paid = (r.paidWeeks || []).filter((w) => (r.weekIds || []).includes(w)).length;
+  let cls = "estat--pendent", label = "Pendent";
+  if (r.estat === "Pagat") { cls = "estat--pagat"; label = "Pagat"; }
+  else if (r.estat === "Parcial") { cls = "estat--parcial"; label = `Parcial ${paid}/${reg}`; }
+  const attr = clickable ? ` data-toggle="${esc(r.id)}" title="Marcar/desmarcar totes les setmanes"` : "";
+  const tag = clickable ? "button" : "span";
+  return `<${tag} class="estat ${cls}"${attr}><span class="estat__dot"></span>${label}</${tag}>`;
 }
 
 function fmtDate(iso) {
@@ -426,35 +455,61 @@ function fmtDate(iso) {
 /* ============================================================
    Accions de fila
    ============================================================ */
-async function toggleStatus(id, btn) {
+// Operació base: defineix les setmanes pagades d'una fila i refresca el dashboard.
+async function setPayment(id, weeks, opts) {
   const row = state.list.find((r) => r.id === id);
   if (!row) return;
-  const next = row.estat === "Pagat" ? "Pendent" : "Pagat";
-  btn.style.opacity = ".5"; btn.disabled = true;
   try {
-    await api("admin_set_status", { id, estat: next });
-    row.estat = next;
-    // refresca KPIs de cobrament localment
+    const out = await api("admin_set_payment", { id, weeks });
+    row.paidWeeks = out.paidWeeks || weeks;
+    row.estat = out.estat;
     recomputePayments();
     applyFilters();
-    toast(`Marcat com a ${next.toLowerCase()}.`);
+    if (opts && opts.reopen) openDrawer(row);
+    const msg = row.estat === "Pagat" ? "Totes les setmanes pagades."
+      : row.estat === "Pendent" ? "Marcat com a pendent."
+      : `Pagament parcial actualitzat.`;
+    toast(msg);
   } catch (err) {
     toast("No s'ha pogut actualitzar: " + err.message, true);
-    btn.style.opacity = ""; btn.disabled = false;
   }
+}
+
+// Botó d'estat de la taula: marca totes les setmanes o cap (alterna).
+function toggleAllPaid(id, opts) {
+  const row = state.list.find((r) => r.id === id);
+  if (!row) return;
+  const reg = (row.weekIds || []);
+  const allPaid = reg.length > 0 && reg.every((w) => (row.paidWeeks || []).includes(w));
+  setPayment(id, allPaid ? [] : reg.slice(), opts);
+}
+
+// Alterna una setmana concreta (des del calaix de detall).
+function toggleWeekPaid(id, weekId) {
+  const row = state.list.find((r) => r.id === id);
+  if (!row) return;
+  const paid = new Set(row.paidWeeks || []);
+  paid.has(weekId) ? paid.delete(weekId) : paid.add(weekId);
+  setPayment(id, [...paid], { reopen: true });
 }
 
 function recomputePayments() {
   const o = state.overview; if (!o) return;
-  let pagat = 0, pendent = 0, cobrats = 0;
+  let pagat = 0, parcial = 0, pendent = 0, cobrats = 0;
   state.list.forEach((r) => {
-    if (r.estat === "Pagat") { pagat++; cobrats += Number(r.preu) || 0; }
+    const reg = (r.weekIds || []).length;
+    const paid = (r.paidWeeks || []).filter((w) => (r.weekIds || []).includes(w)).length;
+    if (r.estat === "Pagat") pagat++;
+    else if (r.estat === "Parcial") parcial++;
     else pendent++;
+    if (reg) cobrats += (Number(r.preu) || 0) * (paid / reg);
   });
-  o.payments = { Pagat: pagat, Pendent: pendent };
+  o.payments = { Pagat: pagat, Parcial: parcial, Pendent: pendent };
   o.kpis.ingressos_cobrats = Math.round(cobrats);
   o.kpis.ingressos_pendents = Math.round((o.kpis.ingressos_total || 0) - cobrats);
-  renderOverview();
+  // Només actualitzem el que canvia en marcar pagaments: KPIs (sense reanimar) i el donut.
+  renderKpis(false);
+  renderPayments();
 }
 
 async function resend(id) {
@@ -497,9 +552,30 @@ function openDrawer(r) {
     <div class="dfield"><span class="dfield__k">Referència</span><span class="dfield__v">${esc(r.id)}</span></div>
     <div class="dfield"><span class="dfield__k">Data</span><span class="dfield__v">${esc(fmtDate(r.ts))}</span></div>
     <div class="dfield"><span class="dfield__k">Formulari</span><span class="dfield__v">${esc(r.formulario || "—")}</span></div>
-    <div class="dfield"><span class="dfield__k">Setmanes</span><span class="dfield__v">${esc(r.setmanes || "—")}</span></div>
-    <div class="dfield"><span class="dfield__k">Estat</span><span class="dfield__v">${esc(r.estat)}</span></div>
+    <div class="dfield"><span class="dfield__k">Estat</span><span class="dfield__v">${estatBadge(r, false)}</span></div>
   </div>`;
+
+  // ── Pagaments per setmana ──
+  if ((r.weekIds || []).length) {
+    const metaById = {};
+    ((state.overview && state.overview.weeks) || []).forEach((w) => (metaById[w.id] = w));
+    const paidSet = new Set(r.paidWeeks || []);
+    const allPaid = r.weekIds.every((w) => paidSet.has(w));
+    html += `<div class="dgroup"><div class="dgroup__title">Pagaments per setmana</div>
+      <div class="pay-actions">
+        <button class="btn btn--ghost btn--sm" data-payall>${allPaid ? "Desmarcar totes" : "Marcar totes pagades"}</button>
+      </div>
+      <div class="pay-weeks">` +
+      r.weekIds.map((wid) => {
+        const meta = metaById[wid] || {};
+        const isPaid = paidSet.has(wid);
+        return `<div class="pay-week">
+          <span class="pay-week__lbl"><b>${esc(meta.etiqueta || wid)}</b>${meta.fechas ? `<span class="cell-sub"> · ${esc(meta.fechas)}</span>` : ""}</span>
+          <button class="estat ${isPaid ? "estat--pagat" : "estat--pendent"}" data-payweek="${esc(wid)}"><span class="estat__dot"></span>${isPaid ? "Pagat" : "Pendent"}</button>
+        </div>`;
+      }).join("") +
+      `</div></div>`;
+  }
 
   Object.keys(groups).forEach((g) => {
     html += `<div class="dgroup"><div class="dgroup__title">${esc(g)}</div>` +
@@ -508,37 +584,19 @@ function openDrawer(r) {
       ).join("") + `</div>`;
   });
 
-  if (r.fitxers && r.fitxers.length) {
-    html += `<div class="dgroup"><div class="dgroup__title">Documents (${r.fitxers.length})</div>` +
-      r.fitxers.map((u, i) => `<div class="dfield"><span class="dfield__k">Fitxer ${i + 1}</span><span class="dfield__v"><a href="${esc(u)}" target="_blank" rel="noopener">Obrir</a></span></div>`).join("") +
-      `</div>`;
-  }
-
   html += `<div class="drawer__actions">
-    <button class="btn btn--primary btn--sm" id="dw-status">${r.estat === "Pagat" ? "Marcar pendent" : "Marcar pagat"}</button>
     <button class="btn btn--ghost btn--sm" id="dw-resend">Reenviar correu</button>
   </div>`;
 
   $("drawer-body").innerHTML = html;
-  $("dw-status").addEventListener("click", async () => { await toggleStatusFromDrawer(r); });
+  const payAll = $("drawer-body").querySelector("[data-payall]");
+  if (payAll) payAll.addEventListener("click", () => toggleAllPaid(r.id, { reopen: true }));
+  $("drawer-body").querySelectorAll("[data-payweek]").forEach((b) =>
+    b.addEventListener("click", () => toggleWeekPaid(r.id, b.dataset.payweek)));
   $("dw-resend").addEventListener("click", () => resend(r.id));
 
   $("drawer-backdrop").hidden = false;
   $("drawer").hidden = false;
-}
-
-async function toggleStatusFromDrawer(r) {
-  const next = r.estat === "Pagat" ? "Pendent" : "Pagat";
-  try {
-    await api("admin_set_status", { id: r.id, estat: next });
-    r.estat = next;
-    const row = state.list.find((x) => x.id === r.id);
-    if (row) row.estat = next;
-    recomputePayments();
-    applyFilters();
-    openDrawer(r);
-    toast(`Marcat com a ${next.toLowerCase()}.`);
-  } catch (err) { toast("Error: " + err.message, true); }
 }
 
 function closeDrawer() {
@@ -646,15 +704,21 @@ function demoData(form) {
     // ~55% han pujat la targeta sanitària al formulari (enllaç de Drive d'exemple).
     const card = Math.random() > 0.45 ? "https://drive.google.com/file/d/EXEMPLE-targeta-" + i + "/view" : "";
     const day = new Date(2026, 4, 1 + Math.floor(i / 1.6));
+    // Pagament per setmanes: ~45% totes pagades, ~30% parcial, ~25% cap.
+    const wids = wsel.map((w) => w.id);
+    const roll = Math.random();
+    const paidWeeks = roll < 0.45 ? wids.slice()
+      : roll < 0.75 ? wids.filter(() => Math.random() > 0.5)
+      : [];
+    const estat = paidWeeks.length === 0 ? "Pendent" : paidWeeks.length >= wids.length ? "Pagat" : "Parcial";
     rows.push({
       id: "INS-" + (1700000000000 + i * 99000) + (Math.random() > 0.8 ? "-1" : ""),
       baseId: "INS-" + i, row: i + 2, ts: day.toISOString().slice(0, 10),
       formulario: cfg.nombre, nom,
       tutor: tutors[i % tutors.length], email: nom.toLowerCase().replace(/\s+/g, ".") + "@exemple.cat",
       telefon: "6" + (10000000 + Math.floor(Math.random() * 8999999)),
-      edat: 6 + (i % 8), setmanes: wsel.map((w) => w.id).join(", "),
-      weekIds: wsel.map((w) => w.id), preu, descompte: desc,
-      estat: Math.random() > 0.45 ? "Pagat" : "Pendent",
+      edat: 6 + (i % 8), setmanes: wids.join(", "),
+      weekIds: wids, paidWeeks, preu, descompte: desc, estat,
       fitxers: card ? [card] : [],
       detall: [
         { label: "Nom i cognoms", value: nom, grup: "Dades del jugador/a", esJugador: true },
@@ -680,17 +744,21 @@ async function demoApi(action, extra) {
   }
   const d = demoData(state.form);
   if (action === "admin_overview") {
-    let total = 0, cobrats = 0, pagat = 0, pendent = 0;
+    let total = 0, cobrats = 0, pagat = 0, parcial = 0, pendent = 0;
     const disc = { rdb: 0, fn: 0, germa: 0, cap: 0 };
     d.rows.forEach((r) => {
       total += r.preu;
-      if (r.estat === "Pagat") { cobrats += r.preu; pagat++; } else pendent++;
+      const reg = (r.weekIds || []).length;
+      const paid = (r.paidWeeks || []).length;
+      if (r.estat === "Pagat") pagat++; else if (r.estat === "Parcial") parcial++; else pendent++;
+      if (reg) cobrats += r.preu * (paid / reg);
       let any = false;
       if (/riudebitlles/i.test(r.descompte)) { disc.rdb++; any = true; }
       if (/nombrosa/i.test(r.descompte)) { disc.fn++; any = true; }
       if (/-1$/.test(r.id)) { disc.germa++; any = true; }
       if (!any) disc.cap++;
     });
+    cobrats = Math.round(cobrats);
     const families = new Set(d.rows.map((r) => r.tutor)).size;
     return {
       ok: true, form: state.form, generatedAt: new Date().toISOString(),
@@ -698,13 +766,24 @@ async function demoApi(action, extra) {
       weeks: d.weeks.map((w) => ({ id: w.id, etiqueta: w.etiqueta, fechas: w.fechas, plazas: w.plazas, inscrits: d.occ[w.id] })),
       perDay: Object.keys(d.perDay).sort().map((k) => ({ date: k, count: d.perDay[k] })),
       ages: Object.keys(d.ages).map(Number).sort((a, b) => a - b).map((a) => ({ age: a, count: d.ages[a] })),
-      discounts: disc, payments: { Pagat: pagat, Pendent: pendent },
+      discounts: disc, payments: { Pagat: pagat, Parcial: parcial, Pendent: pendent },
       recent: d.rows.slice(-8).reverse()
     };
   }
   if (action === "admin_list") return { ok: true, form: state.form, rows: d.rows.slice().reverse() };
+  if (action === "admin_set_payment") {
+    const r = d.rows.find((x) => x.id === extra.id);
+    if (r) {
+      const paid = (extra.weeks || []).filter((w) => (r.weekIds || []).includes(w));
+      r.paidWeeks = paid;
+      r.estat = paid.length === 0 ? "Pendent" : paid.length >= (r.weekIds || []).length ? "Pagat" : "Parcial";
+      return { ok: true, id: extra.id, estat: r.estat, paidWeeks: paid };
+    }
+    return { ok: false, error: "row not found" };
+  }
   if (action === "admin_set_status") {
-    const r = d.rows.find((x) => x.id === extra.id); if (r) r.estat = extra.estat;
+    const r = d.rows.find((x) => x.id === extra.id);
+    if (r) { r.paidWeeks = extra.estat === "Pagat" ? (r.weekIds || []).slice() : []; r.estat = extra.estat; }
     return { ok: true, id: extra.id, estat: extra.estat };
   }
   if (action === "admin_resend") {

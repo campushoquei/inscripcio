@@ -211,11 +211,22 @@ gestió de pagaments i taula d'inscripcions amb cerca, filtres i exportació CSV
   **reenviar el correu** de confirmació.
 - **Exportar CSV** del que tinguis filtrat (s'obre bé a Excel, amb accents).
 
-### La columna `Estat`
+### Pagaments per setmana (columnes `Estat` i `Setmanes pagades`)
 
-El script l'afegeix sola a `Inscripciones`. Cada inscripció nova entra com a **Pendent**;
-des del panell la pots passar a **Pagat** quan rebis la transferència o el pagament en mà.
-És només per al teu control intern (el cobrament online encara no hi és).
+El script afegeix soles dues columnes a `Inscripciones`:
+
+- **`Setmanes pagades`** — la llista de setmanes ja pagades de cada jugador/a (p. ex. `S1, S3`).
+- **`Estat`** — es calcula sol a partir de l'anterior: **Pendent** (cap pagada),
+  **Parcial** (algunes) o **Pagat** (totes les que té inscrites).
+
+Des del panell pots:
+- **Marcar setmana per setmana** (al detall de cada nen/a, secció *Pagaments per setmana*).
+- **Marcar-les totes de cop** amb el botó *Marcar totes pagades*, o clicant l'etiqueta
+  d'estat a la taula (alterna entre totes pagades / cap).
+
+Els **ingressos cobrats** del dashboard es calculen de forma proporcional a les setmanes
+pagades de cada inscripció. És només per al teu control intern (transferència o pagament
+en mà); el cobrament online encara no hi és.
 
 > **Mode demo:** si `admin.js` té `SCRIPT_URL` buit, el panell mostra dades d'exemple
 > generades (codi `1234`) per veure'l funcionar sense backend.
