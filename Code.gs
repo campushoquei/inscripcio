@@ -31,6 +31,12 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  // Router: les peticions del panell d'administració porten un camp "action".
+  // Les processem abans d'agafar el lock perquè són lectures/edicions puntuals.
+  var pre = null;
+  try { pre = JSON.parse(e.postData.contents); } catch (_) { pre = null; }
+  if (pre && pre.action) return json(handleAdmin(pre));
+
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -58,8 +64,9 @@ function doPost(e) {
       var cd = child.data || {};
       var childFiles = child.files || [];
       // Passa les dades del fill concret perquè el nom del fitxer reflecteixi el seu nom,
-      // no sempre el del primer fill.
-      var saved = saveFiles(childFiles, settings, { data: cd }, id);
+      // no sempre el del primer fill. També passem el formulari perquè els fitxers
+      // es desin en una carpeta amb el nom del formulari (no a "General").
+      var saved = saveFiles(childFiles, settings, { data: cd, formName: payload.formName, form: form }, id);
       var byField = {};
       saved.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
 
@@ -185,18 +192,38 @@ function readFields(form) {
 function saveFiles(files, settings, payload, id) {
   if (!files || !files.length) return [];
   var folder = getUploadFolder(settings, payload);
+  // Nom del nen/a per al nom del fitxer (si no n'hi ha, fem servir l'ID).
+  var childName = (pickChild(payload) || id).replace(/[^\w\-]+/g, "_").replace(/^_+|_+$/g, "") || id;
   return files.map(function (f) {
     var bytes = Utilities.base64Decode(f.dataBase64);
-    var safe = (pickChild(payload) || id).replace(/[^\w\-]+/g, "_");
-    var blob = Utilities.newBlob(bytes, f.mimeType || "application/octet-stream", safe + "__" + (f.field || "fitxer") + "__" + (f.name || "arxiu"));
+    var ext = extensionFor(f.name, f.mimeType);
+    var label = String(f.field || "document").replace(/[^\w\-]+/g, "_");
+    // Ex.: "Marc_Puig - tarjeta_sanitaria.pdf"
+    var fileName = childName + " - " + label + (ext ? "." + ext : "");
+    var blob = Utilities.newBlob(bytes, f.mimeType || "application/octet-stream", fileName);
     var file = folder.createFile(blob);
     return { field: f.field, name: file.getName(), url: file.getUrl() };
   });
 }
+// Carpeta destí: arrel/<carpeta_fitxers>/<hoja del formulari>.
+// El nom de la subcarpeta és el mateix valor de la columna "hoja" de la pestanya
+// Formularios (via subsSheetName), de manera que la carpeta de fitxers coincideix
+// amb la pestanya on es guarden les inscripcions d'aquell formulari.
 function getUploadFolder(settings, payload) {
   var root = getOrCreateFolder(DriveApp.getRootFolder(), settings.carpeta_fitxers || "Inscripcions - fitxers");
-  var campus = (payload && payload.campusName) || (payload && payload.campusId) || "General";
-  return getOrCreateFolder(root, String(campus));
+  var form = (payload && payload.form) || "";
+  var sub = subsSheetName(form);
+  // Fallbacks per si de cas (formulari sense hoja ni id).
+  if (!sub) sub = (payload && payload.formName) || (payload && payload.campusName) || (payload && payload.campusId) || "General";
+  sub = String(sub).replace(/[\/\\]+/g, "-").trim() || "General";
+  return getOrCreateFolder(root, sub);
+}
+// Treu l'extensió del nom original; si no en té, la dedueix del mimeType.
+function extensionFor(name, mime) {
+  var m = String(name || "").match(/\.([A-Za-z0-9]{1,8})$/);
+  if (m) return m[1].toLowerCase();
+  var map = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/heic": "heic", "image/webp": "webp" };
+  return map[String(mime || "").toLowerCase()] || "";
 }
 function getOrCreateFolder(parent, name) {
   var it = parent.getFoldersByName(name);
@@ -227,6 +254,7 @@ function saveRow(id, payload, data) {
   plan.push("Setmanes");
   plan.push("Preu");
   plan.push("Descompte");
+  plan.push("Estat");
 
   // capçalera actual; afegeix les columnes que faltin (al final)
   var lastCol = sheet.getLastColumn();
@@ -253,6 +281,7 @@ function saveRow(id, payload, data) {
     if (col === "Setmanes") return (payload.weekLabels || []).join(", ");
     if (col === "Preu") return payload.preu != null ? payload.preu : "";
     if (col === "Descompte") return payload.descompte || "";
+    if (col === "Estat") return payload.estat || "Pendent";
     if (selectedIsWeek(col, weeks)) return selected[col] ? 1 : 0;
     var fieldId = fieldIdForColumn(col, fields, labelById);
     if (fieldId && data[fieldId] != null) return data[fieldId];
@@ -592,3 +621,258 @@ function pickChild(payload) {
   return "";
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+/* ============================================================
+   PANELL D'ADMINISTRACIÓ (admin.html)
+   --------------------------------------------------------------
+   Totes les peticions arriben per POST amb { action, pin, ... } i
+   es validen contra el PIN desat a Ajustes (clau "admin_pin").
+   Sense admin_pin configurat, el panell queda bloquejat.
+   ============================================================ */
+
+// Comprova el PIN d'administració (definit a Ajustes → admin_pin).
+function adminAuth(pin) {
+  var s = readSettings("");
+  var real = str(s.admin_pin);
+  if (!real) return false;                 // cal configurar-lo per poder entrar
+  return str(pin) === real;
+}
+
+// Llista de formularis per al selector del panell (sempre amb el per defecte).
+function adminForms() {
+  var g = readSettings("");
+  var def = str(g.form_defecto);
+  var forms = readForms().map(function (f) { return { id: f.id, nombre: f.nombre || f.id, estacio: f.estacio, habilitado: f.habilitado }; });
+  if (!forms.length) forms = [{ id: def, nombre: str(g.nombre_campus) || "Formulari", estacio: "", habilitado: true }];
+  else if (def && !forms.some(function (f) { return f.id === def; })) {
+    forms.unshift({ id: def, nombre: str(g.nombre_campus) || def, estacio: "", habilitado: true });
+  }
+  return forms;
+}
+
+// Router de les accions d'administració.
+function handleAdmin(p) {
+  try {
+    if (!adminAuth(p.pin)) return { ok: false, error: "unauthorized" };
+    var form = str(p.form);
+    if (!form) { var g = readSettings(""); form = str(g.form_defecto); }
+    switch (p.action) {
+      case "admin_login":      return { ok: true, forms: adminForms(), settings: { nombre_campus: str(readSettings("").nombre_campus), club: str(readSettings("").club) } };
+      case "admin_overview":   return adminOverview(form);
+      case "admin_list":       return adminList(form);
+      case "admin_set_status": return adminSetStatus(form, p.id, p.estat);
+      case "admin_resend":     return adminResend(form, p.id);
+      default:                 return { ok: false, error: "unknown action" };
+    }
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+// Llegeix totes les files d'inscripció d'un formulari com a objectes {capçalera: valor}.
+function readSubmissionRows(form) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(subsSheetName(form));
+  if (!sheet || sheet.getLastRow() < 2) return { header: [], rows: [], sheet: sheet };
+  var lastCol = sheet.getLastColumn(), lastRow = sheet.getLastRow();
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  var values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var rows = values.map(function (r, i) {
+    var o = {};
+    header.forEach(function (h, c) { if (h) o[h] = r[c]; });
+    o.__row = i + 2;
+    return o;
+  });
+  return { header: header, rows: rows, sheet: sheet };
+}
+
+function adminRowEstat(row) { return str(row.Estat) || "Pendent"; }
+function adminRowName(row, form) {
+  var v = pickFirstValue(row, [/^nom_jugador$/i]);
+  if (v) return v;
+  for (var k in row) { if (/nom/i.test(k) && !/tutor|pare|mare|formulari|formulario/i.test(k) && str(row[k])) return str(row[k]); }
+  return "";
+}
+function adminBaseId(id) { return String(id || "").replace(/-\d+$/, ""); }
+function adminToISODate(v) {
+  var d = (v instanceof Date) ? v : new Date(v);
+  if (isNaN(d.getTime())) return "";
+  return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+}
+function adminFileUrls(row) {
+  var urls = [];
+  for (var k in row) {
+    if (k === "__row") continue;
+    var val = String(row[k] == null ? "" : row[k]);
+    if (val.indexOf("http") === 0) {
+      val.split(/[\s\n]+/).forEach(function (u) { if (u.indexOf("http") === 0) urls.push(u); });
+    }
+  }
+  return urls;
+}
+
+// Estadístiques agregades per a les targetes i els gràfics.
+function adminOverview(form) {
+  var data = readSubmissionRows(form);
+  var rows = data.rows;
+  var weeksCfg = readWeeks(form);
+
+  var ingressosTotal = 0, ingressosCobrats = 0, preuComptats = 0;
+  var families = {}, enviaments = {};
+  var perDay = {}, ages = {}, payments = { Pagat: 0, Pendent: 0 };
+  var discounts = { rdb: 0, fn: 0, germa: 0, cap: 0 };
+
+  rows.forEach(function (row) {
+    var preu = num(row.Preu) || 0;
+    ingressosTotal += preu;
+    if (preu > 0) preuComptats++;
+    var estat = adminRowEstat(row);
+    if (estat === "Pagat") { ingressosCobrats += preu; payments.Pagat++; }
+    else payments.Pendent++;
+
+    var fk = buildFamilyKey(row); if (fk) families[fk] = true;
+    enviaments[adminBaseId(row.ID)] = true;
+
+    var day = adminToISODate(row.Timestamp);
+    if (day) perDay[day] = (perDay[day] || 0) + 1;
+
+    var edat = num(row.Edat);
+    if (edat != null && edat >= 0 && edat < 30) ages[edat] = (ages[edat] || 0) + 1;
+
+    var desc = str(row.Descompte);
+    var any = false;
+    if (/riudebitlles|rdb/i.test(desc)) { discounts.rdb++; any = true; }
+    if (/nombrosa/i.test(desc)) { discounts.fn++; any = true; }
+    if (/germ/i.test(desc)) { discounts.germa++; any = true; }
+    if (!any) discounts.cap++;
+  });
+
+  var weeks = weeksCfg.map(function (w) {
+    var inscrits = 0;
+    rows.forEach(function (r) { if (Number(r[w.id]) === 1) inscrits++; });
+    return {
+      id: w.id, etiqueta: w.etiqueta, fechas: w.fechas,
+      plazas: (w.plazas != null ? w.plazas : null), inscrits: inscrits
+    };
+  });
+
+  var perDayArr = Object.keys(perDay).sort().map(function (d) { return { date: d, count: perDay[d] }; });
+  var maxAge = 0; Object.keys(ages).forEach(function (a) { if (Number(a) > maxAge) maxAge = Number(a); });
+  var agesArr = [];
+  for (var a = 0; a <= maxAge; a++) if (ages[a]) agesArr.push({ age: a, count: ages[a] });
+
+  var recent = rows.slice(-8).reverse().map(function (r) {
+    return { id: str(r.ID), nom: adminRowName(r, form), data: adminToISODate(r.Timestamp), preu: num(r.Preu) || 0, estat: adminRowEstat(r) };
+  });
+
+  return {
+    ok: true,
+    form: form,
+    generatedAt: new Date().toISOString(),
+    kpis: {
+      jugadors: rows.length,
+      enviaments: Object.keys(enviaments).length,
+      families: Object.keys(families).length,
+      ingressos_total: Math.round(ingressosTotal),
+      ingressos_cobrats: Math.round(ingressosCobrats),
+      ingressos_pendents: Math.round(ingressosTotal - ingressosCobrats),
+      preu_mitja: preuComptats ? Math.round(ingressosTotal / preuComptats) : 0
+    },
+    weeks: weeks,
+    perDay: perDayArr,
+    ages: agesArr,
+    discounts: discounts,
+    payments: payments,
+    recent: recent
+  };
+}
+
+// Llista completa per a la taula + detall.
+function adminList(form) {
+  var data = readSubmissionRows(form);
+  var fields = readFields(form).filter(function (f) { return f.tipo !== "nota"; });
+  var labels = fieldLabels(form);
+  var childGroup = childGroupForForm(form);
+  var groups = fieldGroups(form);
+
+  var rows = data.rows.map(function (row) {
+    var detail = [];
+    fields.forEach(function (f) {
+      var v = row[f.id];
+      if (v == null || v === "") return;
+      detail.push({ label: labels[f.id] || f.id, value: String(v), grup: groups[f.id] || "", esJugador: groups[f.id] === childGroup });
+    });
+    return {
+      id: str(row.ID),
+      baseId: adminBaseId(row.ID),
+      row: row.__row,
+      ts: adminToISODate(row.Timestamp),
+      formulario: str(row.Formulario),
+      nom: adminRowName(row, form),
+      tutor: pickFirstValue(row, [/nom_tutor/i, /tutor/i]),
+      email: findEmail(row),
+      telefon: pickFirstValue(row, [/telefon|telefono|mobil|movil/i]),
+      edat: (num(row.Edat) != null ? num(row.Edat) : ""),
+      setmanes: str(row.Setmanes),
+      weekIds: data.header.filter(function (h) { return /^[A-Z]\d+$/.test(h) && Number(row[h]) === 1; }),
+      preu: num(row.Preu) || 0,
+      descompte: str(row.Descompte),
+      estat: adminRowEstat(row),
+      fitxers: adminFileUrls(row),
+      detall: detail
+    };
+  }).reverse();
+
+  return { ok: true, form: form, rows: rows };
+}
+
+// Marca una fila com a Pagat / Pendent.
+function adminSetStatus(form, id, estat) {
+  estat = (str(estat) === "Pagat") ? "Pagat" : "Pendent";
+  var data = readSubmissionRows(form);
+  var sheet = data.sheet;
+  if (!sheet) return { ok: false, error: "sheet not found" };
+  var col = data.header.indexOf("Estat") + 1;
+  if (col === 0) {
+    col = data.header.length + 1;
+    sheet.getRange(1, col, 1, 1).setValue("Estat");
+  }
+  var target = null;
+  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
+  if (!target) return { ok: false, error: "row not found" };
+  sheet.getRange(target.__row, col, 1, 1).setValue(estat);
+  return { ok: true, id: id, estat: estat };
+}
+
+// Reenvia el correu de confirmació d'una fila concreta.
+function adminResend(form, id) {
+  var settings = readSettings(form);
+  var data = readSubmissionRows(form);
+  var match = null;
+  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) match = r; });
+  if (!match) return { ok: false, error: "row not found" };
+
+  var childGroup = childGroupForForm(form);
+  var groups = fieldGroups(form);
+  var shared = {}, cd = {};
+  readFields(form).forEach(function (f) {
+    if (f.tipo === "nota") return;
+    var v = match[f.id];
+    if (v == null || v === "") return;
+    if (groups[f.id] === childGroup) cd[f.id] = v; else shared[f.id] = v;
+  });
+  if (!shared.email) shared.email = findEmail(match);
+
+  var weekLabels = str(match.Setmanes).split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  var files = adminFileUrls(match).map(function (u) { return { url: u, name: "document" }; });
+  var merged = {}; Object.keys(shared).forEach(function (k) { merged[k] = shared[k]; }); Object.keys(cd).forEach(function (k) { merged[k] = cd[k]; });
+
+  var payload = {
+    form: form, formName: str(match.Formulario) || form, campusName: "",
+    shared: shared,
+    children: [{ data: cd, weekLabels: weekLabels, preu: num(match.Preu), descompte: str(match.Descompte) }]
+  };
+  var rows = [{ id: id, data: merged, weekLabels: weekLabels, savedFiles: files }];
+  sendConfirmation(settings, payload, rows);
+  return { ok: true, id: id, to: shared.email };
+}

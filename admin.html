@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panell d'administració · Campus d'Hoquei Riudebitlles</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0E2A63" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body class="adm">
+
+  <!-- ====== Login ====== -->
+  <section class="login" id="login">
+    <form class="login__card" id="login-form" autocomplete="off">
+      <span class="login__emblem"><img src="logo.png" alt="" /></span>
+      <h1 class="login__title">Panell d'administració</h1>
+      <p class="login__sub" data-camp-name>Campus d'Hoquei Riudebitlles</p>
+      <label class="login__label" for="pin">Codi d'accés</label>
+      <input class="login__input" id="pin" type="password" inputmode="numeric" placeholder="••••••" autocomplete="off" />
+      <button class="btn btn--primary login__btn" id="login-btn" type="submit">
+        <span class="btn__label">Entrar</span>
+        <span class="btn__spinner" aria-hidden="true"></span>
+      </button>
+      <p class="login__note" id="login-note" role="alert"></p>
+    </form>
+  </section>
+
+  <!-- ====== Dashboard ====== -->
+  <div class="app" id="app" hidden>
+    <header class="abar">
+      <span class="abar__emblem"><img src="logo.png" alt="" /></span>
+      <div class="abar__titles">
+        <span class="abar__title" data-camp-name>Campus d'Hoquei Riudebitlles</span>
+        <span class="abar__sub">Panell d'administració</span>
+      </div>
+      <div class="abar__tools">
+        <div class="select-wrap">
+          <select class="abar__select" id="form-select" aria-label="Tria el formulari"></select>
+        </div>
+        <button class="iconbtn" id="refresh-btn" title="Actualitzar" aria-label="Actualitzar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <button class="iconbtn iconbtn--text" id="logout-btn">Sortir</button>
+      </div>
+    </header>
+
+    <main class="amain" id="dash">
+
+      <!-- KPI cards -->
+      <section class="kpis" id="kpis"></section>
+
+      <!-- Charts -->
+      <section class="grid">
+        <div class="card card--span2">
+          <div class="card__head">
+            <h2 class="card__title">Ocupació per setmana</h2>
+            <span class="card__hint" id="occ-hint"></span>
+          </div>
+          <div class="occ" id="chart-occupancy"></div>
+        </div>
+
+        <div class="card card--span2">
+          <div class="card__head">
+            <h2 class="card__title">Inscripcions per dia</h2>
+            <span class="card__hint" id="timeline-hint"></span>
+          </div>
+          <div class="chart-area" id="chart-timeline"></div>
+        </div>
+
+        <div class="card">
+          <div class="card__head"><h2 class="card__title">Estat dels pagaments</h2></div>
+          <div class="donut-row">
+            <div id="chart-payments"></div>
+            <ul class="legend" id="legend-payments"></ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__head"><h2 class="card__title">Distribució d'edats</h2></div>
+          <div class="chart-bars" id="chart-ages"></div>
+        </div>
+
+        <div class="card card--span2">
+          <div class="card__head"><h2 class="card__title">Descomptes aplicats</h2></div>
+          <div class="chips-stats" id="chart-discounts"></div>
+        </div>
+      </section>
+
+      <!-- Table -->
+      <section class="card table-card">
+        <div class="table-toolbar">
+          <div class="search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="search" type="search" placeholder="Cerca nom, tutor, correu…" />
+          </div>
+          <div class="filters">
+            <select id="filter-week" aria-label="Filtra per setmana"><option value="">Totes les setmanes</option></select>
+            <select id="filter-status" aria-label="Filtra per estat">
+              <option value="">Tots els estats</option>
+              <option value="Pagat">Pagat</option>
+              <option value="Pendent">Pendent</option>
+            </select>
+            <button class="btn btn--ghost btn--sm" id="export-btn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              CSV
+            </button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="dtable" id="table">
+            <thead>
+              <tr>
+                <th data-sort="ts">Data</th>
+                <th data-sort="nom">Jugador/a</th>
+                <th data-sort="tutor">Tutor/a</th>
+                <th class="hide-sm" data-sort="setmanes">Setmanes</th>
+                <th class="num" data-sort="preu">Preu</th>
+                <th data-sort="estat">Estat</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <p class="table-empty" id="table-empty" hidden>Cap inscripció encara.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- ====== Detail drawer ====== -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="drawer" hidden aria-label="Detall de la inscripció">
+    <div class="drawer__head">
+      <h2 class="drawer__title" id="drawer-title">Detall</h2>
+      <button class="iconbtn" id="drawer-close" aria-label="Tancar">✕</button>
+    </div>
+    <div class="drawer__body" id="drawer-body"></div>
+  </aside>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

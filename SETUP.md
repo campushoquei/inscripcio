@@ -174,7 +174,55 @@ No cal tornar a desplegar res ni tocar el codi. Les respostes apareixen soles a
 
 ---
 
-## 5. Notes
+## 5. Panell d'administració (`admin.html`)
+
+Un dashboard privat per al club: estadístiques, ocupació per setmana, ingressos,
+gestió de pagaments i taula d'inscripcions amb cerca, filtres i exportació CSV.
+
+### Activar-lo
+
+1. **Posa un codi d'accés.** A `Ajustes` afegeix una fila:
+
+   | Clave | Valor |
+   |---|---|
+   | admin_pin | _(el codi que vulguis, p. ex. 4821)_ |
+
+   > Sense `admin_pin`, el panell queda bloquejat (ningú hi pot entrar). El codi es
+   > valida sempre al servidor; viatja xifrat (HTTPS) i només es guarda a la sessió
+   > del navegador (`sessionStorage`), no de forma permanent.
+
+2. **Torna a desplegar** l'Apps Script (Gestiona desplegaments → edita → versió nova),
+   perquè `Code.gs` ja inclou els endpoints d'administració.
+
+3. Obre **`…/admin.html`** i entra amb el codi. Pots fer servir `?` per triar el
+   formulari per defecte; dins del panell hi ha un selector per canviar de formulari.
+
+### Què hi trobaràs
+
+- **Targetes resum:** jugadors/es inscrits, famílies, ingressos totals i pendents de cobrar.
+- **Ocupació per setmana:** barres amb places ocupades / límit i percentatge (es posen
+  en taronja a partir del 80 % i en vermell quan s'omple).
+- **Inscripcions per dia:** gràfic de tendència.
+- **Pagaments:** percentatge cobrat (donut) — vegeu la columna `Estat`.
+- **Edats** i **descomptes aplicats**.
+- **Taula:** cerca per nom/tutor/correu, filtre per setmana i estat, ordenació per
+  columnes, i **clic a una fila** per veure tot el detall (i obrir els documents de Drive).
+- **Accions:** marcar com a **Pagat/Pendent** (un clic a l'etiqueta d'estat) i
+  **reenviar el correu** de confirmació.
+- **Exportar CSV** del que tinguis filtrat (s'obre bé a Excel, amb accents).
+
+### La columna `Estat`
+
+El script l'afegeix sola a `Inscripciones`. Cada inscripció nova entra com a **Pendent**;
+des del panell la pots passar a **Pagat** quan rebis la transferència o el pagament en mà.
+És només per al teu control intern (el cobrament online encara no hi és).
+
+> **Mode demo:** si `admin.js` té `SCRIPT_URL` buit, el panell mostra dades d'exemple
+> generades (codi `1234`) per veure'l funcionar sense backend.
+
+---
+
+## 6. Notes
 
 - **Fitxers**: 5 MB/fitxer i 12 MB per enviament (a dalt d'`app.js`: `MAX_FILE_MB`, `MAX_TOTAL_MB`).
 - **Drets d'imatge**: ara és Sí/No (com a la teva exportació). Legalment és més correcte que sigui opcional; deixa'l obligatori només si t'interessa forçar resposta.
