@@ -578,13 +578,9 @@ function updateFilterMeta() {
   const countEl = $("table-count");
   if (countEl) {
     countEl.hidden = false;
-    const txt = active
+    countEl.textContent = active
       ? `${state.filtered.length} de ${state.list.length} inscripcions`
       : `${state.list.length} inscripcions`;
-    const legend = (state.groups || DEFAULT_GROUPS).map((g) =>
-      `<span class="tl-leg"><span class="tl-dot" style="background:${GROUP_HEX[g.color] || "#94A8C9"}"></span>${esc(g.label)}</span>`
-    ).join("") + `<span class="tl-leg"><span class="tl-chk">✓</span> pagada</span>`;
-    countEl.innerHTML = `<span class="table-count__n">${txt}</span><span class="table-legend">${legend}</span>`;
   }
   const clear = $("clear-filters");
   if (clear) clear.hidden = !active;
