@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPx4yj5A0QhqHqgyNGbq2aiH1_HpMTLonlaRo6OQqe9xylU96gi0am1U4K9y3BaqwFqg/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const DEMO_PIN = "1234";
