@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyeoiwmztaYAssvnccQkZHqHXKDn-dnZJBWON92PpAWfLgiVN_zneiqZEF_0V5_td31fA/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2yS4-90ziGdsU9Z_cfCK6-FlJVzFTN-sKvxSIm1UlvcpWJspZyik4Y95GSCRSSAeOA/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const DEMO_PIN = "1234";
@@ -142,14 +142,23 @@ async function loadAll(spin) {
   if (spin) btn.classList.add("is-spinning");
   renderKpisSkeleton();
   try {
-    const [ov, ls] = await Promise.all([api("admin_overview"), api("admin_list")]);
+    let ov, list;
+    try {
+      const out = await api("admin_data");          // 1 sola petició (ràpid)
+      ov = out.overview; list = out.list || [];
+    } catch (e1) {
+      // Backend antic sense "admin_data": tornem al mètode de 2 peticions.
+      if (!/unknown action/i.test(e1.message)) throw e1;
+      const [o, l] = await Promise.all([api("admin_overview"), api("admin_list")]);
+      ov = o; list = (l && l.rows) || [];
+    }
     // Si el backend respon ok però sense estructura de panell, és que l'Apps Script
     // desplegat encara és l'antic (sense els endpoints d'admin). Avisem clarament.
     if (!ov || !ov.kpis) {
       throw new Error("El servidor no respon com a panell. Cal publicar una VERSIÓ NOVA del desplegament de l'Apps Script (Gestiona desplegaments → edita → Versió nova).");
     }
     state.overview = ov;
-    state.list = ls.rows || [];
+    state.list = list;
     state.groups = (ov.groups && ov.groups.length) ? ov.groups : DEFAULT_GROUPS.slice();
     renderOverview();
     renderWeekFilter();
@@ -589,18 +598,21 @@ function fmtDate(iso) {
 async function setPayment(id, weeks, opts) {
   const row = state.list.find((r) => r.id === id);
   if (!row) return;
+  const prev = { paidWeeks: row.paidWeeks, estat: row.estat };
+  // Actualització optimista: la UI respon a l'instant; després confirmem amb el servidor.
+  const paid = (weeks || []).filter((w) => (row.weekIds || []).includes(w));
+  row.paidWeeks = paid;
+  row.estat = paid.length === 0 ? "Pendent" : paid.length >= (row.weekIds || []).length ? "Pagat" : "Parcial";
+  recomputePayments();
+  applyFilters();
+  if (opts && opts.reopen) openDrawer(row);
   try {
     const out = await api("admin_set_payment", { id, weeks });
-    row.paidWeeks = out.paidWeeks || weeks;
+    row.paidWeeks = out.paidWeeks || paid;
     row.estat = out.estat;
-    recomputePayments();
-    applyFilters();
-    if (opts && opts.reopen) openDrawer(row);
-    const msg = row.estat === "Pagat" ? "Totes les setmanes pagades."
-      : row.estat === "Pendent" ? "Marcat com a pendent."
-      : `Pagament parcial actualitzat.`;
-    toast(msg);
   } catch (err) {
+    row.paidWeeks = prev.paidWeeks; row.estat = prev.estat;
+    recomputePayments(); applyFilters();
     toast("No s'ha pogut actualitzar: " + err.message, true);
   }
 }
@@ -869,41 +881,45 @@ function demoData(form) {
 }
 
 let _demoGroups = DEFAULT_GROUPS.slice();
+function demoOverview(d) {
+  let total = 0, cobrats = 0, pagat = 0, parcial = 0, pendent = 0;
+  const disc = { rdb: 0, fn: 0, germa: 0, cap: 0 };
+  d.rows.forEach((r) => {
+    total += r.preu;
+    const reg = (r.weekIds || []).length;
+    const paid = (r.paidWeeks || []).length;
+    if (r.estat === "Pagat") pagat++; else if (r.estat === "Parcial") parcial++; else pendent++;
+    if (reg) cobrats += r.preu * (paid / reg);
+    let any = false;
+    if (/riudebitlles/i.test(r.descompte)) { disc.rdb++; any = true; }
+    if (/nombrosa/i.test(r.descompte)) { disc.fn++; any = true; }
+    if (/-1$/.test(r.id)) { disc.germa++; any = true; }
+    if (!any) disc.cap++;
+  });
+  cobrats = Math.round(cobrats);
+  const families = new Set(d.rows.map((r) => r.tutor)).size;
+  return {
+    ok: true, form: state.form, generatedAt: new Date().toISOString(),
+    kpis: { jugadors: d.rows.length, enviaments: d.rows.length - 3, families, ingressos_total: total, ingressos_cobrats: cobrats, ingressos_pendents: total - cobrats, preu_mitja: Math.round(total / d.rows.length) },
+    weeks: d.weeks.map((w) => ({ id: w.id, etiqueta: w.etiqueta, fechas: w.fechas, plazas: w.plazas, inscrits: d.occ[w.id] })),
+    perDay: Object.keys(d.perDay).sort().map((k) => ({ date: k, count: d.perDay[k] })),
+    ages: Object.keys(d.ages).map(Number).sort((a, b) => a - b).map((a) => ({ age: a, count: d.ages[a] })),
+    discounts: disc, payments: { Pagat: pagat, Parcial: parcial, Pendent: pendent },
+    groups: _demoGroups,
+    recent: d.rows.slice(-8).reverse()
+  };
+}
 async function demoApi(action, extra) {
-  await new Promise((r) => setTimeout(r, 280));
+  await new Promise((r) => setTimeout(r, 120));
   if (action === "admin_login") {
     if (state.pin !== DEMO_PIN) throw new Error("unauthorized");
     return { ok: true, forms: DEMO_FORMS, settings: { nombre_campus: "Campus d'Hoquei Riudebitlles", club: "El plaer de jugar!" } };
   }
   const d = demoData(state.form);
-  if (action === "admin_overview") {
-    let total = 0, cobrats = 0, pagat = 0, parcial = 0, pendent = 0;
-    const disc = { rdb: 0, fn: 0, germa: 0, cap: 0 };
-    d.rows.forEach((r) => {
-      total += r.preu;
-      const reg = (r.weekIds || []).length;
-      const paid = (r.paidWeeks || []).length;
-      if (r.estat === "Pagat") pagat++; else if (r.estat === "Parcial") parcial++; else pendent++;
-      if (reg) cobrats += r.preu * (paid / reg);
-      let any = false;
-      if (/riudebitlles/i.test(r.descompte)) { disc.rdb++; any = true; }
-      if (/nombrosa/i.test(r.descompte)) { disc.fn++; any = true; }
-      if (/-1$/.test(r.id)) { disc.germa++; any = true; }
-      if (!any) disc.cap++;
-    });
-    cobrats = Math.round(cobrats);
-    const families = new Set(d.rows.map((r) => r.tutor)).size;
-    return {
-      ok: true, form: state.form, generatedAt: new Date().toISOString(),
-      kpis: { jugadors: d.rows.length, enviaments: d.rows.length - 3, families, ingressos_total: total, ingressos_cobrats: cobrats, ingressos_pendents: total - cobrats, preu_mitja: Math.round(total / d.rows.length) },
-      weeks: d.weeks.map((w) => ({ id: w.id, etiqueta: w.etiqueta, fechas: w.fechas, plazas: w.plazas, inscrits: d.occ[w.id] })),
-      perDay: Object.keys(d.perDay).sort().map((k) => ({ date: k, count: d.perDay[k] })),
-      ages: Object.keys(d.ages).map(Number).sort((a, b) => a - b).map((a) => ({ age: a, count: d.ages[a] })),
-      discounts: disc, payments: { Pagat: pagat, Parcial: parcial, Pendent: pendent },
-      groups: _demoGroups,
-      recent: d.rows.slice(-8).reverse()
-    };
+  if (action === "admin_data") {
+    return { ok: true, overview: demoOverview(d), list: d.rows.slice().reverse() };
   }
+  if (action === "admin_overview") return demoOverview(d);
   if (action === "admin_list") return { ok: true, form: state.form, rows: d.rows.slice().reverse() };
   if (action === "admin_set_group") {
     const r = d.rows.find((x) => x.id === extra.id);

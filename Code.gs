@@ -22,7 +22,14 @@ var SHEETS = {
   forms: "Formularios"
 };
 
+// Cau de lectures vàlida NOMÉS dins d'una mateixa petició HTTP. Evita rellegir
+// el mateix full desenes de vegades (Inscripcions, Camps, Ajustes…), que és el
+// que feia lent el panell. Es buida a l'inici de cada doGet/doPost.
+var _cache = { tables: {}, subs: {} };
+function resetCache() { _cache = { tables: {}, subs: {} }; }
+
 function doGet(e) {
+  resetCache();
   try {
     var form = (e && e.parameter && e.parameter.form) ? String(e.parameter.form).trim() : "";
     return json(buildConfig(form));
@@ -31,6 +38,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  resetCache();
   // Router: les peticions del panell d'administració porten un camp "action".
   // Les processem abans d'agafar el lock perquè són lectures/edicions puntuals.
   var pre = null;
@@ -404,19 +412,12 @@ function computeAge(v) {
 function countWeekRegistrations(form) {
   form = String(form || "").trim();
   var counts = {};
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(subsSheetName(form));
-  if (!sheet || sheet.getLastRow() < 2) return counts;
-  var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  // compta via les columnes 1/0 de cada setmana
+  var data = readSubmissionRows(form);          // cau per petició
+  if (!data.rows.length) return counts;
   var weeks = readTable(SHEETS.weeks).filter(function (r) { return r.id && rowMatchesForm(r, form); }).map(function (r) { return String(r.id).trim(); });
-  if (sheet.getLastRow() < 2) return counts;
-  var vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
   weeks.forEach(function (wid) {
-    var col = header.indexOf(wid);
-    if (col === -1) return;
     var c = 0;
-    vals.forEach(function (r) { if (Number(r[col]) === 1) c++; });
+    data.rows.forEach(function (row) { if (Number(row[wid]) === 1) c++; });
     counts[wid] = c;
   });
   return counts;
@@ -593,9 +594,10 @@ function fieldLabels(form) {
 
 /* ---------- Full ---------- */
 function readTable(name) {
+  if (_cache.tables[name]) return _cache.tables[name];
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(name);
-  if (!sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet || sheet.getLastRow() < 2) { _cache.tables[name] = []; return _cache.tables[name]; }
   var values = sheet.getDataRange().getValues();
   var header = values[0].map(function (h) { return String(h).trim(); });
   var out = [];
@@ -608,6 +610,7 @@ function readTable(name) {
     }
     if (!empty) out.push(obj);
   }
+  _cache.tables[name] = out;
   return out;
 }
 
@@ -662,6 +665,11 @@ function handleAdmin(p) {
     if (!form) { var g = readSettings(""); form = str(g.form_defecto); }
     switch (p.action) {
       case "admin_login":      return { ok: true, forms: adminForms(), settings: { nombre_campus: str(readSettings("").nombre_campus), club: str(readSettings("").club) } };
+      case "admin_data": {       // overview + llista en una sola petició (cau compartida)
+        var ov = adminOverview(form);
+        var ls = adminList(form);
+        return { ok: true, overview: ov, list: ls.rows };
+      }
       case "admin_overview":    return adminOverview(form);
       case "admin_list":        return adminList(form);
       case "admin_set_status":  return adminSetStatus(form, p.id, p.estat);
@@ -677,10 +685,13 @@ function handleAdmin(p) {
 }
 
 // Llegeix totes les files d'inscripció d'un formulari com a objectes {capçalera: valor}.
+// Cau per petició: es llegeix el full una sola vegada encara que es cridi diversos cops.
 function readSubmissionRows(form) {
+  var key = String(form || "");
+  if (_cache.subs[key]) return _cache.subs[key];
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(subsSheetName(form));
-  if (!sheet || sheet.getLastRow() < 2) return { header: [], rows: [], sheet: sheet };
+  if (!sheet || sheet.getLastRow() < 2) { _cache.subs[key] = { header: [], rows: [], sheet: sheet }; return _cache.subs[key]; }
   var lastCol = sheet.getLastColumn(), lastRow = sheet.getLastRow();
   var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
   var values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
@@ -690,7 +701,8 @@ function readSubmissionRows(form) {
     o.__row = i + 2;
     return o;
   });
-  return { header: header, rows: rows, sheet: sheet };
+  _cache.subs[key] = { header: header, rows: rows, sheet: sheet };
+  return _cache.subs[key];
 }
 
 // Setmanes per a les quals s'ha registrat el jugador/a (columnes 1/0).
