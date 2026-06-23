@@ -103,14 +103,15 @@ body.adm {
 .abar__sub { font-size: .74rem; color: var(--ink-soft); font-weight: 600; }
 .abar__tools { margin-left: auto; display: flex; align-items: center; gap: 9px; }
 .select-wrap { position: relative; }
-.abar__select, #filter-week, #filter-status {
+.abar__select, .filters select {
   appearance: none; -webkit-appearance: none;
   background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235A6B86' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 12px center;
   border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 34px 9px 13px;
   font-family: inherit; font-size: .88rem; font-weight: 600; color: var(--navy); cursor: pointer;
   transition: border-color .15s ease;
 }
-.abar__select:focus, #filter-week:focus, #filter-status:focus { outline: 0; border-color: var(--blue); }
+.abar__select:focus, .filters select:focus { outline: 0; border-color: var(--blue); }
+.filters select:hover { border-color: var(--blue); }
 .iconbtn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   width: 40px; height: 40px; border-radius: 10px; border: 1.5px solid var(--line);
@@ -243,7 +244,11 @@ body.adm {
 .search input { width: 100%; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 14px 10px 38px; font-family: inherit; font-size: .9rem; color: var(--ink); transition: border-color .15s ease; }
 .search input:focus { outline: 0; border-color: var(--blue); }
 .filters { display: flex; gap: 9px; flex-wrap: wrap; }
-.table-count { padding: 9px 20px 0; font-size: .8rem; color: var(--ink-soft); font-weight: 600; }
+.table-count { padding: 9px 20px 0; font-size: .8rem; color: var(--ink-soft); font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.table-legend { display: flex; flex-wrap: wrap; gap: 11px; }
+.tl-leg { display: inline-flex; align-items: center; gap: 5px; font-size: .76rem; color: var(--ink-soft); font-weight: 600; }
+.tl-dot { width: 10px; height: 10px; border-radius: 3px; }
+.tl-chk { color: var(--navy); font-weight: 900; }
 .table-scroll { overflow-x: auto; }
 .dtable { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .dtable th { text-align: left; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); font-weight: 700; padding: 13px 16px; border-bottom: 1.5px solid var(--line); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--card); }
@@ -258,12 +263,16 @@ body.adm {
 .dtable .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .cell-name { font-weight: 700; color: var(--navy); }
 .cell-sub { font-size: .78rem; color: var(--ink-soft); }
-.weeks-pills { display: flex; flex-wrap: wrap; gap: 4px; }
-.grp-badge { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--gc); color: var(--gc); border-radius: 999px; padding: 3px 10px 3px 8px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
-.grp-badge .grp-dot { background: var(--gc); }
-.grp-dots { display: inline-flex; gap: 3px; flex-wrap: wrap; }
-.grp-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
-.wpill { background: var(--blue-soft); color: var(--blue-deep); border-radius: 6px; padding: 2px 7px; font-size: .72rem; font-weight: 700; }
+.weeks-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+/* Píndola de setmana: el color (--wc) indica el GRUP d'aquella setmana.
+   Pendent = fons clar + text del color. Pagada = fons ple + text blanc + ✓. */
+.wpill {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: color-mix(in srgb, var(--wc, #94A8C9) 15%, #fff);
+  color: color-mix(in srgb, var(--wc, #94A8C9) 75%, #1b2740);
+  border: 1.5px solid color-mix(in srgb, var(--wc, #94A8C9) 35%, transparent);
+  border-radius: 7px; padding: 2px 8px; font-size: .73rem; font-weight: 800; white-space: nowrap;
+}
 .hide-sm { }
 
 /* Estat badge / toggle */
@@ -280,8 +289,8 @@ button.estat { cursor: pointer; }
 span.estat { cursor: default; }
 
 /* Píndola de setmana pagada a la taula */
-.wpill--paid { background: var(--ok-soft); color: #15803d; position: relative; }
-.wpill--paid::after { content: "✓"; margin-left: 3px; font-size: .7em; }
+.wpill--paid { background: var(--wc, #94A8C9); color: #fff; border-color: var(--wc, #94A8C9); }
+.wpill__chk { font-size: .82em; font-weight: 900; line-height: 1; }
 
 /* Pagaments per setmana (calaix de detall) */
 .pay-actions { margin-bottom: 10px; }

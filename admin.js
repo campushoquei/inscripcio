@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2yS4-90ziGdsU9Z_cfCK6-FlJVzFTN-sKvxSIm1UlvcpWJspZyik4Y95GSCRSSAeOA/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const DEMO_PIN = "1234";
@@ -578,9 +578,13 @@ function updateFilterMeta() {
   const countEl = $("table-count");
   if (countEl) {
     countEl.hidden = false;
-    countEl.textContent = active
+    const txt = active
       ? `${state.filtered.length} de ${state.list.length} inscripcions`
       : `${state.list.length} inscripcions`;
+    const legend = (state.groups || DEFAULT_GROUPS).map((g) =>
+      `<span class="tl-leg"><span class="tl-dot" style="background:${GROUP_HEX[g.color] || "#94A8C9"}"></span>${esc(g.label)}</span>`
+    ).join("") + `<span class="tl-leg"><span class="tl-chk">✓</span> pagada</span>`;
+    countEl.innerHTML = `<span class="table-count__n">${txt}</span><span class="table-legend">${legend}</span>`;
   }
   const clear = $("clear-filters");
   if (clear) clear.hidden = !active;
@@ -623,16 +627,19 @@ function renderTable() {
   const rows = state.filtered;
   $("table-empty").hidden = rows.length > 0;
   tbody.innerHTML = rows.map((r, i) => {
+    // Cada setmana: fons = color del grup d'aquella setmana; pagada = plena + ✓.
     const pills = (r.weekIds || []).map((w) => {
+      const color = groupColorOf(r, w);
+      const hex = GROUP_HEX[color] || "#94A8C9";
       const isPaid = (r.paidWeeks || []).includes(w);
-      return `<span class="wpill${isPaid ? " wpill--paid" : ""}" title="${isPaid ? "Pagada" : "Pendent"}">${esc(w)}</span>`;
+      const gl = GROUP_LABEL[color] || color;
+      return `<span class="wpill${isPaid ? " wpill--paid" : ""}" style="--wc:${hex}" title="${esc(w)} · ${esc(gl)} · ${isPaid ? "Pagada" : "Pendent"}">${esc(w)}${isPaid ? ' <span class="wpill__chk">✓</span>' : ""}</span>`;
     }).join("");
     return `<tr data-i="${i}">
       <td>${esc(fmtDate(r.ts))}</td>
       <td><div class="cell-name">${esc(r.nom || "—")}</div>${r.edat !== "" ? `<div class="cell-sub">${r.edat} anys</div>` : ""}</td>
       <td>${esc(r.tutor || "—")}<div class="cell-sub">${esc(r.email || "")}</div></td>
-      <td class="hide-sm"><div class="weeks-pills">${pills || "—"}</div></td>
-      <td>${groupCell(r)}</td>
+      <td><div class="weeks-pills">${pills || "—"}</div></td>
       <td class="num">${r.preu ? eur(r.preu) : "—"}</td>
       <td>${estatBadge(r, true)}</td>
       <td><div class="row-actions">
@@ -654,22 +661,6 @@ function renderTable() {
 }
 
 // Etiqueta d'estat de pagament. clickable=true → botó que marca/desmarca totes les setmanes.
-// Cel·la de grup a la taula: una etiqueta amb color si totes les setmanes són del
-// mateix grup; si varia per setmana, una fila de punts (un per setmana).
-function groupCell(r) {
-  const cols = (r.weekIds || []).map((w) => groupColorOf(r, w));
-  if (!cols.length) return "—";
-  const uniq = [...new Set(cols)];
-  if (uniq.length === 1) {
-    const c = uniq[0];
-    return `<span class="grp-badge" style="--gc:${GROUP_HEX[c] || "#94A8C9"}"><span class="grp-dot"></span>${esc(GROUP_LABEL[c] || c)}</span>`;
-  }
-  return `<span class="grp-dots">` + r.weekIds.map((w) => {
-    const c = groupColorOf(r, w);
-    return `<span class="grp-dot" style="background:${GROUP_HEX[c] || "#94A8C9"}" title="${esc(w)} · ${esc(GROUP_LABEL[c] || c)}"></span>`;
-  }).join("") + `</span>`;
-}
-
 function estatBadge(r, clickable) {
   const reg = (r.weekIds || []).length;
   const paid = (r.paidWeeks || []).filter((w) => (r.weekIds || []).includes(w)).length;
