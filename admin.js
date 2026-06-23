@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2yS4-90ziGdsU9Z_cfCK6-FlJVzFTN-sKvxSIm1UlvcpWJspZyik4Y95GSCRSSAeOA/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const DEMO_PIN = "1234";
@@ -241,25 +241,43 @@ function countUp(el) {
    ============================================================ */
 function renderOccupancy() {
   const weeks = state.overview.weeks || [];
+  const groups = state.groups || DEFAULT_GROUPS;
   const box = $("chart-occupancy");
   if (!weeks.length) { box.innerHTML = '<p class="card__hint">Sense setmanes configurades.</p>'; $("occ-hint").textContent = ""; return; }
   const totalInscrits = weeks.reduce((s, w) => s + w.inscrits, 0);
   $("occ-hint").textContent = `${totalInscrits} places ocupades`;
-  box.innerHTML = weeks.map((w) => {
+
+  const legend = `<div class="occ-legend">` + groups.map((g) =>
+    `<span class="occ-leg"><span class="occ-leg__dot" style="background:${GROUP_HEX[g.color] || "#94A8C9"}"></span>${esc(g.label)}</span>`
+  ).join("") + `</div>`;
+
+  const rows = weeks.map((w) => {
     const hasLimit = w.plazas != null;
-    const pct = hasLimit && w.plazas > 0 ? Math.min(100, Math.round((w.inscrits / w.plazas) * 100)) : 0;
-    let cls = "is-nolimit";
-    if (hasLimit) cls = pct >= 100 ? "is-full" : pct >= 80 ? "is-high" : "";
-    const countTxt = hasLimit ? `<b>${w.inscrits}</b> / ${w.plazas}` : `<b>${w.inscrits}</b> inscrits`;
+    const kids = state.list.filter((r) => (r.weekIds || []).includes(w.id));
+    const inscrits = kids.length || w.inscrits;
+    const counts = {}; groups.forEach((g) => (counts[g.color] = 0));
+    kids.forEach((r) => { const c = groupColorOf(r, w.id); counts[c] = (counts[c] || 0) + 1; });
+    const pct = hasLimit && w.plazas > 0 ? Math.min(100, Math.round((inscrits / w.plazas) * 100)) : 0;
+    // Base de càlcul de l'amplada: places (si n'hi ha) o el total d'inscrits.
+    const basis = hasLimit && w.plazas > 0 ? w.plazas : (inscrits || 1);
+    const segs = groups.map((g) => {
+      const cnt = counts[g.color] || 0;
+      if (!cnt) return "";
+      const wdt = Math.min(100, (cnt / basis) * 100);
+      return `<span class="occ__seg" data-w="${wdt.toFixed(2)}" style="background:${GROUP_HEX[g.color] || "#94A8C9"}" title="${esc(g.label)}: ${cnt}"></span>`;
+    }).join("");
+    const countTxt = hasLimit ? `<b>${inscrits}</b> / ${w.plazas}` : `<b>${inscrits}</b> inscrits`;
     return `<div class="occ__row">
       <div class="occ__top">
         <span><span class="occ__name">${esc(w.etiqueta || w.id)}</span> <span class="occ__dates">${esc(w.fechas || "")}</span></span>
         <span class="occ__count">${countTxt}${hasLimit ? ` · ${pct}%` : ""}</span>
       </div>
-      <div class="occ__track"><div class="occ__bar ${cls}" data-w="${hasLimit ? pct : Math.min(100, w.inscrits * 8)}"></div></div>
+      <div class="occ__track">${segs}</div>
     </div>`;
   }).join("");
-  requestAnimationFrame(() => box.querySelectorAll(".occ__bar").forEach((b) => (b.style.width = b.dataset.w + "%")));
+
+  box.innerHTML = legend + rows;
+  requestAnimationFrame(() => box.querySelectorAll(".occ__seg").forEach((s) => (s.style.width = s.dataset.w + "%")));
 }
 
 /* ============================================================
@@ -446,7 +464,7 @@ async function setGroup(id, week, color) {
   const auto = autoGroupColor(Number(row.edat));
   row.grups = row.grups || {};
   if (!color || color === auto) delete row.grups[week]; else row.grups[week] = color;
-  renderGroupsBoard(); // actualització optimista
+  renderGroupsBoard(); renderOccupancy(); renderTable(); // actualització optimista
   try { await api("admin_set_group", { id, week, color }); }
   catch (err) { toast("No s'ha pogut moure: " + err.message, true); loadAll(); }
 }
@@ -486,6 +504,8 @@ async function saveGroupsConfig() {
     toast("Intervals desats.");
     renderGroups();
     renderAges();
+    renderOccupancy();
+    renderTable();
   } catch (err) { toast("No s'ha pogut desar: " + err.message, true); }
 }
 
@@ -554,6 +574,7 @@ function renderTable() {
       <td><div class="cell-name">${esc(r.nom || "—")}</div>${r.edat !== "" ? `<div class="cell-sub">${r.edat} anys</div>` : ""}</td>
       <td>${esc(r.tutor || "—")}<div class="cell-sub">${esc(r.email || "")}</div></td>
       <td class="hide-sm"><div class="weeks-pills">${pills || "—"}</div></td>
+      <td>${groupCell(r)}</td>
       <td class="num">${r.preu ? eur(r.preu) : "—"}</td>
       <td>${estatBadge(r, true)}</td>
       <td><div class="row-actions">
@@ -575,6 +596,22 @@ function renderTable() {
 }
 
 // Etiqueta d'estat de pagament. clickable=true → botó que marca/desmarca totes les setmanes.
+// Cel·la de grup a la taula: una etiqueta amb color si totes les setmanes són del
+// mateix grup; si varia per setmana, una fila de punts (un per setmana).
+function groupCell(r) {
+  const cols = (r.weekIds || []).map((w) => groupColorOf(r, w));
+  if (!cols.length) return "—";
+  const uniq = [...new Set(cols)];
+  if (uniq.length === 1) {
+    const c = uniq[0];
+    return `<span class="grp-badge" style="--gc:${GROUP_HEX[c] || "#94A8C9"}"><span class="grp-dot"></span>${esc(GROUP_LABEL[c] || c)}</span>`;
+  }
+  return `<span class="grp-dots">` + r.weekIds.map((w) => {
+    const c = groupColorOf(r, w);
+    return `<span class="grp-dot" style="background:${GROUP_HEX[c] || "#94A8C9"}" title="${esc(w)} · ${esc(GROUP_LABEL[c] || c)}"></span>`;
+  }).join("") + `</span>`;
+}
+
 function estatBadge(r, clickable) {
   const reg = (r.weekIds || []).length;
   const paid = (r.paidWeeks || []).filter((w) => (r.weekIds || []).includes(w)).length;
@@ -752,10 +789,10 @@ function closeDrawer() {
 function exportCsv() {
   const rows = state.filtered;
   if (!rows.length) return toast("No hi ha res per exportar.", true);
-  const cols = ["ID", "Data", "Jugador/a", "Edat", "Tutor/a", "Email", "Telèfon", "Setmanes", "Preu", "Descompte", "Estat"];
+  const cols = ["ID", "Data", "Jugador/a", "Edat", "Tutor/a", "Email", "Telèfon", "Setmanes", "Grup", "Preu", "Descompte", "Estat"];
   const lines = [cols.join(";")];
   rows.forEach((r) => {
-    const vals = [r.id, fmtDate(r.ts), r.nom, r.edat, r.tutor, r.email, r.telefon, r.setmanes, r.preu, r.descompte, r.estat];
+    const vals = [r.id, fmtDate(r.ts), r.nom, r.edat, r.tutor, r.email, r.telefon, r.setmanes, csvGroups(r), r.preu, r.descompte, r.estat];
     lines.push(vals.map(csvCell).join(";"));
   });
   const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
@@ -769,6 +806,14 @@ function exportCsv() {
 function csvCell(v) {
   const s = String(v == null ? "" : v);
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+// Grup per a l'exportació: una etiqueta si és igual a totes les setmanes, o "S1:Blau S2:Verd…".
+function csvGroups(r) {
+  const cols = (r.weekIds || []).map((w) => groupColorOf(r, w));
+  if (!cols.length) return "";
+  const uniq = [...new Set(cols)];
+  if (uniq.length === 1) return GROUP_LABEL[uniq[0]] || uniq[0];
+  return r.weekIds.map((w) => `${w}:${GROUP_LABEL[groupColorOf(r, w)] || groupColorOf(r, w)}`).join(" ");
 }
 
 /* ============================================================

@@ -152,11 +152,11 @@ body.adm {
 .occ__dates { color: var(--ink-soft); font-weight: 500; font-size: .8rem; }
 .occ__count { color: var(--ink-soft); font-weight: 700; font-variant-numeric: tabular-nums; }
 .occ__count b { color: var(--navy); }
-.occ__track { height: 12px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
-.occ__bar { height: 100%; border-radius: 999px; width: 0; background: linear-gradient(90deg, var(--blue), #4F8EFF); transition: width .9s cubic-bezier(.2,.8,.2,1); }
-.occ__bar.is-full { background: linear-gradient(90deg, var(--danger), #e06453); }
-.occ__bar.is-high { background: linear-gradient(90deg, var(--warn), #f0a83c); }
-.occ__bar.is-nolimit { background: linear-gradient(90deg, #94A8C9, #B9C8E0); }
+.occ__track { height: 12px; border-radius: 999px; background: var(--line-soft); overflow: hidden; display: flex; }
+.occ__seg { height: 100%; width: 0; transition: width .9s cubic-bezier(.2,.8,.2,1); }
+.occ-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.occ-leg { display: inline-flex; align-items: center; gap: 5px; font-size: .76rem; color: var(--ink-soft); font-weight: 600; }
+.occ-leg__dot { width: 9px; height: 9px; border-radius: 50%; }
 
 /* ---------- Area / timeline chart ---------- */
 .chart-area { width: 100%; }
@@ -247,6 +247,10 @@ body.adm {
 .cell-name { font-weight: 700; color: var(--navy); }
 .cell-sub { font-size: .78rem; color: var(--ink-soft); }
 .weeks-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.grp-badge { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--gc); color: var(--gc); border-radius: 999px; padding: 3px 10px 3px 8px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.grp-badge .grp-dot { background: var(--gc); }
+.grp-dots { display: inline-flex; gap: 3px; flex-wrap: wrap; }
+.grp-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
 .wpill { background: var(--blue-soft); color: var(--blue-deep); border-radius: 6px; padding: 2px 7px; font-size: .72rem; font-weight: 700; }
 .hide-sm { }
 
