@@ -1,7 +1,7 @@
 {
-  "name": "Campus Hoquei Riudebitlles",
-  "short_name": "Casal Hoquei",
-  "description": "Formulari d'inscripció del Casal d'Hoquei",
+  "name": "Campus d'Hoquei Riudebitlles",
+  "short_name": "Campus Hoquei",
+  "description": "Inscripcions als campus i casals d'hoquei de Riudebitlles durant tot l'any.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#EEF3FB",
