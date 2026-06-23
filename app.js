@@ -22,7 +22,6 @@ const MAX_TOTAL_MB = 12;
 const LOAD_HINTS = [
   "📋 Preparant la teva inscripció",
   "🏑 Buscant la millor línia de passada",
-  "🛼 Fent els últims ajustos als patins",
   "✨ Donant els últims retocs",
 ];
 let _hintTimer = null;
