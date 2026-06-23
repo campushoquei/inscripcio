@@ -256,6 +256,7 @@ function saveRow(id, payload, data) {
   plan.push("Descompte");
   plan.push("Estat");
   plan.push("Setmanes pagades");
+  plan.push("Grups");
 
   // capçalera actual; afegeix les columnes que faltin (al final)
   var lastCol = sheet.getLastColumn();
@@ -284,6 +285,7 @@ function saveRow(id, payload, data) {
     if (col === "Descompte") return payload.descompte || "";
     if (col === "Estat") return payload.estat || "Pendent";
     if (col === "Setmanes pagades") return payload.pagat_setmanes || "";
+    if (col === "Grups") return payload.grups || "";
     if (selectedIsWeek(col, weeks)) return selected[col] ? 1 : 0;
     var fieldId = fieldIdForColumn(col, fields, labelById);
     if (fieldId && data[fieldId] != null) return data[fieldId];
@@ -664,6 +666,8 @@ function handleAdmin(p) {
       case "admin_list":        return adminList(form);
       case "admin_set_status":  return adminSetStatus(form, p.id, p.estat);
       case "admin_set_payment": return adminSetPayment(form, p.id, p.weeks);
+      case "admin_set_group":   return adminSetGroup(form, p.id, p.week, p.color);
+      case "admin_set_groups_config": return adminSetGroupsConfig(p.config);
       case "admin_resend":      return adminResend(form, p.id);
       default:                 return { ok: false, error: "unknown action" };
     }
@@ -705,6 +709,52 @@ function computeEstat(paid, registered) {
   if (!registered || !registered.length) return "Pendent";
   if (!paid || !paid.length) return "Pendent";
   return paid.length >= registered.length ? "Pagat" : "Parcial";
+}
+
+/* ---------- Grups per edat (vestidors) ---------- */
+function defaultGroups() {
+  return [
+    { color: "blau",    label: "Blau",    min: 4,  max: 6 },
+    { color: "verd",    label: "Verd",    min: 7,  max: 8 },
+    { color: "taronja", label: "Taronja", min: 9,  max: 10 },
+    { color: "vermell", label: "Vermell", min: 11, max: 99 }
+  ];
+}
+// Llegeix la config de grups de l'Ajustes (clau "grups_edats"):
+//   "blau:4-6; verd:7-8; taronja:9-10; vermell:11-99"
+function groupsConfig(settings) {
+  var raw = str(settings && settings.grups_edats);
+  if (!raw) return defaultGroups();
+  var labels = { blau: "Blau", verd: "Verd", taronja: "Taronja", vermell: "Vermell" };
+  var out = [];
+  raw.split(/[;,]/).forEach(function (part) {
+    var kv = part.split(":");
+    if (kv.length < 2) return;
+    var color = str(kv[0]).toLowerCase();
+    var range = str(kv[1]).split("-");
+    var min = num(range[0]), max = num(range[1]);
+    if (color && min != null) out.push({ color: color, label: labels[color] || color, min: min, max: (max != null ? max : 99) });
+  });
+  return out.length ? out : defaultGroups();
+}
+function autoGroupColor(age, groups) {
+  if (age == null || isNaN(age)) return groups.length ? groups[0].color : "";
+  for (var i = 0; i < groups.length; i++) if (age >= groups[i].min && age <= groups[i].max) return groups[i].color;
+  var sorted = groups.slice().sort(function (a, b) { return a.min - b.min; });
+  return age < sorted[0].min ? sorted[0].color : sorted[sorted.length - 1].color;
+}
+function parseGroupOverrides(s) {
+  var map = {};
+  String(s || "").split(/[;,]/).forEach(function (p) {
+    var kv = p.split(":");
+    if (kv.length < 2) return;
+    var w = String(kv[0]).trim(), c = String(kv[1]).trim().toLowerCase();
+    if (w && c) map[w] = c;
+  });
+  return map;
+}
+function serializeGroupOverrides(map) {
+  return Object.keys(map).map(function (w) { return w + ":" + map[w]; }).join("; ");
 }
 function adminRowEstat(row) { return str(row.Estat) || "Pendent"; }
 function adminRowName(row, form) {
@@ -809,6 +859,7 @@ function adminOverview(form) {
     ages: agesArr,
     discounts: discounts,
     payments: payments,
+    groups: groupsConfig(readSettings(form)),
     recent: recent
   };
 }
@@ -848,6 +899,8 @@ function adminList(form) {
       preu: num(row.Preu) || 0,
       descompte: str(row.Descompte),
       estat: computeEstat(paid, registered),
+      grups: parseGroupOverrides(str(row.Grups)),
+      sapNedar: pickFirstValue(row, [/sap_nedar/i, /nedar|nadar|swim/i]),
       fitxers: adminFileUrls(row),
       detall: detail
     };
@@ -899,6 +952,59 @@ function adminSetStatus(form, id, estat) {
   if (!target) return { ok: false, error: "row not found" };
   var registered = rowRegisteredWeeks(target, weekIds);
   return adminSetPayment(form, id, (str(estat) === "Pagat") ? registered : []);
+}
+
+// Mou un jugador/a a un color de grup per a una setmana concreta.
+// Si el color coincideix amb l'automàtic (per edat), s'esborra l'excepció.
+function adminSetGroup(form, id, week, color) {
+  week = str(week); color = str(color).toLowerCase();
+  var data = readSubmissionRows(form);
+  var sheet = data.sheet;
+  if (!sheet) return { ok: false, error: "sheet not found" };
+  var target = null;
+  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
+  if (!target) return { ok: false, error: "row not found" };
+
+  var groups = groupsConfig(readSettings(form));
+  var auto = autoGroupColor(num(target.Edat), groups);
+  var map = parseGroupOverrides(str(target.Grups));
+  if (!week) return { ok: false, error: "week missing" };
+  if (!color || color === auto) delete map[week]; else map[week] = color;
+
+  var col = ensureColumn(sheet, data.header, "Grups");
+  sheet.getRange(target.__row, col, 1, 1).setValue(serializeGroupOverrides(map));
+  return { ok: true, id: id, grups: map };
+}
+
+// Desa els intervals d'edat dels grups a Ajustes (global, per a tots els formularis).
+function adminSetGroupsConfig(config) {
+  if (!config || !config.length) return { ok: false, error: "config buida" };
+  var parts = config.map(function (g) {
+    return String(g.color).toLowerCase() + ":" + num(g.min) + "-" + num(g.max);
+  });
+  writeSetting("grups_edats", parts.join("; "));
+  return { ok: true, groups: groupsConfig(readSettings("")) };
+}
+
+// Escriu (o crea) una fila Clave/Valor global a la pestanya Ajustes.
+function writeSetting(key, value) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEETS.settings);
+  if (!sheet) { sheet = ss.insertSheet(SHEETS.settings); sheet.getRange(1, 1, 1, 2).setValues([["Clave", "Valor"]]); }
+  var values = sheet.getDataRange().getValues();
+  var header = values[0].map(function (h) { return String(h).trim(); });
+  var kc = header.indexOf("Clave"); if (kc < 0) kc = header.indexOf("clave"); if (kc < 0) kc = 0;
+  var vc = header.indexOf("Valor"); if (vc < 0) vc = header.indexOf("valor"); if (vc < 0) vc = 1;
+  var formCol = header.indexOf("form");
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][kc]).trim() === key) {
+      var rf = formCol >= 0 ? String(values[i][formCol]).trim() : "";
+      if (!rf) { sheet.getRange(i + 1, vc + 1, 1, 1).setValue(value); return; }
+    }
+  }
+  var row = []; for (var j = 0; j < header.length; j++) row.push("");
+  row[kc] = key; row[vc] = value;
+  sheet.appendRow(row);
 }
 
 // Reenvia el correu de confirmació d'una fila concreta.

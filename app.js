@@ -730,7 +730,7 @@ function childWeeksEl(i) {
     const input = document.createElement("input");
     input.type = "checkbox"; input.value = w.id; input.name = `c${i}__weeks`; input.disabled = full;
     input.addEventListener("change", () => { lab.classList.toggle("is-selected", input.checked); if (navigator.vibrate) navigator.vibrate(10); });
-    const placesMeta = (!full && w.plazas_restantes != null) ? ` · queden ${w.plazas_restantes}` : "";
+    const placesMeta = (!full && w.plazas_restantes != null) ? ` · ${w.plazas_restantes} places disponibles` : "";
     const fullTag = full ? `<span class="week__tag">Complet</span>` : "";
     lab.innerHTML = `<span class="week__num">${idx + 1}</span>
       <span class="week__body"><span class="week__label">${escapeHtml(w.etiqueta)}</span>

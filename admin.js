@@ -13,6 +13,16 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2yS4-90ziGdsU9Z_c
 const PIN_KEY = "casal_admin_pin";
 const DEMO_PIN = "1234";
 
+// Colors fixos dels grups (vestidors). Els intervals d'edat són configurables.
+const GROUP_HEX = { blau: "#1F5AE0", verd: "#16A34A", taronja: "#D97706", vermell: "#DC2626" };
+const GROUP_LABEL = { blau: "Blau", verd: "Verd", taronja: "Taronja", vermell: "Vermell" };
+const DEFAULT_GROUPS = [
+  { color: "blau", label: "Blau", min: 4, max: 6 },
+  { color: "vermell", label: "Vermell", min: 7, max: 9 },
+  { color: "taronja", label: "Taronja", min: 10, max: 11 },
+  { color: "verd", label: "Verd", min: 12, max: 14 }
+];
+
 // ---- Estat ----
 const state = {
   pin: "",
@@ -22,7 +32,9 @@ const state = {
   list: [],
   filtered: [],
   sort: { key: "ts", dir: "desc" },
-  filters: { q: "", week: "", status: "" }
+  filters: { q: "", week: "", status: "" },
+  groups: DEFAULT_GROUPS.slice(),
+  groupWeek: ""
 };
 
 const $ = (id) => document.getElementById(id);
@@ -40,6 +52,7 @@ function init() {
   $("filter-week").addEventListener("change", (e) => { state.filters.week = e.target.value; applyFilters(); });
   $("filter-status").addEventListener("change", (e) => { state.filters.status = e.target.value; applyFilters(); });
   $("export-btn").addEventListener("click", exportCsv);
+  $("groups-config-btn").addEventListener("click", toggleGroupsConfig);
   $("drawer-close").addEventListener("click", closeDrawer);
   $("drawer-backdrop").addEventListener("click", closeDrawer);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
@@ -137,9 +150,11 @@ async function loadAll(spin) {
     }
     state.overview = ov;
     state.list = ls.rows || [];
+    state.groups = (ov.groups && ov.groups.length) ? ov.groups : DEFAULT_GROUPS.slice();
     renderOverview();
     renderWeekFilter();
     applyFilters();
+    renderGroups();
   } catch (err) {
     if (err.message === "unauthorized") return logout();
     toast("No s'han pogut carregar les dades: " + err.message, true);
@@ -326,11 +341,14 @@ function renderAges() {
   const box = $("chart-ages");
   if (!ages.length) { box.innerHTML = '<p class="card__hint">Sense dades d\'edat.</p>'; return; }
   const max = Math.max(...ages.map((a) => a.count), 1);
-  box.innerHTML = ages.map((a) =>
-    `<div class="chart-bars__col">
-      <div class="chart-bars__bar" data-h="${Math.round((a.count / max) * 100)}"><span class="chart-bars__val">${a.count}</span></div>
+  // Cada barra es pinta amb el color del grup que correspon a aquella edat.
+  box.innerHTML = ages.map((a) => {
+    const hex = GROUP_HEX[autoGroupColor(a.age)] || "#1F5AE0";
+    return `<div class="chart-bars__col">
+      <div class="chart-bars__bar" data-h="${Math.round((a.count / max) * 100)}" style="background:${hex}"><span class="chart-bars__val">${a.count}</span></div>
       <span class="chart-bars__lbl">${a.age}</span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   requestAnimationFrame(() => box.querySelectorAll(".chart-bars__bar").forEach((b) => (b.style.height = b.dataset.h + "%")));
 }
 
@@ -348,6 +366,118 @@ function renderDiscounts() {
   $("chart-discounts").innerHTML = items.map((i) =>
     `<div class="stat-chip"><span class="stat-chip__val">${i.val}</span><span class="stat-chip__lbl">${esc(i.lbl)}</span></div>`
   ).join("");
+}
+
+/* ============================================================
+   RENDER — Grups i vestidors
+   ============================================================ */
+// Color de grup automàtic segons l'edat (intervals configurables).
+function autoGroupColor(age) {
+  const groups = state.groups || DEFAULT_GROUPS;
+  if (age === "" || age == null || isNaN(age)) return groups[0] ? groups[0].color : "";
+  for (const g of groups) if (age >= g.min && age <= g.max) return g.color;
+  const sorted = groups.slice().sort((a, b) => a.min - b.min);
+  return age < sorted[0].min ? sorted[0].color : sorted[sorted.length - 1].color;
+}
+// Color efectiu d'un nen/a en una setmana: excepció manual o automàtic per edat.
+function groupColorOf(row, week) {
+  return (row.grups && row.grups[week]) || autoGroupColor(Number(row.edat));
+}
+
+function renderGroups() {
+  const weeks = (state.overview && state.overview.weeks) || [];
+  const tabs = $("groups-week-tabs");
+  const board = $("groups-board");
+  if (!weeks.length) { tabs.innerHTML = ""; board.innerHTML = '<p class="card__hint">Sense setmanes configurades.</p>'; return; }
+  if (!state.groupWeek || !weeks.some((w) => w.id === state.groupWeek)) state.groupWeek = weeks[0].id;
+  tabs.innerHTML = weeks.map((w) =>
+    `<button class="week-tab${w.id === state.groupWeek ? " is-active" : ""}" data-week="${esc(w.id)}">${esc(w.etiqueta || w.id)}</button>`
+  ).join("");
+  tabs.querySelectorAll("[data-week]").forEach((b) =>
+    b.addEventListener("click", () => { state.groupWeek = b.dataset.week; renderGroups(); }));
+  renderGroupsBoard();
+  renderGroupsConfig();
+}
+
+function renderGroupsBoard() {
+  const week = state.groupWeek;
+  const groups = state.groups || DEFAULT_GROUPS;
+  const kids = state.list.filter((r) => (r.weekIds || []).includes(week));
+  const byColor = {}; groups.forEach((g) => (byColor[g.color] = []));
+  kids.forEach((r) => { const c = groupColorOf(r, week); (byColor[c] = byColor[c] || []).push(r); });
+
+  $("groups-board").innerHTML = groups.map((g) => {
+    const list = (byColor[g.color] || []).slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
+    const hex = GROUP_HEX[g.color] || "#64748B";
+    const chips = list.map((r) => {
+      const manual = r.grups && r.grups[week];
+      const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
+      const opts = groups.map((gg) => `<option value="${esc(gg.color)}"${gg.color === g.color ? " selected" : ""}>${esc(gg.label)}</option>`).join("");
+      return `<div class="gchip${manual ? " gchip--manual" : ""}" title="${manual ? "Mogut manualment" : "Assignat per edat"}">
+        <span class="gchip__name">${esc(r.nom || "—")}</span>
+        <span class="gchip__age">${r.edat !== "" ? r.edat + "a" : ""}</span>
+        ${noSwim ? '<span class="gchip__noswim" title="No sap nedar">🚱</span>' : ""}
+        <select class="gchip__move" data-move="${esc(r.id)}" aria-label="Mou de grup">${opts}</select>
+      </div>`;
+    }).join("");
+    return `<div class="gcol" style="--gc:${hex}">
+      <div class="gcol__head"><span class="gcol__dot"></span><span class="gcol__name">${esc(g.label)}</span><span class="gcol__count">${list.length}</span></div>
+      <div class="gcol__range">${g.min}–${g.max} anys</div>
+      <div class="gcol__list">${chips || '<p class="gcol__empty">Cap nen/a</p>'}</div>
+    </div>`;
+  }).join("");
+
+  $("groups-board").querySelectorAll("[data-move]").forEach((sel) =>
+    sel.addEventListener("change", () => setGroup(sel.dataset.move, week, sel.value)));
+}
+
+async function setGroup(id, week, color) {
+  const row = state.list.find((r) => r.id === id);
+  if (!row) return;
+  const auto = autoGroupColor(Number(row.edat));
+  row.grups = row.grups || {};
+  if (!color || color === auto) delete row.grups[week]; else row.grups[week] = color;
+  renderGroupsBoard(); // actualització optimista
+  try { await api("admin_set_group", { id, week, color }); }
+  catch (err) { toast("No s'ha pogut moure: " + err.message, true); loadAll(); }
+}
+
+function toggleGroupsConfig() {
+  const box = $("groups-config");
+  box.hidden = !box.hidden;
+  if (!box.hidden) renderGroupsConfig(true);
+}
+function renderGroupsConfig(force) {
+  const box = $("groups-config");
+  if (box.hidden && !force) return;
+  const groups = state.groups || DEFAULT_GROUPS;
+  box.innerHTML = `<p class="groups-config__hint">Assignació automàtica per edat. Els canvis manuals sempre tenen prioritat.</p>
+    <div class="groups-config__rows">` +
+    groups.map((g) => `<div class="gconf-row" data-color="${esc(g.color)}">
+      <span class="gconf-dot" style="background:${GROUP_HEX[g.color] || "#64748B"}"></span>
+      <span class="gconf-name">${esc(g.label)}</span>
+      <input class="gconf-min" type="number" min="0" max="99" value="${g.min}">
+      <span>–</span>
+      <input class="gconf-max" type="number" min="0" max="99" value="${g.max}">
+      <span class="cell-sub">anys</span>
+    </div>`).join("") +
+    `</div><div class="groups-config__actions"><button class="btn btn--primary btn--sm" id="gconf-save">Desa els intervals</button></div>`;
+  $("gconf-save").addEventListener("click", saveGroupsConfig);
+}
+async function saveGroupsConfig() {
+  const config = [...$("groups-config").querySelectorAll(".gconf-row")].map((r) => ({
+    color: r.dataset.color,
+    min: Number(r.querySelector(".gconf-min").value) || 0,
+    max: Number(r.querySelector(".gconf-max").value) || 99
+  }));
+  try {
+    const out = await api("admin_set_groups_config", { config });
+    state.groups = (out.groups && out.groups.length) ? out.groups
+      : config.map((c) => ({ ...c, label: GROUP_LABEL[c.color] || c.color }));
+    toast("Intervals desats.");
+    renderGroups();
+    renderAges();
+  } catch (err) { toast("No s'ha pogut desar: " + err.message, true); }
 }
 
 /* ============================================================
@@ -711,19 +841,21 @@ function demoData(form) {
       : roll < 0.75 ? wids.filter(() => Math.random() > 0.5)
       : [];
     const estat = paidWeeks.length === 0 ? "Pendent" : paidWeeks.length >= wids.length ? "Pagat" : "Parcial";
+    const swim = Math.random() > 0.25 ? "Sí" : "No";
     rows.push({
       id: "INS-" + (1700000000000 + i * 99000) + (Math.random() > 0.8 ? "-1" : ""),
       baseId: "INS-" + i, row: i + 2, ts: day.toISOString().slice(0, 10),
       formulario: cfg.nombre, nom,
       tutor: tutors[i % tutors.length], email: nom.toLowerCase().replace(/\s+/g, ".") + "@exemple.cat",
       telefon: "6" + (10000000 + Math.floor(Math.random() * 8999999)),
-      edat: 6 + (i % 8), setmanes: wids.join(", "),
+      edat: 4 + (i % 11), setmanes: wids.join(", "),
       weekIds: wids, paidWeeks, preu, descompte: desc, estat,
+      grups: {}, sapNedar: swim,
       fitxers: card ? [card] : [],
       detall: [
         { label: "Nom i cognoms", value: nom, grup: "Dades del jugador/a", esJugador: true },
         { label: "Data de naixement", value: `1${i % 9}/0${1 + i % 8}/20${10 + i % 9}`, grup: "Dades del jugador/a", esJugador: true },
-        { label: "Sap nedar?", value: Math.random() > 0.3 ? "Sí" : "No", grup: "Dades del jugador/a", esJugador: true },
+        { label: "Sap nedar?", value: swim, grup: "Dades del jugador/a", esJugador: true },
         ...(card ? [{ label: "Còpia de la targeta sanitària", value: card, grup: "Documentació", esJugador: true }] : []),
         { label: "Nom del tutor/a", value: tutors[i % tutors.length], grup: "Dades del tutor/a", esJugador: false },
         { label: "Telèfon", value: "6" + (10000000 + Math.floor(Math.random() * 8999999)), grup: "Dades del tutor/a", esJugador: false }
@@ -736,6 +868,7 @@ function demoData(form) {
   return _demo[form];
 }
 
+let _demoGroups = DEFAULT_GROUPS.slice();
 async function demoApi(action, extra) {
   await new Promise((r) => setTimeout(r, 280));
   if (action === "admin_login") {
@@ -767,10 +900,25 @@ async function demoApi(action, extra) {
       perDay: Object.keys(d.perDay).sort().map((k) => ({ date: k, count: d.perDay[k] })),
       ages: Object.keys(d.ages).map(Number).sort((a, b) => a - b).map((a) => ({ age: a, count: d.ages[a] })),
       discounts: disc, payments: { Pagat: pagat, Parcial: parcial, Pendent: pendent },
+      groups: _demoGroups,
       recent: d.rows.slice(-8).reverse()
     };
   }
   if (action === "admin_list") return { ok: true, form: state.form, rows: d.rows.slice().reverse() };
+  if (action === "admin_set_group") {
+    const r = d.rows.find((x) => x.id === extra.id);
+    if (r) {
+      r.grups = r.grups || {};
+      const auto = autoGroupColor(Number(r.edat));
+      if (!extra.color || extra.color === auto) delete r.grups[extra.week]; else r.grups[extra.week] = extra.color;
+      return { ok: true, id: extra.id, grups: r.grups };
+    }
+    return { ok: false, error: "row not found" };
+  }
+  if (action === "admin_set_groups_config") {
+    _demoGroups = (extra.config || []).map((c) => ({ color: c.color, label: GROUP_LABEL[c.color] || c.color, min: Number(c.min) || 0, max: Number(c.max) || 99 }));
+    return { ok: true, groups: _demoGroups };
+  }
   if (action === "admin_set_payment") {
     const r = d.rows.find((x) => x.id === extra.id);
     if (r) {

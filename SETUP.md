@@ -228,6 +228,24 @@ Els **ingressos cobrats** del dashboard es calculen de forma proporcional a les 
 pagades de cada inscripció. És només per al teu control intern (transferència o pagament
 en mà); el cobrament online encara no hi és.
 
+### Grups i vestidors (per colors)
+
+Al panell hi ha la secció **Grups i vestidors** per distribuir els nens/es en 4 grups de
+color: **Blau, Verd, Taronja, Vermell**.
+
+- **Assignació automàtica per edat.** Cada grup té un interval d'edat (editable amb el botó
+  *Edats dels grups…*). Per defecte: Blau 4–6, Verd 7–8, Taronja 9–10, Vermell 11–14.
+- **Per setmana.** A dalt tries la setmana (S1…S5): un nen/a pot estar en un grup diferent
+  cada setmana.
+- **Moure manualment.** Cada nen/a té un selector per canviar-lo de color en aquella setmana;
+  el canvi manual (marcat amb vora discontínua) té prioritat sobre l'automàtic.
+- **Recompte per grup** a cada columna (útil per als vestidors) i icona 🚱 si **no sap nedar**.
+- El **gràfic de distribució d'edats** es pinta amb el color del grup de cada edat.
+
+Tècnicament: el script afegeix sola la columna **`Grups`** a `Inscripciones` (hi desa només
+les excepcions manuals, p. ex. `S2:vermell`), i els intervals es guarden a `Ajustes` →
+`grups_edats` (p. ex. `blau:4-6; verd:7-8; taronja:9-10; vermell:11-14`).
+
 > **Mode demo:** si `admin.js` té `SCRIPT_URL` buit, el panell mostra dades d'exemple
 > generades (codi `1234`) per veure'l funcionar sense backend.
 

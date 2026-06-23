@@ -192,6 +192,38 @@ body.adm {
 .stat-chip__val { font-family: "Anton", sans-serif; font-size: 1.5rem; color: var(--navy); }
 .stat-chip__lbl { font-size: .82rem; color: var(--ink-soft); font-weight: 600; }
 
+/* ---------- Grups i vestidors ---------- */
+.groups-section { margin-bottom: 22px; }
+.week-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+.week-tab { border: 1.5px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 999px; padding: 7px 15px; font-family: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; transition: all .15s ease; }
+.week-tab:hover { border-color: var(--blue); color: var(--blue); }
+.week-tab.is-active { background: var(--navy); border-color: var(--navy); color: #fff; }
+.groups-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.gcol { border: 1px solid var(--line); border-top: 3px solid var(--gc, var(--blue)); border-radius: var(--radius-sm); background: #fbfcfe; display: flex; flex-direction: column; min-height: 90px; }
+.gcol__head { display: flex; align-items: center; gap: 8px; padding: 11px 13px 6px; }
+.gcol__dot { width: 11px; height: 11px; border-radius: 50%; background: var(--gc); flex: 0 0 auto; }
+.gcol__name { font-weight: 800; color: var(--navy); font-size: .92rem; }
+.gcol__count { margin-left: auto; font-weight: 800; color: var(--gc); font-variant-numeric: tabular-nums; background: #fff; border: 1.5px solid var(--gc); border-radius: 999px; min-width: 26px; text-align: center; padding: 1px 7px; font-size: .82rem; }
+.gcol__range { font-size: .72rem; color: var(--ink-soft); padding: 0 13px 9px; border-bottom: 1px solid var(--line-soft); }
+.gcol__list { display: flex; flex-direction: column; gap: 6px; padding: 10px; flex: 1; }
+.gcol__empty { color: var(--ink-soft); font-size: .82rem; text-align: center; margin: 8px 0; opacity: .7; }
+.gchip { display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; font-size: .86rem; }
+.gchip--manual { border-style: dashed; border-color: var(--gc); }
+.gchip__name { font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gchip__age { color: var(--ink-soft); font-size: .78rem; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.gchip__noswim { flex: 0 0 auto; font-size: .8rem; }
+.gchip__move { flex: 0 0 auto; appearance: none; -webkit-appearance: none; border: 1.5px solid var(--line); border-radius: 7px; background: var(--line-soft); padding: 3px 6px; font-family: inherit; font-size: .74rem; font-weight: 700; color: var(--ink-soft); cursor: pointer; max-width: 80px; }
+.gchip__move:hover { border-color: var(--blue); color: var(--blue); }
+.groups-config { background: var(--line-soft); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 16px; }
+.groups-config__hint { margin: 0 0 12px; font-size: .82rem; color: var(--ink-soft); }
+.groups-config__rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.gconf-row { display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; }
+.gconf-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+.gconf-name { font-weight: 700; color: var(--navy); font-size: .85rem; min-width: 54px; }
+.gconf-row input { width: 46px; border: 1.5px solid var(--line); border-radius: 7px; padding: 5px 6px; font-family: inherit; font-size: .85rem; text-align: center; color: var(--ink); }
+.gconf-row input:focus { outline: 0; border-color: var(--blue); }
+.groups-config__actions { margin-top: 13px; }
+
 /* ---------- Table ---------- */
 .table-card { padding: 0; overflow: hidden; }
 .table-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px 20px; border-bottom: 1px solid var(--line); }
@@ -288,12 +320,14 @@ span.estat { cursor: default; }
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .grid { grid-template-columns: 1fr; }
   .card--span2 { grid-column: span 1; }
+  .groups-board { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 560px) {
   .abar__sub { display: none; }
   .hide-sm { display: none; }
   .kpi__value { font-size: 1.6rem; }
   .donut-row { flex-direction: column; align-items: flex-start; }
+  .groups-board { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
