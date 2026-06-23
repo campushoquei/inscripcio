@@ -39,7 +39,7 @@ function startHintCycle() {
       phraseIdx = (phraseIdx + 1) % LOAD_HINTS.length;
     }
     render();
-  }, 600);
+  }, 700);
 }
 function stopHintCycle() {
   clearInterval(_hintTimer);
