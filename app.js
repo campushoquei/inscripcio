@@ -6,7 +6,7 @@
 
 // 🔧 Enganxa aquí la URL del teu Apps Script (acaba en /exec).
 // Buida = MODE DEMO amb dades d'exemple.
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2yS4-90ziGdsU9Z_cfCK6-FlJVzFTN-sKvxSIm1UlvcpWJspZyik4Y95GSCRSSAeOA/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyeoiwmztaYAssvnccQkZHqHXKDn-dnZJBWON92PpAWfLgiVN_zneiqZEF_0V5_td31fA/exec";
 
 // 🔧 Quin formulari es mostra. Es llegeix de la URL: ...index.html?form=primavera
 // Buit = formulari per defecte (les files del full sense columna "form").
