@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inscripcions · Campus Hoquei Riudebitlles</title>
+  <meta name="description" content="Formulari d'inscripció del casal d'hoquei" />
+  <meta property="og:title" id="og-title" content="Inscripcions · Campus Hoquei Riudebitlles" />
+  <meta property="og:description" id="og-desc" content="Inscriu el teu fill/a al Casal d'Hoquei. Tria les setmanes i envia la inscripció en minuts." />
+  <meta property="og:image" content="logo.png" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Capçalera -->
+  <header class="topbar">
+    <div class="wrap topbar__inner">
+      <span class="emblem" aria-hidden="true">
+        <img src="logo.png" alt="Campus Hoquei Riudebitlles" />
+      </span>
+      <span class="topbar__titles">
+        <span class="topbar__camp" data-camp-name>Campus Hoquei Riudebitlles</span>
+        <span class="topbar__club" data-club>El plaer de jugar!</span>
+      </span>
+      <a class="topbar__contact" data-contact-link href="#">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.61 4.87 2 2 0 0 1 3.6 2.69h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.31a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        Contacte
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero amb pista d'hoquei -->
+  <section class="hero hero--init" id="hero">
+    <div class="rink" aria-hidden="true">
+      <span class="rink__perim"></span>
+      <span class="rink__mid"></span>
+      <span class="rink__circle"></span>
+      <span class="rink__spot"></span>
+      <span class="rink__d"></span>
+      <span class="rink__goal"></span>
+      <span class="rink__crease"></span>
+      <span class="rink__crease-spot"></span>
+      <span class="rink__penalty-spot"></span>
+    </div>
+    <div class="wrap hero__inner">
+      <p class="eyebrow"><span data-tagline>Inscripcions obertes</span></p>
+      <h1 class="hero__title" data-hero-title>Casal d'Hoquei d'Estiu</h1>
+      <p class="hero__lead" data-intro>Completa la inscripció, tria les setmanes i rep la confirmació al correu.</p>
+    </div>
+    <nav class="hero-nav" id="hero-nav" aria-label="Formularis disponibles" hidden></nav>
+  </section>
+
+  <main class="wrap main" id="main">
+    <!-- Barra de "ja t'havíem vist" -->
+    <div class="returning" id="returning" hidden>
+      <button type="button" class="returning__toggle" id="returning-toggle" aria-expanded="false" aria-controls="returning-panel">
+        <span class="returning__icon" aria-hidden="true">↩</span>
+        <span class="returning__head">
+          <span class="returning__title" id="returning-title">Ja t'havíem vist per aquí</span>
+          <span class="returning__hint" id="returning-text">Recupera dades d'una inscripció anterior</span>
+        </span>
+        <span class="returning__chevron" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </span>
+      </button>
+      <button class="returning__close" id="returning-close" aria-label="Tancar">✕</button>
+      <div class="returning__panel" id="returning-panel">
+        <div class="returning__actions" id="returning-actions"></div>
+      </div>
+    </div>
+
+    <!-- Estats -->
+    <div class="state state--splash" id="loading">
+      <div class="load-shot" aria-hidden="true">
+        <svg viewBox="0 0 96 72" fill="none" style="overflow:visible">
+          <!-- Mànec recte en diagonal, taló en S suau, blade lleugerament alçat al toe -->
+          <g class="load-shot__stick">
+            <path d="M76,8 C59,25 38,48 26,58 S10,64 8,56" stroke-width="2.8" stroke-linecap="round" fill="none"/>
+          </g>
+          <!-- Pilota de roller hockey -->
+          <circle cx="4" cy="58" r="5.5" class="load-shot__ball"/>
+        </svg>
+      </div>
+      <p class="load-camp" data-camp-name>Campus Hoquei Riudebitlles</p>
+      <p class="load-hint" id="load-hint">🥅 Col·locant les porteries .</p>
+    </div>
+    <div class="state state--error" id="load-error" hidden>
+      <p class="state__title">No s'ha pogut carregar el formulari</p>
+      <p class="state__hint" id="load-error-hint">Comprova la connexió i torna-ho a provar.</p>
+      <button class="btn btn--ghost" id="retry">Tornar a provar</button>
+    </div>
+    <div class="state state--no-forms" id="closed" hidden>
+      <!-- Pista d'hoquei 3D -->
+      <div class="nf-ice-wrap" aria-hidden="true">
+        <div class="nf-ice">
+          <!-- Línia vermella del centre -->
+          <span class="nf-cl"></span>
+          <!-- Cercle + punt del centre -->
+          <span class="nf-cc"></span>
+          <span class="nf-cd"></span>
+          <!-- Àrees de porter (rectangulars) -->
+          <span class="nf-crease nf-crease--l"></span>
+          <span class="nf-crease nf-crease--r"></span>
+          <!-- Jugadors (1 per equip) -->
+          <span class="nf-p nf-p--a" style="left:32%;top:38%"></span>
+          <span class="nf-p nf-p--b" style="left:68%;top:58%"></span>
+          <!-- Puck 3D rebotant -->
+          <span class="nf-ball"></span>
+        </div>
+      </div>
+      <!-- Text -->
+      <p class="nf-tag" data-camp-name>Campus Hoquei Riudebitlles</p>
+      <h2 class="nf-title" id="closed-title">A punt per tornar a rodar</h2>
+      <p class="nf-hint" id="closed-text">Cada campus té una història. Nosaltres ja estem preparant la següent. Torna aviat per descobrir-ne tots els detalls.</p>
+    </div>
+
+    <!-- Formulari -->
+    <form class="form" id="form" hidden novalidate>
+      <div class="form-progress" id="form-progress" hidden>
+        <div class="form-progress__track">
+          <div class="form-progress__bar" id="form-progress-bar"></div>
+        </div>
+        <span class="form-progress__label" id="form-progress-label"></span>
+      </div>
+      <div id="form-sections"></div>
+
+      <div id="price-total-card"></div>
+
+      <div class="consent">
+        <label class="check">
+          <input type="checkbox" id="consent" required />
+          <span class="check__box" aria-hidden="true"></span>
+          <span class="check__label" id="consent-text">
+            He llegit i accepto la política de protecció de dades.
+          </span>
+        </label>
+      </div>
+
+      <div class="submit-row">
+        <button type="submit" class="btn btn--primary" id="submit-btn">
+          <span class="btn__label" data-submit-text>Enviar inscripció</span>
+          <span class="btn__spinner" aria-hidden="true"></span>
+        </button>
+        <p class="submit-row__note" id="submit-note" aria-live="polite" role="alert"></p>
+      </div>
+    </form>
+
+    <!-- Pantalla d'èxit -->
+    <section class="done" id="done" hidden>
+      <div class="done__mark" aria-hidden="true">✓</div>
+      <h2 class="done__title" id="done-title">Inscripció enviada</h2>
+      <p class="done__text" id="done-text"></p>
+      <p class="done__ref" id="done-ref" hidden></p>
+      <div class="done__summary" id="done-summary"></div>
+      <div class="done__actions">
+        <button class="btn btn--ghost" id="another">Inscriure un altre jugador/a</button>
+        <button class="btn btn--ghost" id="print-btn" type="button">Imprimir comprovant</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p data-camp-name>Casal Hoquei</p>
+      <div class="foot__contact" id="foot-contact" hidden>
+        <a class="foot__contact-item" id="foot-phone" href="#"></a>
+        <a class="foot__contact-item" id="foot-email" href="#"></a>
+      </div>
+      <p class="foot__small">Inscripció gestionada de forma privada. Les dades només s'utilitzen per organitzar el casal.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

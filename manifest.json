@@ -1,0 +1,13 @@
+{
+  "name": "Campus Hoquei Riudebitlles",
+  "short_name": "Casal Hoquei",
+  "description": "Formulari d'inscripció del Casal d'Hoquei",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#EEF3FB",
+  "theme_color": "#1F5AE0",
+  "icons": [
+    { "src": "logo.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "logo.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

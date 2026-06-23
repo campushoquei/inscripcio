@@ -1,0 +1,1384 @@
+/* ============================================================
+   Casal d'hoquei — inscripcions
+   Tema: pista de parquet + línies blaves, tonalitats blaves
+   Display: Anton  ·  Body: Hanken Grotesk
+   ============================================================ */
+
+:root {
+  /* Blaus */
+  --blue:      #1F5AE0;   /* accent principal / botons */
+  --blue-deep: #1543A0;   /* hover */
+  --navy:      #0E2A63;   /* text fosc / capçalera */
+  --rink-line: #4F8EFF;   /* línies de la pista */
+  --blue-soft: #E5EDFC;   /* fons blau molt clar */
+
+  /* Fusta / parquet (només a l'hero) */
+  --wood-1: #D9B383;
+  --wood-2: #C99A63;
+  --wood-3: #B07E43;
+
+  /* Neutres frescos */
+  --paper:    #EEF3FB;   /* fons de pàgina */
+  --card:     #FFFFFF;
+  --ink:      #16233D;   /* text */
+  --ink-soft: #5A6B86;   /* text suau */
+  --line-ink: #D6DEEC;   /* filets */
+  --danger:   #C0392B;
+
+  --radius:    14px;
+  --radius-sm: 10px;
+  --maxw:      720px;
+  --shadow:    0 1px 2px rgba(14,42,99,.06), 0 8px 28px rgba(14,42,99,.08);
+  --fs-display: clamp(2.4rem, 7vw, 4rem);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: "Hanken Grotesk", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: var(--maxw); margin-inline: auto; padding-inline: 20px; }
+
+/* ---------- Capçalera ---------- */
+.topbar {
+  background: var(--card);
+  border-bottom: 1px solid var(--line-ink);
+  box-shadow: 0 1px 0 rgba(14,42,99,.04);
+  position: sticky; top: 0; z-index: 50;
+}
+.topbar__inner { display: flex; align-items: center; gap: 13px; padding-block: 12px; }
+.emblem {
+  width: 42px; height: 42px; flex: 0 0 auto; border-radius: 10px;
+  overflow: hidden; box-shadow: 0 4px 12px rgba(31,90,224,.28);
+}
+.emblem img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.topbar__titles { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.topbar__camp {
+  font-family: "Anton", sans-serif; text-transform: uppercase;
+  letter-spacing: .03em; font-size: .98rem; color: var(--navy);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar__club { font-size: .76rem; color: var(--ink-soft); }
+.topbar__contact {
+  margin-left: auto; color: var(--blue); text-decoration: none;
+  font-weight: 700; font-size: .9rem; white-space: nowrap;
+  padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--blue-soft);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.topbar__contact:hover { background: var(--blue-soft); }
+
+/* ---------- Hero (antracita modern) ---------- */
+.hero {
+  position: relative; overflow: hidden; color: #fff;
+  background: #0a0f1a;
+  background-image: linear-gradient(135deg, #080c14 0%, #0f1623 55%, #0d1930 100%);
+  transition: background-color .5s ease, background-image .5s ease, opacity .4s ease;
+}
+/* Ocult fins que el JS aplica el tema: evita el flash de color */
+.hero--init { opacity: 0; }
+.hero::before {
+  content: ""; position: absolute; inset: 0; z-index: 1;
+  background: radial-gradient(ellipse 60% 95% at 10% 50%, rgba(31,90,224,.32) 0%, transparent 72%);
+  transition: background .5s ease;
+  animation: hero-glow-pulse 5s ease-in-out infinite;
+}
+.hero::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(ellipse 55% 70% at 88% 65%, rgba(31,90,224,.12) 0%, transparent 68%);
+  animation: hero-drift 8s ease-in-out infinite alternate;
+}
+/* Temes estacionals — el fons surt del negre i agafa el color de la temporada */
+.hero.season-estiu {
+  background: #1A1303;
+  background-image: linear-gradient(135deg, #160F01 0%, #3A2B06 55%, #1C1403 100%);
+  --rink-line: rgba(255,213,40,.78);
+}
+.hero.season-estiu::before {
+  background: radial-gradient(ellipse 60% 95% at 10% 50%, rgba(255,205,30,.46) 0%, transparent 72%);
+}
+.hero.season-estiu::after {
+  background: radial-gradient(ellipse 55% 70% at 88% 65%, rgba(255,175,15,.18) 0%, transparent 68%);
+}
+.hero.season-primavera {
+  background: #051710;
+  background-image: linear-gradient(135deg, #04130B 0%, #0D3320 55%, #06180E 100%);
+  --rink-line: rgba(52,211,110,.72);
+}
+.hero.season-primavera::before {
+  background: radial-gradient(ellipse 60% 95% at 10% 50%, rgba(34,197,94,.42) 0%, transparent 72%);
+}
+.hero.season-primavera::after {
+  background: radial-gradient(ellipse 55% 70% at 88% 65%, rgba(34,197,94,.15) 0%, transparent 68%);
+}
+.hero.season-tardor {
+  background: #170B01;
+  background-image: linear-gradient(135deg, #140800 0%, #3C1E03 55%, #1A0D01 100%);
+  --rink-line: rgba(245,158,11,.74);
+}
+.hero.season-tardor::before {
+  background: radial-gradient(ellipse 60% 95% at 10% 50%, rgba(234,130,12,.44) 0%, transparent 72%);
+}
+.hero.season-tardor::after {
+  background: radial-gradient(ellipse 55% 70% at 88% 65%, rgba(234,130,12,.16) 0%, transparent 68%);
+}
+.hero.season-hivern {
+  background: #07101F;
+  background-image: linear-gradient(135deg, #0A1426 0%, #14315E 55%, #0C1A33 100%);
+  --rink-line: rgba(79,142,255,.8);
+}
+.hero.season-hivern::before {
+  background: radial-gradient(ellipse 60% 95% at 10% 50%, rgba(31,90,224,.42) 0%, transparent 72%);
+}
+.hero.season-hivern::after {
+  background: radial-gradient(ellipse 55% 70% at 88% 65%, rgba(31,90,224,.15) 0%, transparent 68%);
+}
+/* Hero content transition (fade en canviar de formulari) */
+.hero__inner {
+  position: relative; z-index: 2; padding-block: 54px 62px;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.hero__inner.is-fading { opacity: 0; transform: translateY(8px); }
+.hero.has-slider .hero__inner { padding-bottom: 78px; }
+/* Pills de navegació del hero slider */
+.hero-nav {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+  padding: 0 20px 20px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.hero-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 16px; border-radius: 999px;
+  border: 1.5px solid rgba(255,255,255,.3);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.7);
+  font-family: "Hanken Grotesk", sans-serif; font-size: .8rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  backdrop-filter: blur(10px);
+  transition: background .2s, color .2s, border-color .2s, transform .15s;
+}
+.hero-pill__icon { font-size: .95em; }
+.hero-pill.is-active {
+  background: rgba(255,255,255,.95); color: var(--navy);
+  border-color: rgba(255,255,255,.95);
+}
+.hero-pill:hover:not(.is-active) {
+  background: rgba(255,255,255,.18); color: #fff; border-color: rgba(255,255,255,.55);
+  transform: translateY(-1px);
+}
+.eyebrow {
+  font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .14em;
+  font-size: 1.05rem; color: var(--rink-line); margin: 0 0 14px;
+}
+.hero__title {
+  font-family: "Anton", sans-serif; font-weight: 400; font-size: var(--fs-display);
+  line-height: .98; letter-spacing: .005em; text-transform: uppercase;
+  margin: 0 0 16px; max-width: 13ch;
+}
+.hero__lead { font-size: 1.08rem; max-width: 46ch; color: rgba(255,255,255,.85); margin: 0; }
+
+/* línies de la pista (blaves sobre el parquet de la dreta) */
+.rink { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.rink__perim {
+  position: absolute; top: 50%; right: -90px; transform: translateY(-50%);
+  width: 480px; height: 310px; border: 2px solid var(--rink-line);
+  border-radius: 45px; opacity: .35;
+}
+.rink__mid {
+  position: absolute; top: 50%; right: 70px; transform: translateY(-50%);
+  width: 2px; height: 306px; background: var(--rink-line); opacity: .35;
+}
+.rink__circle {
+  position: absolute; top: 50%; right: 70px; transform: translate(50%, -50%);
+  width: 100px; height: 100px; border: 2px solid var(--rink-line); border-radius: 50%; opacity: .35;
+}
+.rink__spot {
+  position: absolute; top: 50%; right: 70px; transform: translate(50%, -50%);
+  width: 6px; height: 6px; background: var(--rink-line); border-radius: 50%; opacity: .5;
+}
+.rink__d {
+  position: absolute; top: 50%; right: -90px; transform: translateY(-50%);
+  width: 64px; height: 168px; border: 2px solid var(--rink-line);
+  border-right: none; border-radius: 80px 0 0 80px; opacity: .3;
+}
+/* Porteria: forma de D, meitat de mida, espai de 20px des de la paret */
+.rink__goal {
+  position: absolute; top: 50%; right: 344px; transform: translateY(-50%);
+  width: 26px; height: 55px;
+  border: 2px solid var(--rink-line);
+  border-right: none; border-radius: 36px 0 0 36px;
+  opacity: .55;
+}
+/* Àrea: rectangle més petit, costat esquerre toca la D */
+.rink__crease {
+  position: absolute; top: 50%; right: 279px; transform: translateY(-50%);
+  width: 65px; height: 130px;
+  border: 2px solid var(--rink-line); opacity: .38;
+}
+/* Punt de falta directa */
+.rink__crease-spot {
+  position: absolute; top: 50%; right: 235px; transform: translate(50%, -50%);
+  width: 8px; height: 8px;
+  background: var(--rink-line); border-radius: 50%; opacity: .5;
+}
+/* Punt de penal: a la línia de l'àrea, com el punt de centre */
+.rink__penalty-spot {
+  position: absolute; top: 50%; right: 279px; transform: translate(50%, -50%);
+  width: 6px; height: 6px;
+  background: var(--rink-line); border-radius: 50%; opacity: .5;
+}
+
+/* ---------- Main ---------- */
+.main { padding-block: 28px 64px; }
+
+/* ---------- Barra de retorn ---------- */
+.returning {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+  background: var(--card); border: 1px solid var(--line-ink);
+  border-left: 4px solid var(--blue); border-radius: var(--radius);
+  padding: 8px 10px 8px 14px; margin-bottom: 24px; box-shadow: var(--shadow);
+}
+.returning__toggle {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0;
+  background: none; border: 0; margin: 0; padding: 6px 2px;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.returning__icon {
+  font-size: 1.1rem; color: var(--blue); background: var(--blue-soft);
+  width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 700;
+}
+.returning__head { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.returning__title { font-weight: 700; margin: 0; font-size: .98rem; line-height: 1.2; }
+.returning__hint {
+  margin: 1px 0 0; color: var(--ink-soft); font-size: .85rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.returning__chevron {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  color: var(--blue); background: var(--blue-soft);
+  transition: transform .25s ease, background .15s ease;
+}
+.returning__toggle:hover .returning__chevron { background: var(--blue); color: #fff; }
+.returning[data-open] .returning__chevron { transform: rotate(180deg); }
+.returning__panel { grid-column: 1 / -1; display: none; padding: 2px 2px 6px; }
+.returning[data-open] .returning__panel { display: block; }
+.returning__actions { display: grid; gap: 12px; }
+.returning-family {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-ink);
+}
+.returning-family:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.returning-family__title {
+  margin: 0;
+  font-size: .84rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+.returning-family__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border: 1px solid var(--line-ink); background: #fff; border-radius: 999px;
+  padding: 7px 14px; cursor: pointer; font-family: inherit; font-size: .9rem;
+  font-weight: 600; color: var(--ink);
+}
+.chip:hover { border-color: var(--blue); background: var(--blue-soft); }
+.chip--with-delete { display: inline-flex; align-items: center; gap: 7px; padding-right: 9px; }
+.chip__del {
+  display: inline-grid; place-items: center;
+  width: 19px; height: 19px; border-radius: 50%; flex: 0 0 auto;
+  background: rgba(14,42,99,.08); color: var(--ink-soft);
+  font-size: .8rem; line-height: 1; cursor: pointer; transition: background .15s, color .15s;
+}
+.chip--with-delete:hover .chip__del { background: rgba(192,57,43,.15); color: var(--danger); }
+.chip__del:hover { background: var(--danger) !important; color: #fff !important; }
+.chip--all {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+.chip--all:hover {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+.returning__close {
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  background: #fff;
+  border: 1px solid var(--line-ink);
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  padding: 0;
+  line-height: 1;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.returning__close:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+.returning__close:focus-visible {
+  outline: 3px solid rgba(31,90,224,.22);
+  outline-offset: 2px;
+}
+
+/* ---------- Estats ---------- */
+.state { text-align: center; padding: 56px 20px; color: var(--ink-soft); }
+.state__title { font-weight: 700; color: var(--ink); margin: 0 0 6px; }
+.state__hint { margin: 0 0 16px; }
+.closed__mark { font-size: 2rem; margin-bottom: 12px; }
+
+/* ================================================================
+   Pantalla sense formularis — pista d'hoquei 3D
+   ================================================================ */
+
+.page--no-forms { background: #07101e; }
+.page--no-forms .hero { display: none; }
+.page--no-forms .main {
+  max-width: 100%;
+  padding-inline: 0;
+  margin-inline: 0;
+  padding-block: 0;
+}
+.page--no-forms .state--no-forms {
+  min-height: calc(100vh - 65px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px 72px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.page--no-forms .state--no-forms::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 75% 55% at 50% 40%, rgba(31,90,224,.18) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+/* ---- Perspectiva 3D ---- */
+.nf-ice-wrap {
+  perspective: 680px;
+  perspective-origin: 50% -10%;
+  width: min(540px, 88vw);
+  margin: 0 auto 90px;
+  flex-shrink: 0;
+  animation: nf-fadein .8s ease both;
+}
+
+/* ---- Pista (superfície de gel) ---- */
+.nf-ice {
+  width: 100%;
+  aspect-ratio: 540 / 200;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%, #eaf5ff 0%, #d4eaff 65%, #c0dcf7 100%);
+  border-radius: min(13%, 42px);
+  border: 2.5px solid rgba(31,90,224,.6);
+  position: relative;
+  overflow: hidden;
+  transform: rotateX(52deg);
+  transform-origin: 50% 50%;
+  box-shadow:
+    0 0 0 1px rgba(31,90,224,.15),
+    0 32px 90px rgba(0,0,0,.7),
+    0 64px 140px rgba(0,0,0,.35),
+    inset 0 0 70px rgba(200,230,255,.15);
+}
+.nf-ice::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 48%;
+  background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, transparent 100%);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.nf-ice::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 82% 88% at 50% 50%, transparent 50%, rgba(31,90,224,.1) 100%);
+  pointer-events: none;
+}
+
+/* ---- Línies de la pista ---- */
+.nf-cl {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: rgba(210,35,35,.5);
+}
+.nf-cc {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 22%; aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(210,35,35,.4);
+}
+.nf-cd {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 2.8%; aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(210,35,35,.5);
+}
+
+/* Creases — rectangulars (sense border-radius) */
+.nf-crease {
+  position: absolute;
+  top: 22%; height: 56%; width: 10.5%;
+  border: 2px solid rgba(210,35,35,.4);
+  background: rgba(160,215,255,.14);
+}
+.nf-crease--l { left: 4%; border-left: none; }
+.nf-crease--r { right: 4%; border-right: none; }
+
+/* ---- Jugadors ---- */
+.nf-p {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  width: 3.5%; aspect-ratio: 1;
+}
+.nf-p--a {
+  background: #2563eb;
+  box-shadow: 0 0 0 1.5px rgba(37,99,235,.5), 0 2px 6px rgba(0,0,0,.35);
+  animation: nf-move-a 15s linear infinite;
+}
+.nf-p--b {
+  background: #e5521a;
+  box-shadow: 0 0 0 1.5px rgba(229,82,26,.5), 0 2px 6px rgba(0,0,0,.35);
+  animation: nf-move-b 15s linear infinite;
+}
+/* Jugador A: segueix el puck quan ataca, defensa quan B té la pilota */
+@keyframes nf-move-a {
+  0%   { left: 32%; top: 38%; }   /* centre-esquerra */
+  7%   { left: 60%; top: 22%; }   /* rush cap al fwd-T (amb puck) */
+  13%  { left: 84%; top: 10%; }   /* cantonada dreta-alta */
+  20%  { left: 55%; top: 32%; }   /* replegament al mig */
+  27%  { left: 44%; top: 46%; }   /* pressió central */
+  34%  { left: 30%; top: 52%; }   /* bloqueig B fwd-B */
+  40%  { left: 20%; top: 40%; }   /* defensa porteria pròpia */
+  47%  { left: 26%; top: 22%; }   /* desallotjament del porter */
+  55%  { left: 60%; top: 66%; }   /* creuament ala baixa */
+  61%  { left: 84%; top: 76%; }   /* cantonada dreta-baixa */
+  67%  { left: 60%; top: 60%; }   /* replegament */
+  74%  { left: 35%; top: 28%; }   /* talla B fwd-T */
+  80%  { left: 20%; top: 41%; }   /* defensa porteria (2n tir) */
+  87%  { left: 26%; top: 62%; }   /* segueix desallotjament */
+  93%  { left: 38%; top: 42%; }   /* torna al centre */
+  100% { left: 32%; top: 38%; }
+}
+/* Jugador B: porta la pilota en atac, defensa quan A té la pilota */
+@keyframes nf-move-b {
+  0%   { left: 68%; top: 58%; }   /* centre-dreta */
+  7%   { left: 64%; top: 22%; }   /* contesta A al fwd-T */
+  13%  { left: 80%; top: 12%; }   /* disputa cantonada */
+  20%  { left: 68%; top: 24%; }   /* recupera puck (B def-T) */
+  27%  { left: 50%; top: 50%; }   /* porta al centre */
+  34%  { left: 35%; top: 60%; }   /* entrada a zona (B fwd-B) */
+  40%  { left: 14%; top: 42%; }   /* tir a porteria! */
+  47%  { left: 40%; top: 35%; }   /* recuperació post-tir */
+  55%  { left: 63%; top: 67%; }   /* disputa ala baixa */
+  61%  { left: 82%; top: 76%; }   /* cantonada baixa (porta puck) */
+  67%  { left: 69%; top: 63%; }   /* recupera (B def-B) */
+  74%  { left: 35%; top: 26%; }   /* atac ràpid B fwd-T */
+  80%  { left: 14%; top: 43%; }   /* 2n tir a porteria! */
+  87%  { left: 38%; top: 58%; }   /* torna al mig */
+  93%  { left: 58%; top: 52%; }   /* reposicionament */
+  100% { left: 68%; top: 58%; }
+}
+
+/* ---- Puck (minimalista) ---- */
+.nf-ball {
+  position: absolute;
+  width: 2.6%; aspect-ratio: 1;
+  border-radius: 50%;
+  background: #111;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.1),
+    0 3px 8px rgba(0,0,0,.6);
+  z-index: 3;
+  animation: nf-bounce 15s linear infinite;
+}
+
+/* Trajectòria: passes entre jugadors, tirs a porteria, rebots (15s loop) */
+@keyframes nf-bounce {
+  0%   { left: 47%; top: 44%; }   /* centre - kickoff */
+  7%   { left: 62%; top: 20%; }   /* A fwd-T (passada) */
+  13%  { left: 88%; top:  6%; }   /* cantonada dreta-alta (rebot) */
+  20%  { left: 70%; top: 22%; }   /* B def-T (recuperació) */
+  27%  { left: 50%; top: 50%; }   /* B centre (passada) */
+  34%  { left: 33%; top: 61%; }   /* B fwd-B (entrada a zona) */
+  40%  { left:  7%; top: 42%; }   /* tir a porteria A */
+  47%  { left: 22%; top: 21%; }   /* A def-T (desallotjament) */
+  55%  { left: 62%; top: 69%; }   /* A fwd-B (creuament) */
+  61%  { left: 88%; top: 78%; }   /* cantonada dreta-baixa (rebot) */
+  67%  { left: 71%; top: 63%; }   /* B def-B (recuperació) */
+  74%  { left: 33%; top: 26%; }   /* B fwd-T (passada ràpida) */
+  80%  { left:  7%; top: 42%; }   /* tir a porteria A (2n) */
+  87%  { left: 23%; top: 64%; }   /* A def-B (desallotjament) */
+  93%  { left: 47%; top: 47%; }   /* A centre (tornada al mig) */
+  100% { left: 47%; top: 44%; }
+}
+
+/* ---- Tipografia ---- */
+.nf-tag {
+  font-family: "Anton", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .15em;
+  font-size: 1rem;
+  color: rgba(91,142,255,.75);
+  margin: 0 0 14px;
+  animation: nf-fadein .6s .18s ease both;
+}
+.nf-title {
+  font-family: "Hanken Grotesk", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.9rem, 5.5vw, 3.2rem);
+  letter-spacing: -.025em;
+  line-height: .97;
+  color: #fff;
+  margin: 0 0 16px;
+  animation: nf-fadein .7s .28s ease both;
+}
+.nf-hint {
+  font-family: "Hanken Grotesk", system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(.88rem, 1.9vw, 1rem);
+  color: rgba(255,255,255,.45);
+  max-width: 56ch;
+  margin: 0 auto;
+  line-height: 1.7;
+  animation: nf-fadein .6s .4s ease both;
+}
+@keyframes nf-fadein {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (max-width: 520px) {
+  .nf-ice-wrap { perspective: 520px; margin-bottom: 64px; }
+  .nf-ice { transform: rotateX(44deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nf-ice-wrap, .nf-tag, .nf-title, .nf-hint { animation: none !important; opacity: 1 !important; }
+  .nf-ball { animation-play-state: paused; left: 47%; top: 44%; }
+  .nf-p--a { animation: none !important; left: 32%; top: 38%; transform: translate(-50%,-50%); }
+  .nf-p--b { animation: none !important; left: 68%; top: 58%; transform: translate(-50%,-50%); }
+  .nf-ice { transform: none; }
+}
+
+.spinner {
+  width: 30px; height: 30px; margin: 0 auto 14px;
+  border: 3px solid var(--line-ink); border-top-color: var(--blue);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Hero fora del flow durant loading → el loader queda centrat a pantalla */
+.page--loading .hero { display: none; }
+/* Pantalla d'èxit → amaguem l'hero i el bloc "ja t'hem vist" perquè només es vegi la confirmació */
+.page--done .hero,
+.page--done .returning { display: none; }
+/* Pantalla de càrrega inicial — ocupa tot l'espai disponible */
+.page--loading #loading {
+  min-height: calc(100vh - 60px);
+  padding: 48px 20px 64px;
+  display: flex; flex-direction: column; align-items: center;
+}
+/* Animació de càrrega: estic d'hoquei patins xutant la pilota */
+.load-shot {
+  width: 96px; height: 78px;
+  margin: 0 auto 32px;
+  flex-shrink: 0;
+}
+.load-shot svg { display: block; width: 100%; height: 100%; }
+.load-shot__stick {
+  stroke: var(--navy);
+  transform-origin: 72px 6px;
+  animation: stick-swing 2s infinite;
+}
+@keyframes stick-swing {
+  0%, 14% {
+    transform: rotate(-10deg);
+    animation-timing-function: cubic-bezier(.12, 0, .05, 1);
+  }
+  30%  { transform: rotate(14deg); }
+  58%  { transform: rotate(14deg); }
+  100% { transform: rotate(-10deg); }
+}
+.load-shot__ball {
+  fill: var(--blue);
+  animation: ball-shoot 2s infinite;
+}
+@keyframes ball-shoot {
+  0%, 21% {
+    transform: translate(0, 0);
+    opacity: 1;
+    animation-timing-function: cubic-bezier(.05, .6, .3, 1);
+  }
+  62%    { transform: translate(-58px, 0); opacity: 0; }
+  62.1%  { transform: translate(0, 0);    opacity: 0; }
+  100%   { transform: translate(0, 0);    opacity: 1; }
+}
+.load-camp {
+  font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .05em;
+  font-size: 1.1rem; color: var(--navy); margin: 0 0 8px;
+}
+.load-hint { font-size: .84rem; color: var(--ink-soft); margin: 0; }
+
+/* ---- Skeleton de càrrega ---- */
+.form-skeleton { width: 100%; max-width: var(--maxw); margin-top: 36px; }
+.skeleton-card {
+  background: var(--card); border: 1px solid var(--line-ink);
+  border-radius: var(--radius); padding: 22px 20px;
+  margin-bottom: 18px; box-shadow: var(--shadow);
+}
+.skeleton-head { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.skeleton-field { margin-bottom: 14px; }
+.skeleton-field:last-child { margin-bottom: 0; }
+.skeleton-line {
+  display: block; background: var(--line-ink); border-radius: 999px;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-num { width: 34px; height: 24px; border-radius: 7px; flex-shrink: 0; }
+.skeleton-title { height: 18px; width: 38%; }
+.skeleton-label { height: 11px; width: 32%; margin-bottom: 8px; }
+.skeleton-input { height: 44px; border-radius: var(--radius-sm); }
+@keyframes skeleton-shimmer {
+  0%, 100% { opacity: .75; }
+  50%       { opacity: .3; }
+}
+
+/* ---------- Seccions del formulari ---------- */
+.form { animation: rise .5s ease both; }
+.section {
+  background: var(--card); border: 1px solid var(--line-ink); border-radius: var(--radius);
+  padding: 22px 20px; margin-bottom: 18px; box-shadow: var(--shadow);
+}
+.section__head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
+.section__num {
+  font-family: "Anton", sans-serif; font-size: .9rem; color: var(--blue);
+  background: var(--blue-soft); border-radius: 7px; padding: 3px 9px; letter-spacing: .04em;
+}
+.section__title {
+  font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .04em;
+  font-size: 1.15rem; font-weight: 400; margin: 0; color: var(--navy);
+}
+
+.field { margin-bottom: 16px; }
+.field:last-child { margin-bottom: 0; }
+.field__label { display: block; font-weight: 600; font-size: .92rem; margin-bottom: 7px; }
+.field__req { color: var(--blue); }
+.field__help { font-size: .82rem; color: var(--ink-soft); margin: 6px 0 0; }
+.field__help--above { margin: 0 0 10px; }
+
+/* nota (text informatiu, sense input) */
+.note { background: var(--blue-soft); border-radius: var(--radius-sm); padding: 14px 16px; }
+.note__title { font-weight: 700; color: var(--navy); margin: 0 0 6px; font-size: .95rem; }
+.note__body { font-size: .88rem; color: var(--ink-soft); margin: 0; line-height: 1.5; }
+
+.input, .select, .textarea {
+  width: 100%; font-family: inherit; font-size: 1rem; color: var(--ink); background: #fff;
+  border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm); padding: 12px 13px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.textarea { resize: vertical; min-height: 92px; }
+.input:focus, .select:focus, .textarea:focus {
+  outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(31,90,224,.16);
+}
+.field--invalid .input, .field--invalid .select, .field--invalid .textarea { border-color: var(--danger); }
+.field__error { color: var(--danger); font-size: .82rem; margin: 6px 0 0; display: none; }
+.field--invalid .field__error { display: block; }
+
+/* opcions radio/checkbox */
+.choices { display: flex; flex-direction: column; gap: 8px; }
+.choices--inline { flex-direction: row; flex-wrap: wrap; }
+.choices--inline .choice { flex: 1; min-width: 110px; }
+.choice {
+  display: flex; align-items: center; gap: 11px; cursor: pointer;
+  border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm);
+  padding: 11px 13px; background: #fff;
+}
+.choice:hover { border-color: var(--blue); }
+.choice:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
+.choice input { accent-color: var(--blue); width: 18px; height: 18px; }
+
+/* consentiment */
+.check { display: flex; gap: 11px; align-items: flex-start; cursor: pointer; }
+.check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.check__box {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 6px;
+  border: 1.5px solid var(--line-ink); background: #fff; margin-top: 1px;
+  display: grid; place-items: center; transition: .15s;
+}
+.check input:checked + .check__box { background: var(--blue); border-color: var(--blue); }
+.check input:checked + .check__box::after { content: "✓"; color: #fff; font-size: .85rem; font-weight: 700; }
+.check input:focus-visible + .check__box { box-shadow: 0 0 0 3px rgba(31,90,224,.25); }
+.check__label { font-size: .9rem; color: var(--ink-soft); }
+.consent { padding: 4px 2px 22px; }
+
+/* ---------- Blocs de jugador/a (diversos fills) ---------- */
+.children { display: flex; flex-direction: column; gap: 16px; }
+.child-block {
+  border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm);
+  padding: 16px 16px 4px; background: var(--paper); position: relative;
+  scroll-margin-top: 84px; /* deixa espai sota la barra fixa en fer scroll automàtic */
+}
+.child-block:first-child { border-top: none; padding-top: 4px; background: transparent; border-left: none; border-right: none; border-bottom: none; }
+.child-block__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.child-block__title { font-weight: 700; color: var(--navy); font-size: .98rem; }
+.child-block__remove {
+  background: none; border: 1px solid var(--line-ink); border-radius: 999px; cursor: pointer;
+  color: var(--ink-soft); font-size: .8rem; font-weight: 600; padding: 5px 11px; line-height: 1; font-family: inherit;
+}
+.child-block__remove:hover { border-color: var(--danger); color: var(--danger); }
+.child-weeks { margin-top: 4px; }
+.add-child { margin-top: 16px; padding: 11px 18px; font-size: .92rem; }
+
+/* ---------- Targeta de preus ---------- */
+.price-info {
+  background: linear-gradient(135deg, rgba(31,90,224,.06) 0%, rgba(31,90,224,.02) 100%);
+  border: 1px solid rgba(31,90,224,.14);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.price-info__header {
+  display: flex; align-items: center; gap: 9px; margin-bottom: 11px;
+}
+.price-info__icon {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--blue); color: #fff;
+  font-family: "Anton", sans-serif; font-size: .88rem;
+  display: grid; place-items: center;
+}
+.price-info__title {
+  font-family: "Anton", sans-serif; text-transform: uppercase;
+  letter-spacing: .05em; font-size: .82rem; color: var(--navy);
+}
+.price-info__tiers { list-style: none; margin: 0; padding: 0; }
+.price-tier {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; padding: 8px 0;
+  border-bottom: 1px solid rgba(31,90,224,.1);
+}
+.price-tier:last-child { border-bottom: none; padding-bottom: 0; }
+.price-tier__desc { font-size: .84rem; color: var(--navy); flex: 1; line-height: 1.45; }
+.price-tier__note { display: block; font-size: .78rem; color: var(--ink-soft); margin-top: 3px; font-style: italic; }
+.price-tier__price {
+  font-family: "Anton", sans-serif; font-size: 1.1rem; letter-spacing: .02em;
+  color: var(--blue); white-space: nowrap; flex-shrink: 0;
+}
+/* Taula 2×2 de preus */
+.price-table {
+  width: 100%; border-collapse: collapse; font-size: .84rem;
+}
+.price-table thead th {
+  font-family: "Hanken Grotesk", sans-serif; font-size: .8rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--navy); padding: 0 10px 9px;
+  text-align: center; border-bottom: 2px solid rgba(31,90,224,.15);
+}
+.price-table thead th:first-child { text-align: left; padding-left: 0; min-width: 120px; }
+.price-table tbody td {
+  padding: 10px 10px; border-bottom: 1px solid rgba(31,90,224,.1);
+  text-align: center; vertical-align: middle; line-height: 1.4;
+}
+.price-table tbody td:first-child { text-align: left; padding-left: 0; }
+.price-table tbody tr:last-child td { border-bottom: none; padding-bottom: 0; }
+.price-table__label { font-size: .83rem; color: var(--navy); }
+.price-table__price {
+  font-family: "Anton", sans-serif; font-size: 1.08rem; letter-spacing: .02em;
+  color: var(--navy);
+}
+.price-table__price--rdb { color: var(--blue); }
+
+/* ---------- Setmanes ---------- */
+.weeks { display: grid; gap: 10px; }
+.week {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm);
+  padding: 14px 15px; background: #fff; cursor: pointer; transition: .15s;
+  overflow: hidden;
+}
+.week:hover { border-color: var(--blue); }
+.week input { position: absolute; opacity: 0; pointer-events: none; }
+.week__num {
+  font-family: "Anton", sans-serif; font-size: 1.1rem; width: 40px; height: 40px;
+  flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px;
+  background: var(--navy); color: #fff; transition: .15s;
+}
+.week__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.week__label { font-weight: 700; }
+.week__meta { font-size: .85rem; color: var(--ink-soft); }
+.week__price { display: none; }
+.week__check {
+  width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%;
+  border: 1.5px solid var(--line-ink); display: grid; place-items: center; color: #fff; font-size: .8rem;
+}
+.week.is-selected { border-color: var(--blue); background: var(--blue-soft); }
+.week.is-selected .week__num { background: var(--blue); }
+.week.is-selected .week__check { background: var(--blue); border-color: var(--blue); }
+.week.is-full { opacity: .6; cursor: not-allowed; }
+.week.is-full:hover { border-color: var(--line-ink); }
+.week.is-full .week__check { display: none; }
+.week__tag {
+  flex: 0 0 auto; white-space: nowrap;
+  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--danger); background: rgba(192,57,43,.1);
+  border-radius: 999px; padding: 4px 10px;
+}
+
+/* ---------- Fitxers ---------- */
+.filebox-wrap { display: grid; gap: 10px; }
+.filebox {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 140px;
+  border: 1.5px dashed var(--rink-line);
+  border-radius: calc(var(--radius-sm) + 2px);
+  background: linear-gradient(180deg, #fff 0%, #f7faff 100%);
+  padding: 22px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, box-shadow .15s, transform .15s;
+}
+.filebox:hover, .filebox.is-drag { border-color: var(--blue); background: var(--blue-soft); }
+.filebox:hover, .filebox:focus-within { box-shadow: 0 0 0 4px rgba(31,90,224,.12); transform: translateY(-1px); }
+.filebox input { display: none; }
+.filebox__icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 1.4rem;
+}
+.filebox__text { font-size: .98rem; font-weight: 700; margin: 6px 0 2px; color: var(--navy); }
+.filebox__hint { font-size: .8rem; color: var(--ink-soft); }
+.file-chips { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.file-chip { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-ink); border-radius: var(--radius-sm); padding: 9px 11px; background: var(--paper); font-size: .9rem; }
+.file-chip__thumb { width: 34px; height: 34px; flex: 0 0 auto; border-radius: 7px; object-fit: cover; background: var(--blue-soft); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: var(--blue); }
+.file-chip__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-chip__size { color: var(--ink-soft); font-size: .8rem; white-space: nowrap; }
+.file-chip__remove { background: none; border: none; cursor: pointer; color: var(--ink-soft); font-size: 1rem; padding: 2px 4px; line-height: 1; }
+.file-chip__remove:hover { color: var(--danger); }
+
+/* ---------- Enviar ---------- */
+.submit-row { text-align: center; padding-top: 6px; }
+.btn {
+  font-family: inherit; font-weight: 700; font-size: 1rem; border-radius: 999px;
+  padding: 14px 30px; cursor: pointer; border: 1.5px solid transparent; transition: .15s;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.btn--primary { background: var(--blue); color: #fff; box-shadow: 0 6px 20px rgba(31,90,224,.3); }
+.btn--primary:hover { background: var(--blue-deep); }
+.btn--primary:disabled { opacity: .65; cursor: default; box-shadow: none; }
+.btn--ghost { background: #fff; border-color: var(--line-ink); color: var(--ink); }
+.btn--ghost:hover { border-color: var(--blue); }
+.btn__spinner { display: none; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.45); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+.btn.is-loading .btn__spinner { display: inline-block; }
+.btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.submit-row__note { margin: 12px 0 0; font-size: .88rem; min-height: 1.2em; }
+.submit-row__note.is-error { color: var(--danger); }
+
+/* ---------- Èxit ---------- */
+.done { text-align: center; padding: 40px 20px; animation: rise .5s ease both; }
+.done__mark { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 2rem; font-weight: 700; display: grid; place-items: center; }
+.done__title { font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .03em; font-weight: 400; font-size: 1.8rem; margin: 0 0 10px; color: var(--navy); }
+.done__text { color: var(--ink-soft); max-width: 44ch; margin: 0 auto 22px; }
+.done__summary { text-align: left; max-width: 460px; margin: 0 auto 26px; background: var(--card); border: 1px solid var(--line-ink); border-radius: var(--radius); padding: 18px; }
+.done__summary dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+.done__summary dt { font-weight: 600; color: var(--ink-soft); font-size: .9rem; }
+.done__summary dd { margin: 0; font-size: .95rem; }
+
+/* ---------- Peu ---------- */
+.foot { background: var(--navy); color: #fff; padding-block: 26px; }
+.foot p { margin: 0 0 4px; }
+.foot p:first-child { font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .04em; }
+.foot__small { font-size: .82rem; color: rgba(255,255,255,.6); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ---- Punt verd "en directe" ---- */
+[data-tagline] {
+  color: #22c55e;
+}
+[data-tagline]::before {
+  content: "";
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #22c55e;
+  margin-right: 9px;
+  vertical-align: middle; position: relative; top: -1px;
+  animation: live-pulse 1.8s ease-out infinite;
+}
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0    rgba(34,197,94,.7); }
+  100% { box-shadow: 0 0 0 6px rgba(34,197,94, 0); }
+}
+
+/* ---- Entrada escalonada al hero ---- */
+.eyebrow     { animation: rise .55s .08s ease both; }
+.hero__title { animation: rise .7s  .22s ease both; }
+.hero__lead  { animation: rise .65s .42s ease both; }
+
+/* ---- Resplendor respirant al hero ---- */
+.hero::before { animation: hero-glow 7s ease-in-out infinite; }
+@keyframes hero-glow {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .5; }
+}
+
+/* ---- Línies de la pista: pampallugues suaus escalonades ---- */
+.rink__perim  { animation: rink-fade 6s 0s   ease-in-out infinite; }
+.rink__circle { animation: rink-fade 6s 1.5s ease-in-out infinite; }
+.rink__mid    { animation: rink-fade 6s 3s   ease-in-out infinite; }
+.rink__d      { animation: rink-fade 6s .8s  ease-in-out infinite; }
+.rink__goal        { animation: rink-fade 6s 2s   ease-in-out infinite; }
+.rink__crease      { animation: rink-fade 6s 2.4s ease-in-out infinite; }
+.rink__crease-spot  { animation: rink-fade 6s 2.8s ease-in-out infinite; }
+.rink__penalty-spot { animation: rink-fade 6s 3.2s ease-in-out infinite; }
+@keyframes rink-fade {
+  0%, 100% { opacity: .35; }
+  50%       { opacity: .6; }
+}
+@keyframes hero-glow-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .38; }
+}
+@keyframes hero-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-30px, -18px) scale(1.12); }
+}
+
+/* ---- Setmana: micro-resposta al clic + halo si seleccionada ---- */
+.week { transition: border-color .15s, background .15s, transform .12s; }
+.week:not(.is-full):active { transform: scale(.985); }
+
+/* ---- Botó principal: elevació + resplendor al hover ---- */
+.btn--primary { transition: background .15s, box-shadow .15s, transform .15s; }
+.btn--primary:hover:not(:disabled) {
+  background: var(--blue-deep);
+  box-shadow: 0 10px 32px rgba(31,90,224,.45);
+  transform: translateY(-2px);
+}
+.btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 14px rgba(31,90,224,.3);
+}
+
+/* ---- Pantalla d'èxit: entrada celebratòria ---- */
+@keyframes done-bounce {
+  0%   { transform: scale(0); opacity: 0; }
+  55%  { transform: scale(1.18); }
+  80%  { transform: scale(.94); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.done__mark { animation: done-bounce .55s .05s ease both; }
+
+/* ---- Chip: resposta suau al hover ---- */
+.chip { transition: border-color .15s, background .15s, transform .12s; }
+.chip:not(.chip--delete):hover { transform: scale(1.04); }
+
+@media (max-width: 520px) {
+  .hero__inner { padding-block: 40px 46px; }
+
+  .btn--primary { width: 100%; justify-content: center; }
+  /* Col·lapsa el botó de contacte a icona sola per alliberar espai al títol */
+  .topbar__contact { font-size: 0; padding: 9px; gap: 0; }
+  .topbar__contact svg { width: 17px; height: 17px; }
+
+  /* Pills del slider: fila única amb scroll horitzontal */
+  .hero-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding-left: 16px;
+  }
+  .hero-nav::-webkit-scrollbar { display: none; }
+  /* Espai al final perquè l'últim pill no quedi retallat */
+  .hero-nav::after { content: ""; display: block; min-width: 16px; flex-shrink: 0; }
+
+  /* Pista: petita i a la dreta, com a PC */
+  .rink { transform-origin: right center; transform: scale(0.5); }
+
+  /* Taula de preus: compactar per a pantalles petites */
+  .price-info { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .price-table { min-width: 260px; font-size: .78rem; }
+  .price-table thead th { padding: 0 6px 8px; font-size: .7rem; letter-spacing: .02em; }
+  .price-table thead th:first-child { min-width: 72px; }
+  .price-table tbody td { padding: 8px 6px; }
+  .price-table__price { font-size: .95rem; }
+
+  /* Toggles "C.P. Riudebitlles" i "família nombrosa": més fins al mòbil */
+  .rdb-field { margin-bottom: 10px; }
+  .rdb-toggle { padding: 7px 11px; gap: 8px; flex-wrap: wrap; }
+  .rdb-toggle__box { width: 18px; height: 18px; }
+  /* El text ocupa tota la 1a línia (al costat de la casella) i empeny
+     el badge a una 2a línia, en comptes d'estrènyer-lo a 3 línies */
+  .rdb-toggle__text { flex-basis: 100%; font-size: .82rem; line-height: 1.25; }
+  /* El badge no reserva espai fins que se selecciona; mida segons el
+     seu contingut, com una pill normal */
+  .rdb-toggle__badge {
+    display: none; width: auto;
+    margin: 4px 0 0 26px; font-size: .64rem; padding: 2px 7px;
+  }
+  .rdb-toggle:has(input:checked) .rdb-toggle__badge { display: inline-block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ============================================================
+   Punts 1–6: progrés · preus · confetti · dark mode · haptics
+   ============================================================ */
+
+/* ---- 1. Indicador de progrés ---- */
+.form-progress {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 22px;
+}
+.form-progress__track {
+  flex: 1; height: 6px; border-radius: 999px;
+  background: var(--line-ink); overflow: hidden;
+}
+.form-progress__bar {
+  height: 100%; width: 0%; border-radius: 999px; background: var(--blue);
+  transition: width .35s ease, background .35s ease;
+}
+.form-progress.is-complete .form-progress__bar { background: #22c55e; }
+.form-progress__label {
+  font-size: .8rem; color: var(--ink-soft); white-space: nowrap;
+  min-width: 170px; text-align: right;
+}
+.form-progress.is-complete .form-progress__label { color: #16a34a; font-weight: 700; }
+
+/* ---- 2. Checkbox C.P. Riudebitlles ---- */
+.rdb-heading { margin-top: 18px; margin-bottom: 8px; }
+.rdb-heading .field__help { margin-top: 2px; }
+.rdb-field { margin-bottom: 14px; }
+.rdb-toggle {
+  display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 10px 14px; border: 1.5px solid var(--line-ink);
+  border-radius: var(--radius-sm); background: #fff; width: 100%;
+  transition: border-color .15s, background .15s; user-select: none;
+}
+@media (hover: hover) {
+  .rdb-toggle:hover { border-color: var(--blue); background: var(--blue-soft); }
+}
+.rdb-toggle:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
+.rdb-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.rdb-toggle__box {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 5px;
+  border: 1.5px solid var(--line-ink); background: #fff;
+  display: grid; place-items: center; transition: .15s;
+}
+.rdb-toggle:has(input:checked) .rdb-toggle__box {
+  background: var(--blue); border-color: var(--blue);
+}
+.rdb-toggle:has(input:checked) .rdb-toggle__box::after {
+  content: "✓"; color: #fff; font-size: .8rem; font-weight: 700;
+}
+.rdb-toggle__text { font-size: .9rem; color: var(--ink); flex: 1; }
+.rdb-toggle__text strong { color: var(--navy); }
+.rdb-toggle__badge {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--blue); background: rgba(31,90,224,.12); border-radius: 999px;
+  padding: 3px 9px; flex-shrink: 0; opacity: 0; transition: opacity .2s;
+}
+.rdb-toggle:has(input:checked) .rdb-toggle__badge { opacity: 1; }
+
+/* ---- 2. Preu per fill ---- */
+.child-price {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 12px; padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(31,90,224,.07) 0%, rgba(31,90,224,.02) 100%);
+  border: 1px solid rgba(31,90,224,.15); border-left: 3px solid var(--blue);
+  border-radius: var(--radius-sm);
+  animation: rise .3s ease both;
+}
+/* L'atribut [hidden] ha de guanyar al display:flex de dalt (mateixa especificitat) */
+.child-price[hidden] { display: none; }
+.child-price__icon {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--blue); color: #fff;
+  font-family: "Anton", sans-serif; font-size: 1rem;
+  display: grid; place-items: center;
+}
+.child-price__body { display: flex; flex-direction: column; min-width: 0; }
+.child-price__label {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--ink-soft);
+}
+.child-price__breakdown { font-size: .82rem; color: var(--ink-soft); }
+.child-price__breakdown:empty { display: none; }
+.child-price__amount {
+  margin-left: auto; flex-shrink: 0;
+  font-family: "Anton", sans-serif; font-size: 1.45rem; letter-spacing: .02em; color: var(--blue);
+}
+
+/* ---- 2. Resum total de preus ---- */
+#price-total-card { margin-bottom: 22px; }
+.price-total-card {
+  background: linear-gradient(180deg, rgba(31,90,224,.03) 0%, rgba(31,90,224,.06) 100%);
+  border: 1px solid rgba(31,90,224,.16); border-left: 3px solid var(--blue);
+  border-radius: var(--radius);
+  padding: 18px 20px; box-shadow: var(--shadow); animation: rise .4s ease both;
+}
+.price-total__header { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; }
+.price-total__icon {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--blue); color: #fff;
+  font-family: "Anton", sans-serif; font-size: .9rem;
+  display: grid; place-items: center;
+}
+.price-total__title {
+  font-family: "Anton", sans-serif; text-transform: uppercase;
+  letter-spacing: .05em; font-size: 1rem; color: var(--navy);
+}
+.price-total__row {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 6px 16px;
+  align-items: center; padding: 8px 0;
+  border-bottom: 1px solid rgba(31,90,224,.08); font-size: .9rem;
+}
+.price-total__row:last-child:not(.price-total__row--grand) { border-bottom: none; padding-bottom: 0; }
+.price-total__name { font-weight: 700; color: var(--navy); }
+.price-total__meta { color: var(--ink-soft); font-size: .82rem; }
+.price-total__amount {
+  font-family: "Anton", sans-serif; font-size: 1.2rem; color: var(--blue); letter-spacing: .02em;
+  white-space: nowrap; flex-shrink: 0;
+}
+.price-total__divider { height: 1px; background: var(--line-ink); margin: 10px 0 0; }
+
+/* Franja "hero" del total: bloc blau sòlid, coherent amb la marca */
+.price-total__row--grand {
+  position: relative; overflow: hidden;
+  display: flex; justify-content: flex-end; align-items: center; gap: 14px;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 58%, var(--blue-deep) 100%);
+  margin: 12px -20px -18px; padding: 18px 22px 18px;
+  border-radius: 0 0 var(--radius) var(--radius); border-bottom: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14);
+}
+/* Resplendor diagonal subtil al cantó superior */
+.price-total__row--grand::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 65% 130% at 88% -10%, rgba(79,142,255,.55) 0%, transparent 60%);
+}
+.price-total__row--grand .price-total__name {
+  position: relative; z-index: 1;
+  font-family: "Anton", sans-serif; font-size: 1.2rem; font-weight: 400;
+  letter-spacing: .04em; text-transform: uppercase; color: #fff;
+}
+.price-total__row--grand .price-total__amount {
+  position: relative; z-index: 1;
+  font-family: "Anton", sans-serif; font-size: 1.2rem; letter-spacing: .01em;
+  color: #fff; -webkit-text-fill-color: #fff; background: none;
+  text-shadow: 0 2px 12px rgba(0,0,0,.22);
+}
+
+/* Desglossament per fill i per setmana */
+.price-total__child {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(31,90,224,.08);
+}
+.price-total__child:last-of-type { border-bottom: none; padding-bottom: 4px; }
+.price-total__child-hd {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; margin-bottom: 5px;
+}
+.price-total__child-hd .price-total__name { min-width: 0; }
+.price-total__week-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 3px 0 3px 10px; font-size: .85rem; color: var(--ink-soft);
+}
+.price-total__week-label::before { content: "·"; margin-right: 5px; opacity: .5; }
+.price-total__week-price { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.price-total__tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.price-total__tag {
+  font-size: .8rem; padding: 4px 10px; border-radius: 999px;
+  background: var(--card); border: 1.5px solid var(--line-ink);
+  color: var(--ink-soft); font-weight: 600;
+}
+
+/* ---- 3. Confetti ---- */
+.confetti-container {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden;
+}
+.confetti-piece { position: absolute; top: -12px; animation: confetti-fall linear forwards; }
+@keyframes confetti-fall {
+  0%   { transform: translateY(0) rotate(0deg) scaleX(1); opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(110vh) rotate(800deg) scaleX(-1); opacity: 0; }
+}
+
+/* ---- 3. Pantalla d'èxit millorada ---- */
+.done {
+  background: linear-gradient(160deg, rgba(31,90,224,.05) 0%, transparent 55%);
+  border-radius: var(--radius);
+}
+.done__mark {
+  background: linear-gradient(135deg, var(--blue) 0%, #22c55e 100%);
+  box-shadow: 0 8px 32px rgba(31,90,224,.38);
+}
+
+/* ---- 4. Dark mode ---- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --blue:      #5B8EFF;
+    --blue-deep: #7AACFF;
+    --navy:      #A8BFFF;
+    --rink-line: #5B8EFF;
+    --blue-soft: #162040;
+    --paper:     #090E1A;
+    --card:      #101828;
+    --ink:       #E2E8F8;
+    --ink-soft:  #7A90B8;
+    --line-ink:  #1E2D4A;
+    --danger:    #FF7070;
+  }
+
+  /* Capçalera */
+  .topbar { background: var(--card); }
+  .topbar__contact { border-color: rgba(91,142,255,.28); }
+
+  /* Inputs */
+  .input, .select, .textarea { background: var(--card); color: var(--ink); }
+
+  /* Setmanes i opcions */
+  .choice, .week { background: var(--card); }
+  .week__num { background: var(--blue); }
+
+  /* Checkboxes personalitzats */
+  .rdb-toggle { background: var(--card); }
+  .rdb-toggle:has(input:checked) { background: var(--blue-soft); }
+  .rdb-toggle__box { background: var(--card); }
+  .rdb-toggle__badge { background: rgba(91,142,255,.18); color: var(--blue); }
+  .check__box { background: var(--card); }
+
+  /* Fitxers */
+  .filebox { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
+
+  /* Notes i etiquetes */
+  .note { background: var(--blue-soft); }
+
+  /* Campus chips */
+  .chip { background: var(--card); color: var(--ink); }
+  .chip--all { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .chip--all:hover { background: var(--blue-deep); border-color: var(--blue-deep); }
+
+  /* Barra "ja t'havíem vist" */
+  .returning { background: var(--card); }
+  .returning__close { background: var(--card); }
+
+  /* Botó ghost (Inscriure un altre..., Tornar a provar) */
+  .btn--ghost { background: var(--card); }
+
+  /* Blocs de fill */
+  .child-block { background: rgba(255,255,255,.02); }
+  .child-block:first-child { background: transparent; }
+
+  /* Pantalla d'èxit */
+  .done { background: linear-gradient(160deg, rgba(91,142,255,.08) 0%, transparent 55%); }
+
+  /* Progrés: etiqueta "completat" passa a verd clar */
+  .form-progress.is-complete .form-progress__label { color: #4ade80; }
+
+  /* Targetes de preu */
+  .price-info {
+    background: linear-gradient(135deg, rgba(91,142,255,.1) 0%, rgba(91,142,255,.04) 100%);
+    border-color: rgba(91,142,255,.22);
+  }
+  .child-price {
+    background: linear-gradient(135deg, rgba(91,142,255,.1) 0%, rgba(91,142,255,.04) 100%);
+    border-color: rgba(91,142,255,.22);
+  }
+  .price-total__child { border-bottom-color: var(--line-ink); }
+
+  /* Pill actiu al hero slider: mantenir text fosc sobre fons blanc */
+  .hero-pill.is-active { color: #0E2A63; }
+
+  /* Bloc de preu final en mode fosc */
+  .price-total-card {
+    background: linear-gradient(180deg, rgba(91,142,255,.08) 0%, rgba(91,142,255,.18) 100%);
+    border-color: rgba(91,142,255,.22);
+  }
+  .price-total__row--grand {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 60%, var(--blue-deep) 100%);
+  }
+  .price-total__row--grand .price-total__amount {
+    color: #fff; -webkit-text-fill-color: #fff; background: none;
+  }
+  .price-total__tag { background: var(--card); border-color: var(--line-ink); }
+}
+
+/* ---- 10. Footer contacte ---- */
+.foot__contact {
+  display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 10px;
+}
+.foot__contact-item {
+  color: rgba(255,255,255,.72); text-decoration: none;
+  font-size: .88rem; transition: color .15s;
+}
+.foot__contact-item:hover { color: #fff; text-decoration: underline; }
+
+/* ---- 11. Consentiment dins la secció de protecció de dades ---- */
+.section .consent {
+  padding-top: 14px; padding-bottom: 2px;
+  border-top: 1px solid var(--line-ink); margin-top: 10px;
+}
+
+/* ---- 12. Referència de confirmació ---- */
+.done__ref {
+  font-size: .82rem; color: var(--ink-soft); letter-spacing: .04em;
+  background: var(--blue-soft); border-radius: 999px;
+  padding: 4px 14px; display: inline-block; margin: -4px 0 18px;
+}
+.done__actions {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 4px;
+}
+
+/* ---- Print ---- */
+@media print {
+  .topbar, .hero, .returning, .form, #loading, #load-error, #closed,
+  .foot, .done__actions, .confetti-container, #form-progress { display: none !important; }
+  body { background: #fff; color: #000; -webkit-print-color-adjust: exact; }
+  .main { padding-block: 0; }
+  .done {
+    padding: 20px 0; background: none;
+    animation: none;
+  }
+  .done__mark { box-shadow: none; animation: none; }
+  .done__summary { border: 1px solid #ccc; box-shadow: none; }
+}
