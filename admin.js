@@ -470,6 +470,19 @@ async function resend(id) {
 /* ============================================================
    Drawer de detall
    ============================================================ */
+// Mostra un valor: si és un (o més) enllaç(os) de fitxer, els pinta com a
+// enllaços "Veure document"; si no, text escapat.
+function renderDetailValue(value) {
+  const s = String(value == null ? "" : value).trim();
+  if (/^https?:\/\//.test(s)) {
+    const urls = s.split(/[\s\n]+/).filter((u) => /^https?:\/\//.test(u));
+    return urls.map((u, i) =>
+      `<a href="${esc(u)}" target="_blank" rel="noopener">📎 Veure document${urls.length > 1 ? " " + (i + 1) : ""}</a>`
+    ).join("<br>");
+  }
+  return esc(s);
+}
+
 function openDrawer(r) {
   if (!r) return;
   $("drawer-title").textContent = r.nom || "Inscripció";
@@ -490,10 +503,9 @@ function openDrawer(r) {
 
   Object.keys(groups).forEach((g) => {
     html += `<div class="dgroup"><div class="dgroup__title">${esc(g)}</div>` +
-      groups[g].map((d) => {
-        const v = /^https?:\/\//.test(d.value) ? `<a href="${esc(d.value)}" target="_blank" rel="noopener">Veure document</a>` : esc(d.value);
-        return `<div class="dfield"><span class="dfield__k">${esc(d.label)}</span><span class="dfield__v">${v}</span></div>`;
-      }).join("") + `</div>`;
+      groups[g].map((d) =>
+        `<div class="dfield"><span class="dfield__k">${esc(d.label)}</span><span class="dfield__v">${renderDetailValue(d.value)}</span></div>`
+      ).join("") + `</div>`;
   });
 
   if (r.fitxers && r.fitxers.length) {
@@ -576,21 +588,54 @@ function toast(msg, isError) {
 /* ============================================================
    MODE DEMO (sense backend) — dades generades
    ============================================================ */
-let _demo = null;
-function demoData() {
-  if (_demo) return _demo;
+// Llista de formularis del mode demo (el selector de dalt).
+const DEMO_FORMS = [
+  { id: "estiu", nombre: "Casal d'Estiu 2026" },
+  { id: "primavera", nombre: "Casal de Primavera 2027" },
+  { id: "hivern", nombre: "Casal de Nadal 2026" }
+];
+
+// Cada formulari té el seu propi conjunt de dades (setmanes, nom i quantitat),
+// així el selector es nota: cada tria mostra inscripcions diferents.
+const DEMO_FORM_CFG = {
+  estiu: {
+    nombre: "Casal d'Estiu 2026", count: 34,
+    weeks: [
+      { id: "S1", etiqueta: "Setmana 1", fechas: "29 juny – 3 jul", plazas: 25 },
+      { id: "S2", etiqueta: "Setmana 2", fechas: "6 – 10 jul", plazas: 25 },
+      { id: "S3", etiqueta: "Setmana 3", fechas: "13 – 17 jul", plazas: 20 },
+      { id: "S4", etiqueta: "Setmana 4", fechas: "20 – 24 jul", plazas: 25 },
+      { id: "S5", etiqueta: "Setmana 5", fechas: "27 – 31 jul", plazas: 25 }
+    ]
+  },
+  primavera: {
+    nombre: "Casal de Primavera 2027", count: 14,
+    weeks: [
+      { id: "D1", etiqueta: "Dissabte 1", fechas: "11 abril", plazas: 20 },
+      { id: "D2", etiqueta: "Dissabte 2", fechas: "18 abril", plazas: 20 },
+      { id: "D3", etiqueta: "Dissabte 3", fechas: "25 abril", plazas: 20 },
+      { id: "D4", etiqueta: "Dissabte 4", fechas: "2 maig", plazas: 20 }
+    ]
+  },
+  hivern: {
+    nombre: "Casal de Nadal 2026", count: 9,
+    weeks: [
+      { id: "H1", etiqueta: "Setmana única", fechas: "22 – 26 desembre", plazas: 18 }
+    ]
+  }
+};
+
+let _demo = {};
+function demoData(form) {
+  form = form || "estiu";
+  if (_demo[form]) return _demo[form];
+  const cfg = DEMO_FORM_CFG[form] || DEMO_FORM_CFG.estiu;
   const noms = ["Marc Puig", "Laia Soler", "Jan Vidal", "Aina Roca", "Pol Ferrer", "Júlia Mas", "Bruna Costa", "Nil Serra", "Ona Vila", "Roc Camps", "Èlia Pujol", "Arnau Bosch", "Mar Riba", "Biel Font", "Carla Sala", "Pau Llopis", "Vera Grau", "Guim Soto", "Noa Prat", "Roger Coll"];
   const tutors = ["Anna Puig", "David Soler", "Marta Vidal", "Jordi Roca", "Sara Ferrer", "Albert Mas"];
-  const weeks = [
-    { id: "S1", etiqueta: "Setmana 1", fechas: "29 juny – 3 jul", plazas: 25 },
-    { id: "S2", etiqueta: "Setmana 2", fechas: "6 – 10 jul", plazas: 25 },
-    { id: "S3", etiqueta: "Setmana 3", fechas: "13 – 17 jul", plazas: 20 },
-    { id: "S4", etiqueta: "Setmana 4", fechas: "20 – 24 jul", plazas: 25 },
-    { id: "S5", etiqueta: "Setmana 5", fechas: "27 – 31 jul", plazas: 25 }
-  ];
+  const weeks = cfg.weeks;
   const rows = []; const occ = {};
   weeks.forEach((w) => (occ[w.id] = 0));
-  for (let i = 0; i < 34; i++) {
+  for (let i = 0; i < cfg.count; i++) {
     const nom = noms[i % noms.length] + (i >= noms.length ? " " + (i) : "");
     const wsel = weeks.filter(() => Math.random() > 0.55);
     if (!wsel.length) wsel.push(weeks[i % weeks.length]);
@@ -598,21 +643,24 @@ function demoData() {
     const preu = wsel.reduce((s, _, idx) => s + (idx === 0 ? (rdb ? 70 : 80) : (rdb ? 60 : 70)), 0);
     const desc = [rdb && "C.P. Riudebitlles", fn && "Família nombrosa"].filter(Boolean).join(", ") || "-";
     wsel.forEach((w) => occ[w.id]++);
+    // ~55% han pujat la targeta sanitària al formulari (enllaç de Drive d'exemple).
+    const card = Math.random() > 0.45 ? "https://drive.google.com/file/d/EXEMPLE-targeta-" + i + "/view" : "";
     const day = new Date(2026, 4, 1 + Math.floor(i / 1.6));
     rows.push({
       id: "INS-" + (1700000000000 + i * 99000) + (Math.random() > 0.8 ? "-1" : ""),
       baseId: "INS-" + i, row: i + 2, ts: day.toISOString().slice(0, 10),
-      formulario: "Casal d'Estiu 2026", nom,
+      formulario: cfg.nombre, nom,
       tutor: tutors[i % tutors.length], email: nom.toLowerCase().replace(/\s+/g, ".") + "@exemple.cat",
       telefon: "6" + (10000000 + Math.floor(Math.random() * 8999999)),
       edat: 6 + (i % 8), setmanes: wsel.map((w) => w.id).join(", "),
       weekIds: wsel.map((w) => w.id), preu, descompte: desc,
       estat: Math.random() > 0.45 ? "Pagat" : "Pendent",
-      fitxers: Math.random() > 0.6 ? ["https://drive.google.com/exemple"] : [],
+      fitxers: card ? [card] : [],
       detall: [
         { label: "Nom i cognoms", value: nom, grup: "Dades del jugador/a", esJugador: true },
         { label: "Data de naixement", value: `1${i % 9}/0${1 + i % 8}/20${10 + i % 9}`, grup: "Dades del jugador/a", esJugador: true },
         { label: "Sap nedar?", value: Math.random() > 0.3 ? "Sí" : "No", grup: "Dades del jugador/a", esJugador: true },
+        ...(card ? [{ label: "Còpia de la targeta sanitària", value: card, grup: "Documentació", esJugador: true }] : []),
         { label: "Nom del tutor/a", value: tutors[i % tutors.length], grup: "Dades del tutor/a", esJugador: false },
         { label: "Telèfon", value: "6" + (10000000 + Math.floor(Math.random() * 8999999)), grup: "Dades del tutor/a", esJugador: false }
       ]
@@ -620,17 +668,17 @@ function demoData() {
   }
   const perDay = {}; rows.forEach((r) => (perDay[r.ts] = (perDay[r.ts] || 0) + 1));
   const ages = {}; rows.forEach((r) => (ages[r.edat] = (ages[r.edat] || 0) + 1));
-  _demo = { weeks, occ, rows, perDay, ages };
-  return _demo;
+  _demo[form] = { weeks, occ, rows, perDay, ages };
+  return _demo[form];
 }
 
 async function demoApi(action, extra) {
   await new Promise((r) => setTimeout(r, 280));
-  const d = demoData();
   if (action === "admin_login") {
     if (state.pin !== DEMO_PIN) throw new Error("unauthorized");
-    return { ok: true, forms: [{ id: "estiu", nombre: "Casal d'Estiu 2026" }, { id: "primavera", nombre: "Casal de Primavera 2027" }], settings: { nombre_campus: "Campus d'Hoquei Riudebitlles", club: "El plaer de jugar!" } };
+    return { ok: true, forms: DEMO_FORMS, settings: { nombre_campus: "Campus d'Hoquei Riudebitlles", club: "El plaer de jugar!" } };
   }
+  const d = demoData(state.form);
   if (action === "admin_overview") {
     let total = 0, cobrats = 0, pagat = 0, pendent = 0;
     const disc = { rdb: 0, fn: 0, germa: 0, cap: 0 };
