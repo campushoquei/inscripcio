@@ -794,11 +794,15 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   border: 1px solid rgba(31,90,224,.14);
   border-left: 3px solid var(--blue);
   border-radius: var(--radius-sm);
-  padding: 14px 16px;
+  padding: 12px 14px;
   margin-bottom: 16px;
 }
+/* Capçalera = botó per desplegar/plegar la taula de tarifes */
 .price-info__header {
-  display: flex; align-items: center; gap: 9px; margin-bottom: 11px;
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 0; margin: 0;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; text-align: left; color: inherit;
 }
 .price-info__icon {
   flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
@@ -810,6 +814,26 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   font-family: "Anton", sans-serif; text-transform: uppercase;
   letter-spacing: .05em; font-size: .82rem; color: var(--navy);
 }
+/* Pista discreta a la dreta ("Veure tarifes" → "Amaga") */
+.price-info__hint {
+  margin-left: auto; font-size: .76rem; font-weight: 600; color: var(--ink-soft);
+  white-space: nowrap;
+}
+.price-info.is-open .price-info__hint { color: var(--blue); }
+.price-info__chevron {
+  flex-shrink: 0; stroke: var(--ink-soft);
+  transition: transform .3s cubic-bezier(.4,0,.2,1), stroke .2s ease;
+}
+.price-info.is-open .price-info__chevron { transform: rotate(180deg); stroke: var(--blue); }
+.price-info__header:active .price-info__chevron { transform: scale(.9); }
+.price-info.is-open .price-info__header:active .price-info__chevron { transform: rotate(180deg) scale(.9); }
+/* Cos col·lapsable (truc grid 0fr → 1fr per animar l'alçada automàtica) */
+.price-info__body {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1);
+}
+.price-info.is-open .price-info__body { grid-template-rows: 1fr; }
+.price-info__body-inner { overflow: hidden; min-height: 0; padding-top: 13px; }
 .price-info__tiers { list-style: none; margin: 0; padding: 0; }
 .price-tier {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -1105,13 +1129,42 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   /* Espai al final perquè l'últim pill no quedi retallat */
   .hero-nav::after { content: ""; display: block; min-width: 16px; flex-shrink: 0; }
 
-  /* Taula de preus: compactar per a pantalles petites */
-  .price-info { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .price-table { min-width: 260px; font-size: .78rem; }
-  .price-table thead th { padding: 0 6px 8px; font-size: .7rem; letter-spacing: .02em; }
-  .price-table thead th:first-child { min-width: 72px; }
-  .price-table tbody td { padding: 8px 6px; }
-  .price-table__price { font-size: .95rem; }
+  /* Taula de preus al mòbil: la fila de 3 columnes queda apretada i amb espais
+     buits quan l'etiqueta ocupa diverses línies. La convertim en una targeta per
+     fila: títol a dalt i cada preu en una línia "Columna ——— Preu", ben alineat. */
+  .price-info { overflow: visible; }
+  .price-table { display: block; min-width: 0; font-size: .84rem; }
+  .price-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* capçalera només per a lectors */
+  .price-table tbody { display: block; }
+  .price-table tbody tr {
+    display: block;
+    background: var(--card);
+    border: 1px solid rgba(31,90,224,.14);
+    border-radius: 12px;
+    padding: 11px 13px;
+    margin-bottom: 9px;
+    box-shadow: 0 1px 3px rgba(14,42,99,.05);
+  }
+  .price-table tbody tr:last-child { margin-bottom: 0; }
+  .price-table tbody td { display: block; padding: 0; border: none; text-align: left; }
+  /* Títol de la fila (1a setmana, 2a setmana · …) */
+  .price-table tbody td.price-table__label {
+    font-size: .92rem; font-weight: 700; color: var(--navy); line-height: 1.35;
+    padding-bottom: 9px; margin-bottom: 7px;
+    border-bottom: 1px solid rgba(31,90,224,.12);
+  }
+  /* Cada preu: nom de columna a l'esquerra, import a la dreta */
+  .price-table tbody td[data-label] {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 4px 0;
+  }
+  .price-table tbody td[data-label]::before {
+    content: attr(data-label);
+    font-family: "Hanken Grotesk", sans-serif;
+    font-size: .84rem; font-weight: 600; color: var(--ink-soft);
+    text-transform: none; letter-spacing: 0;
+  }
+  .price-table__price { font-size: 1.12rem; }
 
   /* Toggles "C.P. Riudebitlles" i "família nombrosa": més fins al mòbil */
   .rdb-field { margin-bottom: 10px; }
@@ -1127,6 +1180,12 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
     margin: 4px 0 0 26px; font-size: .64rem; padding: 2px 7px;
   }
   .rdb-toggle:has(input:checked) .rdb-toggle__badge { display: inline-block; }
+}
+/* Targetes de preu apilades en fosc: la targeta (var--card) ja contrasta amb el fons
+   del bloc; només ajustem els filets blaus al to clar del tema fosc */
+@media (prefers-color-scheme: dark) and (max-width: 520px) {
+  .price-table tbody tr { border-color: rgba(91,142,255,.2); }
+  .price-table tbody td.price-table__label { border-bottom-color: rgba(91,142,255,.18); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

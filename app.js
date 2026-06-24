@@ -1206,32 +1206,47 @@ function buildPriceTableFromConfig() {
     rows.push({ label: "Germà/na · família nombrosa",  gen: p2, rdb: p2r });
   }
 
-  const priceCell = function(val, isRdb) {
-    return `<td><span class="price-table__price${isRdb ? " price-table__price--rdb" : ""}">${val}&thinsp;€</span></td>`;
+  // data-label permet que al mòbil cada preu mostri a quina columna pertany
+  // (la capçalera de la taula s'amaga i cada fila es converteix en una targeta).
+  const priceCell = function(val, isRdb, head) {
+    return `<td data-label="${escapeHtml(head)}"><span class="price-table__price${isRdb ? " price-table__price--rdb" : ""}">${val}&thinsp;€</span></td>`;
   };
 
   const rowsHtml = rows.map(function(r) {
     return `<tr>
       <td class="price-table__label">${escapeHtml(r.label)}</td>
-      ${priceCell(r.gen, false)}
-      ${hasRDB ? priceCell(r.rdb, true) : ""}
+      ${priceCell(r.gen, false, "General")}
+      ${hasRDB ? priceCell(r.rdb, true, "C.P. Riudebitlles") : ""}
     </tr>`;
   }).join("");
 
   const card = document.createElement("div");
   card.className = "price-info";
-  card.innerHTML = `<div class="price-info__header">
+  card.innerHTML = `<button type="button" class="price-info__header" aria-expanded="false" aria-controls="price-info-body">
     <span class="price-info__icon" aria-hidden="true">€</span>
     <span class="price-info__title">Preus</span>
-  </div>
-  <table class="price-table">
-    <thead><tr>
-      <th></th>
-      <th>General</th>
-      ${hasRDB ? "<th>C.P. Riudebitlles</th>" : ""}
-    </tr></thead>
-    <tbody>${rowsHtml}</tbody>
-  </table>`;
+    <span class="price-info__hint">Veure tarifes</span>
+    <svg class="price-info__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+  </button>
+  <div class="price-info__body" id="price-info-body">
+    <div class="price-info__body-inner">
+      <table class="price-table">
+        <thead><tr>
+          <th></th>
+          <th>General</th>
+          ${hasRDB ? "<th>C.P. Riudebitlles</th>" : ""}
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  </div>`;
+  const toggle = card.querySelector(".price-info__header");
+  const hint   = card.querySelector(".price-info__hint");
+  toggle.addEventListener("click", function() {
+    const open = card.classList.toggle("is-open");
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (hint) hint.textContent = open ? "Amaga" : "Veure tarifes";
+  });
   return card;
 }
 
