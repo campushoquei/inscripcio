@@ -232,107 +232,106 @@ body {
 
 /* ---------- Barra de retorn ---------- */
 .returning {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
-  background: var(--card); border: 1px solid var(--line-ink);
-  border-left: 4px solid var(--blue); border-radius: var(--radius);
-  padding: 8px 10px 8px 14px; margin-bottom: 24px; box-shadow: var(--shadow);
+  position: relative;
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, rgba(31,90,224,.11) 0%, rgba(31,90,224,.03) 52%, var(--card) 100%);
+  border: 1px solid rgba(31,90,224,.18);
+  border-radius: 18px;
+  padding: 6px 8px 6px 12px; margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(14,42,99,.10);
 }
 .returning__toggle {
-  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0;
-  background: none; border: 0; margin: 0; padding: 6px 2px;
+  display: flex; align-items: center; gap: 13px; width: 100%; min-width: 0;
+  background: none; border: 0; margin: 0; padding: 8px 4px;
   font: inherit; color: inherit; text-align: left; cursor: pointer;
 }
 .returning__icon {
-  font-size: 1.1rem; color: var(--blue); background: var(--blue-soft);
-  width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%;
-  display: grid; place-items: center; font-weight: 700;
+  width: 42px; height: 42px; flex: 0 0 auto; border-radius: 50%;
+  display: grid; place-items: center; color: #fff;
+  background: linear-gradient(140deg, var(--blue) 0%, var(--blue-deep) 100%);
+  box-shadow: 0 5px 14px rgba(31,90,224,.34);
 }
 .returning__head { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.returning__title { font-weight: 700; margin: 0; font-size: .98rem; line-height: 1.2; }
+.returning__title { font-weight: 800; margin: 0; font-size: 1rem; line-height: 1.2; color: var(--navy); letter-spacing: -.01em; }
 .returning__hint {
-  margin: 1px 0 0; color: var(--ink-soft); font-size: .85rem;
+  margin: 2px 0 0; color: var(--ink-soft); font-size: .84rem; font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .returning__chevron {
   flex: 0 0 auto; display: grid; place-items: center;
-  width: 28px; height: 28px; border-radius: 50%;
-  color: var(--blue); background: var(--blue-soft);
+  width: 30px; height: 30px; border-radius: 50%;
+  color: var(--blue); background: rgba(255,255,255,.72);
   transition: transform .25s ease, background .15s ease;
 }
-.returning__toggle:hover .returning__chevron { background: var(--blue); color: #fff; }
+@media (hover: hover) {
+  .returning__toggle:hover .returning__chevron { background: #fff; color: var(--blue-deep); }
+}
 .returning[data-open] .returning__chevron { transform: rotate(180deg); }
-.returning__panel { grid-column: 1 / -1; display: none; padding: 2px 2px 6px; }
+.returning__panel { grid-column: 1 / -1; display: none; padding: 4px 6px 8px; }
 .returning[data-open] .returning__panel { display: block; }
-.returning__actions { display: grid; gap: 12px; }
+.returning__actions { display: grid; gap: 14px; }
 .returning-family {
-  display: grid;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line-ink);
+  display: grid; gap: 10px; padding-top: 12px;
+  border-top: 1px solid rgba(31,90,224,.14);
 }
-.returning-family:first-child {
-  padding-top: 0;
-  border-top: none;
-}
+.returning-family:first-child { padding-top: 4px; border-top: none; }
 .returning-family__title {
-  margin: 0;
-  font-size: .84rem;
-  font-weight: 700;
-  letter-spacing: .03em;
-  text-transform: uppercase;
-  color: var(--navy);
+  margin: 0; font-size: .74rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--blue);
 }
 .returning-family__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
-  border: 1px solid var(--line-ink); background: #fff; border-radius: 999px;
-  padding: 7px 14px; cursor: pointer; font-family: inherit; font-size: .9rem;
-  font-weight: 600; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid rgba(31,90,224,.18); background: var(--card); border-radius: 999px;
+  padding: 6px 14px 6px 7px; cursor: pointer; font-family: inherit; font-size: .9rem;
+  font-weight: 600; color: var(--navy);
+  box-shadow: 0 1px 2px rgba(14,42,99,.05);
+  transition: border-color .15s, background .15s, box-shadow .15s, transform .12s;
 }
-.chip:hover { border-color: var(--blue); background: var(--blue-soft); }
-.chip--with-delete { display: inline-flex; align-items: center; gap: 7px; padding-right: 9px; }
+@media (hover: hover) {
+  .chip:hover { border-color: var(--blue); background: var(--blue-soft); box-shadow: 0 5px 14px rgba(31,90,224,.16); transform: translateY(-1px); }
+}
+.chip:active { transform: translateY(0); }
+/* Avatar amb la inicial dins el chip (lliga amb el popup de fills del wizard) */
+.chip__avatar {
+  width: 24px; height: 24px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center; font-size: .72rem; font-weight: 800;
+  background: var(--blue-soft); color: var(--blue);
+}
+.chip--with-delete { padding-right: 8px; }
 .chip__del {
   display: inline-grid; place-items: center;
-  width: 19px; height: 19px; border-radius: 50%; flex: 0 0 auto;
+  width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto;
   background: rgba(14,42,99,.08); color: var(--ink-soft);
-  font-size: .8rem; line-height: 1; cursor: pointer; transition: background .15s, color .15s;
+  font-size: .82rem; line-height: 1; cursor: pointer; transition: background .15s, color .15s;
 }
-.chip--with-delete:hover .chip__del { background: rgba(192,57,43,.15); color: var(--danger); }
+@media (hover: hover) {
+  .chip--with-delete:hover .chip__del { background: rgba(192,57,43,.15); color: var(--danger); }
+}
 .chip__del:hover { background: var(--danger) !important; color: #fff !important; }
+/* Chip "tots els fills": acció primària, plena */
 .chip--all {
-  background: var(--navy);
-  border-color: var(--navy);
-  color: #fff;
+  background: linear-gradient(140deg, var(--blue) 0%, var(--blue-deep) 100%);
+  border-color: transparent; color: #fff; padding-left: 14px;
+  box-shadow: 0 3px 11px rgba(31,90,224,.30);
 }
-.chip--all:hover {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: #fff;
+@media (hover: hover) {
+  .chip--all:hover { box-shadow: 0 7px 18px rgba(31,90,224,.40); transform: translateY(-1px); }
 }
 .returning__close {
-  align-self: center;
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  background: #fff;
-  border: 1px solid var(--line-ink);
-  border-radius: 999px;
-  cursor: pointer;
-  color: var(--ink-soft);
-  font-size: 1rem;
-  padding: 0;
-  line-height: 1;
+  align-self: start; justify-self: end;
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px; flex: 0 0 auto;
+  background: rgba(255,255,255,.6); border: 1px solid rgba(31,90,224,.14);
+  border-radius: 999px; cursor: pointer; color: var(--ink-soft);
+  font-size: .9rem; padding: 0; line-height: 1;
   transition: border-color .15s, color .15s, background .15s;
 }
-.returning__close:hover {
-  border-color: var(--blue);
-  color: var(--blue);
-  background: var(--blue-soft);
+@media (hover: hover) {
+  .returning__close:hover { border-color: var(--blue); color: var(--blue); background: #fff; }
 }
 .returning__close:focus-visible {
-  outline: 3px solid rgba(31,90,224,.22);
-  outline-offset: 2px;
+  outline: 3px solid rgba(31,90,224,.22); outline-offset: 2px;
 }
 
 /* ---------- Estats ---------- */
@@ -1339,13 +1338,17 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   .note { background: var(--blue-soft); }
 
   /* Campus chips */
-  .chip { background: var(--card); color: var(--ink); }
-  .chip--all { background: var(--blue); border-color: var(--blue); color: #fff; }
-  .chip--all:hover { background: var(--blue-deep); border-color: var(--blue-deep); }
+  .chip { color: var(--ink); }
+  /* El chip primari fa servir els blaus clars del mode fosc: text fosc per contrast */
+  .chip--all { color: #0A1020; }
 
   /* Barra "ja t'havíem vist" */
-  .returning { background: var(--card); }
-  .returning__close { background: var(--card); }
+  .returning {
+    background: linear-gradient(135deg, var(--blue-soft) 0%, var(--card) 68%);
+    border-color: rgba(91,142,255,.24);
+  }
+  .returning__chevron { background: rgba(255,255,255,.06); }
+  .returning__close { background: rgba(255,255,255,.04); }
 
   /* Botó ghost (Inscriure un altre..., Tornar a provar) */
   .btn--ghost { background: var(--card); }

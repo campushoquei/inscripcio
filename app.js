@@ -1589,17 +1589,21 @@ function maybeShowReturning() {
 
     (f.children || []).forEach((child, idx) => {
       const b = document.createElement("button"); b.type = "button"; b.className = "chip chip--with-delete";
-      const nameSpan = document.createElement("span"); nameSpan.textContent = childDisplayName(child, idx);
+      const dispName = childDisplayName(child, idx);
+      const avatar = document.createElement("span");
+      avatar.className = "chip__avatar"; avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = (dispName.trim()[0] || "?").toUpperCase();
+      const nameSpan = document.createElement("span"); nameSpan.textContent = dispName;
       const delSpan = document.createElement("span");
       delSpan.className = "chip__del";
-      delSpan.setAttribute("aria-label", `Esborrar ${childDisplayName(child, idx)} de la memòria`);
+      delSpan.setAttribute("aria-label", `Esborrar ${dispName} de la memòria`);
       delSpan.textContent = "×";
       delSpan.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         removeCachedChild(f, idx);
       });
-      b.append(nameSpan, delSpan);
+      b.append(avatar, nameSpan, delSpan);
       b.addEventListener("click", () => {
         prefillFamilySelection(f, [idx]);
         returningDismissed = true; hideReturning();
