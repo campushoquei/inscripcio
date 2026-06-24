@@ -68,7 +68,11 @@ function init() {
   $("form-select").addEventListener("change", (e) => { state.form = e.target.value; state.selected.clear(); saveView(); loadAll(); });
   document.querySelectorAll("#form-scope .form-scope__btn").forEach((b) =>
     b.addEventListener("click", () => setFormScope(b.dataset.scope)));
-  $("search").addEventListener("input", (e) => { state.filters.q = e.target.value.toLowerCase(); applyFilters(); });
+  const onSearchInput = (e) => { state.filters.q = e.target.value.toLowerCase(); applyFilters(); };
+  // "input" cobreix l'escriptura normal; "compositionupdate" fa que també cerqui lletra a lletra
+  // amb teclats predictius (Android/Gboard), que d'altra manera no confirmen fins prémer espai.
+  $("search").addEventListener("input", onSearchInput);
+  $("search").addEventListener("compositionupdate", onSearchInput);
   $("filter-week").addEventListener("change", (e) => { state.filters.week = e.target.value; applyFilters(); });
   $("filter-status").addEventListener("change", (e) => { state.filters.status = e.target.value; applyFilters(); });
   $("filter-group").addEventListener("change", (e) => { state.filters.group = e.target.value; applyFilters(); });

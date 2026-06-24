@@ -443,7 +443,7 @@ function renderForm() {
 function initWizard() {
   // Elimina wizard anterior (re-render)
   const oldNav = document.getElementById("wizard-nav");
-  if (oldNav) { if (oldNav._removeScroll) oldNav._removeScroll(); oldNav.remove(); }
+  if (oldNav) oldNav.remove();
   document.body.classList.remove("has-wizard");
 
   // Restaura visibilitat per defecte
@@ -507,7 +507,7 @@ function initWizard() {
       `<span class="wizard-nav__indicator" id="wizard-indicator"></span>` +
       `<div class="wizard-nav__action">` +
         `<button type="button" class="btn btn--primary wizard-nav__next" id="wizard-next">Següent ›</button>` +
-        `<button type="submit" class="btn btn--primary wizard-nav__submit" id="wizard-submit" disabled hidden>` +
+        `<button type="submit" form="form" class="btn btn--primary wizard-nav__submit" id="wizard-submit" hidden>` +
           `<span class="btn__label">${escapeHtml(submitLabel)}</span>` +
           `<span class="btn__spinner" aria-hidden="true"></span>` +
         `</button>` +
@@ -519,18 +519,6 @@ function initWizard() {
   document.getElementById("wizard-back").addEventListener("click", wizardBack);
   document.getElementById("wizard-next").addEventListener("click", wizardNext);
   document.getElementById("wizard-children-info").addEventListener("click", toggleChildrenPopup);
-
-  // Compressió de la barra en scroll (només mòbil)
-  if (window.matchMedia("(pointer: coarse)").matches) {
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      nav.classList.toggle("wizard-nav--compact", y > lastY && y > 40);
-      lastY = y;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    nav._removeScroll = () => window.removeEventListener("scroll", onScroll);
-  }
 
   // Actualitza el comptador de fills en temps real quan l'usuari escriu el nom
   if (!els.sections.dataset.childInputWatch) {
@@ -1844,10 +1832,8 @@ function updateProgress() {
     progressEl.classList.remove("is-complete");
     label.textContent = `${filled} de ${total} camps completats`;
   }
-
-  // Habilita el botó d'enviar només quan el formulari és complet (100 %)
-  const wizardSubmitBtn = document.getElementById("wizard-submit");
-  if (wizardSubmitBtn) wizardSubmitBtn.disabled = pct < 100;
+  // El botó d'enviar NO es bloqueja: així clicar sempre dona resposta. onSubmit valida,
+  // marca els camps que falten i salta al pas del wizard corresponent.
 }
 
 // ---- 2. Preus en temps real ----

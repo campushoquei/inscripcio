@@ -704,11 +704,15 @@ body {
   border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm); padding: 12px 13px;
   transition: border-color .15s, box-shadow .15s;
 }
+/* iOS dona als input[type=date] una caixa nativa més alta i amb padding propi.
+   Normalitzem l'aparença perquè tingui exactament les mateixes dimensions que la
+   resta de camps (mateix padding, alçada i amplada). */
 input[type="date"].input {
+  -webkit-appearance: none;
+  appearance: none;
   min-width: 0; max-width: 100%;
-  /* iOS: redueix el padding dret perquè la icona del calendari no faci overflow */
-  padding-right: 6px;
 }
+input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .textarea { resize: vertical; min-height: 92px; }
 .input:focus, .select:focus, .textarea:focus {
   outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(31,90,224,.16);
@@ -930,6 +934,7 @@ input[type="date"].input {
   font-family: inherit; font-weight: 700; font-size: 1rem; border-radius: 999px;
   padding: 14px 30px; cursor: pointer; border: 1.5px solid transparent; transition: .15s;
   display: inline-flex; align-items: center; gap: 10px;
+  touch-action: manipulation; /* elimina el retard de 300ms i el doble-tap-zoom en mòbil */
 }
 .btn--primary { background: var(--blue); color: #fff; box-shadow: 0 6px 20px rgba(31,90,224,.3); }
 .btn--primary:hover { background: var(--blue-deep); }
@@ -1016,12 +1021,16 @@ input[type="date"].input {
 .week { transition: border-color .15s, background .15s, transform .12s; }
 .week:not(.is-full):active { transform: scale(.985); }
 
-/* ---- Botó principal: elevació + resplendor al hover ---- */
+/* ---- Botó principal: elevació + resplendor al hover (només amb ratolí) ---- */
 .btn--primary { transition: background .15s, box-shadow .15s, transform .15s; }
-.btn--primary:hover:not(:disabled) {
-  background: var(--blue-deep);
-  box-shadow: 0 10px 32px rgba(31,90,224,.45);
-  transform: translateY(-2px);
+/* L'elevació al hover només té sentit amb punter fi; en tàctil provoca el "doble toc"
+   (el primer toc activa el :hover i el botó "salta", el segon fa el clic). */
+@media (hover: hover) {
+  .btn--primary:hover:not(:disabled) {
+    background: var(--blue-deep);
+    box-shadow: 0 10px 32px rgba(31,90,224,.45);
+    transform: translateY(-2px);
+  }
 }
 .btn--primary:active:not(:disabled) {
   transform: translateY(0);
@@ -1542,6 +1551,13 @@ body.has-wizard { padding-bottom: 52px; }
   padding: 8px 16px; font-size: .88rem;
   white-space: nowrap; min-height: 40px;
 }
+/* Botons de la barra: ombra continguda i neta (el glow gran del CTA gran
+   es veuria com un blur estrany al voltant d'aquests botons petits). */
+.wizard-nav .btn--primary { box-shadow: 0 2px 6px rgba(31,90,224,.28); }
+.wizard-nav .btn--primary:active:not(:disabled) { box-shadow: 0 1px 3px rgba(31,90,224,.3); }
+/* El botó "Següent" sempre amb el blau fosc (no el clar que canviava en clicar). */
+.wizard-nav__next,
+.wizard-nav__next:active:not(:disabled) { background: var(--blue-deep); }
 /* scrollIntoView deixa marge per la barra fixa */
 html { scroll-padding-bottom: 54px; }
 /* .btn té display:inline-flex que guanya contra [hidden] del navegador → forcem */
