@@ -1062,8 +1062,8 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   .hero.hero::before, .hero.hero::after { display: none; } /* fora glows */
   .rink { display: none; }                                 /* fora la pista decorativa */
 
-  .hero__inner { padding-block: 38px 36px; }
-  .hero.has-slider .hero__inner { padding-bottom: 72px; }
+  .hero__inner { padding-block: 20px 18px; }
+  .hero.has-slider .hero__inner { padding-bottom: 54px; }
 
   /* Eyebrow net en blau, sense temporada (hero tot en tons del formulari) */
   .eyebrow {
@@ -1207,6 +1207,9 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 }
 /* L'atribut [hidden] ha de guanyar al display:flex de dalt (mateixa especificitat) */
 .child-price[hidden] { display: none; }
+/* Al mòbil (wizard actiu) el subtotal per jugador no es mostra: el total viu a la
+   barra inferior i el detall complet a la targeta del final del formulari. */
+body.has-wizard .child-price { display: none !important; }
 .child-price__icon {
   flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
   background: var(--blue); color: #fff;
@@ -1363,9 +1366,8 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   .rdb-toggle__badge { background: rgba(91,142,255,.18); color: var(--blue); }
   .check__box { background: var(--card); }
 
-  /* Fitxers */
+  /* Fitxers (la versió mòbil se sobreescriu més avall, després de la seva base) */
   .filebox { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
-  .filebox--mobile { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
 
   /* Notes i etiquetes */
   .note { background: var(--blue-soft); }
@@ -1474,6 +1476,12 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   width: 100%; text-align: center;
   font-size: .78rem; color: var(--ink-soft); margin: 2px 0 0;
 }
+/* El degradat blanc de dalt és fix; en fosc cal sobreescriure'l AQUÍ (després de la
+   base), perquè el bloc fosc principal és anterior i, amb la mateixa especificitat,
+   perdria per ordre de cascada. */
+@media (prefers-color-scheme: dark) {
+  .filebox--mobile { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
+}
 
 /* ---------- Transició entre passos del wizard ---------- */
 /* Conté l'animació lateral perquè no aparegui un scroll horizontal momentani.
@@ -1499,14 +1507,20 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   border-top: 1px solid rgba(214,222,236,.6);
   box-shadow: 0 -10px 34px rgba(14,42,99,.09);
 }
+/* Tots els controls reaccionen al primer toc, sense el retard ni el zoom de doble toc. */
+.wizard-nav button { touch-action: manipulation; }
 /* El vidre esmerilat va en un pseudo-element SENSE interacció. Posar backdrop-filter
    directament a una barra fixa fa que molts navegadors mòbils "perdin" el primer toc
-   (cal clicar dos cops); aïllar-lo aquí ho soluciona i manté l'aspecte. */
+   (cal clicar dos cops). A més d'aïllar-lo aquí, el promovem a la seva PRÒPIA capa de
+   composició (translateZ): així, quan la barra d'eines del navegador s'encongeix/expandeix
+   en fer scroll, només es re-rasteritza aquesta capa de vidre i la dels botons queda
+   intacta i rep el toc a la primera. */
 .wizard-nav::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background: rgba(255,255,255,.82);
   -webkit-backdrop-filter: saturate(180%) blur(16px);
   backdrop-filter: saturate(180%) blur(16px);
+  transform: translateZ(0);
 }
 /* Sense suport de backdrop-filter, fons sòlid per no quedar translúcid */
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
@@ -1539,7 +1553,7 @@ body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 /* Zona esquerra: contenidor de botó enrere + resum de fills */
-.wizard-nav__left { justify-self: start; display: flex; align-items: center; }
+.wizard-nav__left { justify-self: start; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .wizard-nav__back[hidden] { display: none !important; }
 /* Botó "Enrere": pastilla suau, sense vora dura */
 .wizard-nav__back {
@@ -1563,7 +1577,20 @@ body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 .wc__people { fill: var(--blue); stroke: none; }
 .wc__chevron { stroke: var(--ink-soft); transition: transform .2s ease; }
 .wizard-nav__children.is-open .wc__chevron { transform: rotate(180deg); }
-#wizard-children-label { min-width: 8px; }
+#wizard-children-label { min-width: 8px; text-align: center; }
+/* Badge del preu total dins del trigger de fills: ressalta el total en una píndola blava
+   que conviu amb el comptador de nens. S'anima en canviar (animateCount). */
+.wc__price {
+  display: inline-flex; align-items: center;
+  margin-left: 2px; padding: 3px 9px; border-radius: 999px;
+  background: var(--blue); color: #fff;
+  font-size: .8rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  box-shadow: 0 1px 5px rgba(31,90,224,.32);
+}
+.wc__price[hidden] { display: none !important; }
+/* Amb preu, el trigger guanya una mica d'aire al voltant del badge */
+.wizard-nav__children.has-price { padding-right: 9px; }
 
 /* Icona de recuperació de dades (mòbil): cercle suau que batega per cridar l'atenció */
 .wizard-nav__recover {
@@ -1609,9 +1636,12 @@ body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 }
 .wcp__list { display: flex; flex-direction: column; gap: 2px; }
 .wcp__item {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; flex-direction: column;
   padding: 2px 0;
 }
+.wcp__item + .wcp__item { border-top: 1px solid var(--line-soft, rgba(214,222,236,.5)); }
+/* Fila principal del fill (avatar + nom + subtotal + eliminar) */
+.wcp__row { display: flex; align-items: center; gap: 10px; }
 .wcp__scroll-btn {
   flex: 1; display: flex; align-items: center; gap: 10px;
   background: none; border: none; padding: 9px 8px;
@@ -1626,18 +1656,48 @@ body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
   display: flex; align-items: center; justify-content: center;
   font-size: .82rem; font-weight: 700;
 }
-.wcp__name { font-size: .88rem; font-weight: 600; }
+.wcp__name { font-size: .88rem; font-weight: 600; flex: 1; min-width: 0; }
 .wcp__incomplete {
+  flex-shrink: 0;
   font-size: .72rem; color: var(--danger); font-weight: 500;
   background: #fdecea; padding: 2px 6px; border-radius: 999px;
 }
-.wcp__del {
-  flex-shrink: 0; background: none; border: none;
-  padding: 8px; border-radius: 8px; cursor: pointer;
-  color: var(--ink-soft); display: flex; align-items: center;
-  transition: color .12s, background .12s;
+/* Preu individual de cada fill, alineat a la dreta del seu nom */
+.wcp__amount {
+  flex-shrink: 0; font-size: .85rem; font-weight: 800;
+  color: var(--blue); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
 }
-.wcp__del:active { color: var(--danger); background: #fdecea; }
+/* Desglossament de setmanes sota cada fill: la "suma" que dona el subtotal */
+.wcp__weeks {
+  display: flex; flex-direction: column; gap: 3px;
+  margin: 1px 8px 7px 48px;   /* sagnat per alinear sota el nom (avatar 30 + gaps) */
+}
+.wcp__week {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-size: .78rem; color: var(--ink-soft);
+}
+.wcp__week-label { min-width: 0; }
+.wcp__week-price { flex-shrink: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Petit cercle vermell: dona un toc clar de "treure" sense ser agressiu */
+.wcp__del {
+  flex-shrink: 0; width: 24px; height: 24px; padding: 0;
+  border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(192,57,43,.1); color: var(--danger);
+  display: grid; place-items: center;
+  transition: background .12s, transform .12s, color .12s;
+}
+.wcp__del:active { background: var(--danger); color: #fff; transform: scale(.9); }
+/* Peu del popup amb el total general (quan hi ha més d'un fill) */
+.wcp__total {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 8px 8px 6px; padding-top: 11px;
+  border-top: 1px solid var(--line-ink);
+}
+.wcp__total-label { font-size: .85rem; font-weight: 700; color: var(--navy); }
+.wcp__total-amount {
+  font-size: 1.05rem; font-weight: 800; color: var(--blue);
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
 /* Indicador de progrés amb punts; el pas actiu s'allarga en una píndola */
 .wizard-nav__indicator {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -1710,7 +1770,8 @@ html { scroll-padding-bottom: 84px; }
   .wizard-nav__next:active:not(:disabled) { background: var(--blue); }
   /* Popup de fills: el rosa clar fix dels estats no funciona en fosc */
   .wcp__incomplete { background: rgba(255,112,112,.16); }
-  .wcp__del:active { background: rgba(255,112,112,.16); }
+  .wcp__del { background: rgba(255,112,112,.16); }
+  .wcp__del:active { background: var(--danger); color: #fff; }
 }
 
 /* ---- Print ---- */
