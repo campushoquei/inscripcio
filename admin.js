@@ -9,7 +9,7 @@
    ============================================================ */
 
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
-let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxxDapcQ_Fbwxl0ohzRN_NfQ23eMhrCpNYGibrZXMTRRS6SMqfoDYblGWJwOHFVgX6ibg/exec";
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx72A3mHHPqc8lMSqQY6RDVKlQ8p_ukvk79mf1twgJ6geO-AoEmLrEEOwlodVWB0REX6Q/exec";
 
 const TOKEN_KEY = "casal_admin_token";  // token de sessió UUID (no el PIN)
 const VIEW_KEY  = "casal_admin_view2";  // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
