@@ -506,7 +506,7 @@ function sendConfirmation(settings, payload, rows) {
       preuBlock =
         "<div class='em-soft' style='background:#EEF3FB;border-left:4px solid #1F5AE0;border-radius:9px;padding:14px 16px;margin-top:16px'>" +
           "<table style='border-collapse:collapse;width:100%'><tr>" +
-            "<td class='em-price-label' style='font-weight:700;color:#0E2A63;font-size:14px;vertical-align:middle'>Preu</td>" +
+            "<td class='em-price-label' style='font-weight:700;color:#1F5AE0;font-size:14px;vertical-align:middle'>Preu</td>" +
             "<td class='em-price-val' style='text-align:right;font-size:22px;font-weight:800;color:#1F5AE0;vertical-align:middle'>" + preu +" €</td>" +
           "</tr>" +
           (descompte ? "<tr><td colspan='2' class='em-label' style='font-size:11px;color:#6B7C99;padding-top:5px'>Descomptes aplicats: " + esc(descompte) + "</td></tr>" : "") +
@@ -524,8 +524,10 @@ function sendConfirmation(settings, payload, rows) {
       : (childName || "Jugador/a");
 
     return "<div class='em-cardborder' style='border:1.5px solid #D6DEEC;border-radius:11px;overflow:hidden;margin-bottom:14px'>" +
-             "<div class='em-chip' style='background:#EEF3FB;background:linear-gradient(135deg,#EEF3FB 0%,#E2ECFB 100%);padding:13px 16px;border-bottom:1px solid #D6DEEC'>" +
-               "<span class='em-chip-text' style='font-size:15px;font-weight:800;color:#0E2A63'>🏑 " + esc(blockTitle) + "</span>" +
+             // Capçalera del jugador/a amb fons fosc + text blanc: així es llegeix igual
+             // en mode clar i fosc, sense dependre de la media query (que Gmail ignora).
+             "<div class='em-chip' style='background:#0E2A63;background:linear-gradient(135deg,#16357C 0%,#1F5AE0 100%);padding:13px 16px;border-bottom:1px solid #27344f'>" +
+               "<span class='em-chip-text' style='font-size:15px;font-weight:800;color:#ffffff'>🏑 " + esc(blockTitle) + "</span>" +
              "</div>" +
              "<div style='padding:16px 16px 18px'>" +
                (childRows ? "<table style='border-collapse:collapse;width:100%;table-layout:fixed;font-size:14px'>" + childRows + "</table>" : "") +
@@ -551,8 +553,8 @@ function sendConfirmation(settings, payload, rows) {
         ".em-muted{color:#aab9d6!important;}" +
         ".em-label{color:#92a3c4!important;}" +
         ".em-val{color:#e8eefb!important;}" +
-        ".em-chip{background:#1a2742!important;border-color:#27344f!important;}" +
-        ".em-chip-text{color:#cfe0ff!important;}" +
+        ".em-chip{background:#16357C!important;border-color:#27344f!important;}" +
+        ".em-chip-text{color:#ffffff!important;}" +
         ".em-soft{background:#16223c!important;}" +
         ".em-price-label{color:#cfe0ff!important;}" +
         ".em-price-val{color:#7aa4ff!important;}" +

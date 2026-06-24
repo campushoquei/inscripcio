@@ -563,8 +563,31 @@ function fieldEl(f, scope) {
   // nota: bloc de text sense input
   if (f.tipo === "nota") {
     const note = document.createElement("div"); note.className = "field note";
+    note.dataset.id = f.id;
     if (f.etiqueta) { const t = document.createElement("p"); t.className = "note__title"; t.textContent = f.etiqueta; note.appendChild(t); }
     if (f.ayuda) { const b = document.createElement("p"); b.className = "note__body"; b.textContent = f.ayuda; note.appendChild(b); }
+
+    // Drets d'imatge: a més del text, una casella d'acceptació obligatòria,
+    // amb el mateix mecanisme que el consentiment de protecció de dades.
+    if (f.id === "drets_imatge") {
+      const scoped = scope != null;
+      const sfx = scoped ? `_c${scope}` : "";
+      const nm = scoped ? `c${scope}__${f.id}` : f.id;
+      note.dataset.required = "1";
+      if (scoped) note.dataset.scope = String(scope);
+      const labId = `f_${f.id}${sfx}`;
+      const lab = document.createElement("label"); lab.className = "check"; lab.style.marginTop = "12px";
+      const input = document.createElement("input");
+      input.type = "checkbox"; input.id = labId; input.name = nm; input.value = "Sí";
+      input.dataset.field = f.id; input.dataset.type = "checkbox"; input.dataset.name = nm;
+      if (scoped) input.dataset.scope = String(scope);
+      const box = document.createElement("span"); box.className = "check__box"; box.setAttribute("aria-hidden", "true");
+      const span = document.createElement("span"); span.className = "check__label";
+      span.textContent = "Accepto els drets d'imatge.";
+      lab.append(input, box, span); note.appendChild(lab);
+      const err = document.createElement("p"); err.className = "field__error";
+      err.textContent = "Cal acceptar els drets d'imatge per continuar."; note.appendChild(err);
+    }
     return note;
   }
 
@@ -586,28 +609,14 @@ function fieldEl(f, scope) {
   wrap.appendChild(label);
 
   const choiceLike = ["radio", "checkbox", "file"].includes(f.tipo);
-  // Drets d'imatge: checkbox d'acceptació única, amb el mateix mecanisme que el
-  // consentiment de protecció de dades (el text d'ajuda fa de text de la casella).
-  const isAccept = f.id === "drets_imatge";
   // ajuda a sobre per a opcions/fitxers (text contextual abans del control)
-  if (f.ayuda && choiceLike && !isAccept) {
+  if (f.ayuda && choiceLike) {
     const help = document.createElement("p"); help.className = "field__help field__help--above";
     help.textContent = f.ayuda; wrap.appendChild(help);
   }
 
   let control;
   const opts = (f.opciones || "").split("|").map((o) => o.trim()).filter(Boolean);
-  if (isAccept) {
-    control = document.createElement("div");
-    control.className = "choices";
-    const c = document.createElement("label"); c.className = "check";
-    const input = document.createElement("input");
-    input.type = "checkbox"; input.name = nm; input.value = "Sí"; input.id = labId;
-    const box = document.createElement("span"); box.className = "check__box"; box.setAttribute("aria-hidden", "true");
-    const span = document.createElement("span"); span.className = "check__label";
-    span.textContent = f.ayuda || f.etiqueta;
-    c.append(input, box, span); control.appendChild(c);
-  } else
   switch (f.tipo) {
     case "file": control = fileControl(f, labId, scope); break;
     case "textarea": control = el("textarea", "textarea"); break;
@@ -636,7 +645,7 @@ function fieldEl(f, scope) {
       if (f.placeholder) control.placeholder = f.placeholder;
   }
   if (!control.id) control.id = labId;
-  control.dataset.field = f.id; control.dataset.type = isAccept ? "checkbox" : (f.tipo || "text");
+  control.dataset.field = f.id; control.dataset.type = f.tipo || "text";
   control.dataset.name = nm;
   if (scoped) control.dataset.scope = String(scope);
 
