@@ -834,6 +834,13 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 }
 .price-info.is-open .price-info__body { grid-template-rows: 1fr; }
 .price-info__body-inner { overflow: hidden; min-height: 0; padding-top: 13px; }
+/* Al PC (punter fi) la taula sempre surt desplegada i sense afordança de plegat:
+   el desplegable només té sentit a mòbil/tàctil. */
+@media (pointer: fine) {
+  .price-info__body { grid-template-rows: 1fr !important; }
+  .price-info__chevron, .price-info__hint { display: none; }
+  .price-info__header { cursor: default; pointer-events: none; }
+}
 .price-info__tiers { list-style: none; margin: 0; padding: 0; }
 .price-tier {
   display: flex; justify-content: space-between; align-items: flex-start;
