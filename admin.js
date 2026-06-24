@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxBmr_cLfJ1wgpYBSxaMLwhhJyr-UXTZPPGeXBJEHrml8834c9Z6T2GC7mm5mgHMBYl/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const EXP_KEY = "casal_admin_exp";      // caducitat de sessió (timestamp)
