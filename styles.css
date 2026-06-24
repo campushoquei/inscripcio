@@ -1603,6 +1603,28 @@ html { scroll-padding-bottom: 84px; }
 .page--done #wizard-nav,
 .page--loading #wizard-nav { display: none; }
 
+/* Mode fosc de la barra del wizard. Va AQUÍ (després de les regles base) i no al
+   bloc fosc principal perquè aquelles regles són posteriors al bloc i, amb la mateixa
+   especificitat, guanyarien. */
+@media (prefers-color-scheme: dark) {
+  .wizard-nav {
+    background: rgba(16,24,40,.82);
+    border-top-color: rgba(91,142,255,.14);
+    box-shadow: 0 -8px 30px rgba(0,0,0,.45);
+  }
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .wizard-nav { background: var(--card); }
+  }
+  .wizard-nav__children:active { background: rgba(91,142,255,.18); }
+  /* blue-deep és més CLAR que blue en fosc → el text blanc hi perdria contrast.
+     Igualem el "Següent" al blau estàndard, com la resta de botons primaris. */
+  .wizard-nav__next,
+  .wizard-nav__next:active:not(:disabled) { background: var(--blue); }
+  /* Popup de fills: el rosa clar fix dels estats no funciona en fosc */
+  .wcp__incomplete { background: rgba(255,112,112,.16); }
+  .wcp__del:active { background: rgba(255,112,112,.16); }
+}
+
 /* ---- Print ---- */
 @media print {
   .topbar, .hero, .returning, .form, #loading, #load-error, #closed,
