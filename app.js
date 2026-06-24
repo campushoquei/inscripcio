@@ -6,7 +6,8 @@
 
 // 🔧 Enganxa aquí la URL del teu Apps Script (acaba en /exec).
 // Buida = MODE DEMO amb dades d'exemple.
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxxDapcQ_Fbwxl0ohzRN_NfQ23eMhrCpNYGibrZXMTRRS6SMqfoDYblGWJwOHFVgX6ibg/exec";
+// Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxxDapcQ_Fbwxl0ohzRN_NfQ23eMhrCpNYGibrZXMTRRS6SMqfoDYblGWJwOHFVgX6ibg/exec";
 
 // 🔧 Quin formulari es mostra. Es llegeix de la URL: ...index.html?form=primavera
 // Buit = formulari per defecte (les files del full sense columna "form").
@@ -187,6 +188,7 @@ async function load() {
   startHintCycle();
   try {
     CONFIG = await fetchConfig();
+    if (CONFIG.settings && CONFIG.settings.SCRIPT_URL) SCRIPT_URL = CONFIG.settings.SCRIPT_URL.trim();
     applySettings(CONFIG.settings || {});
     initHeroSlider();
     if (CONFIG.form && CONFIG.form.habilitado === false) {

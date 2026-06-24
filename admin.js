@@ -8,7 +8,8 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxxDapcQ_Fbwxl0ohzRN_NfQ23eMhrCpNYGibrZXMTRRS6SMqfoDYblGWJwOHFVgX6ibg/exec";
+// Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxxDapcQ_Fbwxl0ohzRN_NfQ23eMhrCpNYGibrZXMTRRS6SMqfoDYblGWJwOHFVgX6ibg/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const EXP_KEY = "casal_admin_exp";      // caducitat de sessió (timestamp)
@@ -191,6 +192,7 @@ async function onLogin(e) {
     sessionStorage.setItem(PIN_KEY, pin);
     sessionStorage.setItem(EXP_KEY, String(Date.now() + SESSION_MS));
     state.forms = out.forms || [];
+    if (out.settings && out.settings.SCRIPT_URL) SCRIPT_URL = out.settings.SCRIPT_URL.trim();
     if (out.settings && out.settings.nombre_campus) {
       document.querySelectorAll("[data-camp-name]").forEach((n) => (n.textContent = out.settings.nombre_campus));
     }
@@ -212,7 +214,7 @@ async function enter() {
   $("login").hidden = true;
   $("app").hidden = false;
   if (!state.forms.length) {
-    try { const out = await api("admin_login"); state.forms = out.forms || []; if (out.settings) document.querySelectorAll("[data-camp-name]").forEach((n) => (n.textContent = out.settings.nombre_campus || n.textContent)); }
+    try { const out = await api("admin_login"); state.forms = out.forms || []; if (out.settings && out.settings.SCRIPT_URL) SCRIPT_URL = out.settings.SCRIPT_URL.trim(); if (out.settings) document.querySelectorAll("[data-camp-name]").forEach((n) => (n.textContent = out.settings.nombre_campus || n.textContent)); }
     catch (err) { return logout(); }
   }
   restoreView();
