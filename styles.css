@@ -751,15 +751,6 @@ input[type="date"].input {
   padding: 16px 16px 4px; background: var(--paper); position: relative;
   scroll-margin-top: 84px; /* deixa espai sota la barra fixa en fer scroll automàtic */
 }
-.child-block:first-child { border-top: none; padding-top: 4px; background: transparent; border-left: none; border-right: none; border-bottom: none; }
-/* Quan hi ha múltiples fills, el primer té caixa (expandit o col·lapsat) */
-.child-block:first-child.child-block--multiple {
-  border: 1.5px solid var(--line-ink); background: var(--paper);
-  padding: 16px 16px 4px;
-}
-.child-block:first-child.child-block--multiple.child-block--collapsed {
-  padding: 16px;
-}
 .child-block__head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .child-block__title { font-weight: 700; color: var(--navy); font-size: .98rem; }
 /* Resum visible quan el bloc és col·lapsat */
@@ -768,9 +759,10 @@ input[type="date"].input {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   display: none; min-width: 0;
 }
-.child-block__chevron { display: none; flex-shrink: 0; stroke: var(--ink-soft); transition: transform .2s ease; }
+.child-block__chevron { display: none; flex-shrink: 0; stroke: var(--ink-soft); transition: transform .2s ease; pointer-events: none; }
 /* Expandit amb múltiples fills: chevron apunta avall com a hint de col·laps */
 .child-block--multiple .child-block__chevron { display: block; transform: rotate(90deg); }
+.child-block--multiple .child-block__head { cursor: pointer; }
 /* Estat col·lapsat (mòbil) */
 .child-block--collapsed {
   padding-bottom: 16px;

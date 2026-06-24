@@ -747,10 +747,9 @@ function childBlockEl(group, i, fileFields) {
   rm.innerHTML = `✕ Treure`;
   rm.addEventListener("click", () => removeChildBlock(block));
   head.appendChild(rm);
-  // Toggle col·laps en clicar el cap (mòbil, quan hi ha >1 fills)
+  // Toggle col·laps en clicar el cap (quan hi ha >1 fills)
   head.addEventListener("click", (e) => {
     if (e.target.closest(".child-block__remove")) return;
-    if (!window.matchMedia("(pointer: coarse)").matches) return;
     if (document.querySelectorAll(".child-block").length <= 1) return;
     toggleCollapseChild(block);
   });
@@ -779,17 +778,14 @@ function toggleCollapseChild(block) {
 }
 
 function addChildBlock(wrap, group, fileFields) {
-  // Col·lapsa els blocs existents (mòbil)
-  if (window.matchMedia("(pointer: coarse)").matches) {
-    wrap.querySelectorAll(".child-block").forEach(collapseChild);
-  }
+  wrap.querySelectorAll(".child-block").forEach(collapseChild);
   const i = wrap.querySelectorAll(".child-block").length;
   wrap.appendChild(childBlockEl(group, i, fileFields));
   childCount = wrap.querySelectorAll(".child-block").length;
   renumberChildren(wrap);
-  if (window.matchMedia("(pointer: coarse)").matches) {
-    wrap.lastElementChild.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  const scrollTarget = wrap.children.length >= 2 ? wrap.children[wrap.children.length - 2] : wrap.lastElementChild;
+  const scrollTop = scrollTarget.getBoundingClientRect().top + window.scrollY - 140;
+  window.scrollTo({ top: Math.max(0, scrollTop), behavior: "smooth" });
   renderWizardNav();
   updateProgress();
   updateAllPrices();
@@ -801,6 +797,8 @@ function removeChildBlock(block) {
   [...wrap.querySelectorAll(".child-block")].forEach((b, idx) => reindexChildBlock(b, idx));
   childCount = wrap.querySelectorAll(".child-block").length || 1;
   renumberChildren(wrap);
+  const remaining = wrap.querySelectorAll(".child-block");
+  if (remaining.length === 1) expandChild(remaining[0]);
   scheduleDraftSave();
   renderWizardNav();
   updateProgress();
