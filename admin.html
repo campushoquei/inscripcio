@@ -56,10 +56,10 @@
     <main class="amain" id="dash">
 
       <!-- KPI cards -->
-      <section class="kpis" id="kpis"></section>
+      <section class="kpis" id="kpis" data-section="resum"></section>
 
       <!-- Charts -->
-      <section class="grid">
+      <section class="grid" data-section="resum">
         <div class="card card--span2">
           <div class="card__head">
             <h2 class="card__title">Ocupació per setmana</h2>
@@ -105,7 +105,7 @@
       </section>
 
       <!-- Grups i vestidors -->
-      <section class="card groups-section" id="groups-section">
+      <section class="card groups-section" id="groups-section" data-section="grups">
         <div class="card__head">
           <h2 class="card__title">Grups i vestidors</h2>
           <div class="groups-head-tools">
@@ -119,7 +119,7 @@
       </section>
 
       <!-- Table -->
-      <section class="card table-card">
+      <section class="card table-card" data-section="inscrits">
         <div class="table-toolbar">
           <div class="search">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -190,6 +190,22 @@
         <p class="table-empty" id="table-empty" hidden>Cap inscripció encara.</p>
       </section>
     </main>
+
+    <!-- ====== Barra de navegació inferior (només mòbil) ====== -->
+    <nav class="tabbar" id="tabbar" role="tablist" aria-label="Seccions del panell">
+      <button class="tabbar__btn is-active" type="button" data-view="resum" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        <span>Resum</span>
+      </button>
+      <button class="tabbar__btn" type="button" data-view="grups" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Grups</span>
+      </button>
+      <button class="tabbar__btn" type="button" data-view="inscrits" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>Inscrits</span>
+      </button>
+    </nav>
   </div>
 
   <!-- ====== Detail drawer ====== -->

@@ -12,7 +12,7 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxxDapcQ_Fbwxl0ohzRN
 
 const PIN_KEY = "casal_admin_pin";
 const EXP_KEY = "casal_admin_exp";      // caducitat de sessió (timestamp)
-const VIEW_KEY = "casal_admin_view";    // formulari + filtres + ordre desats
+const VIEW_KEY = "casal_admin_view2";   // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
 const SESSION_MS = 8 * 60 * 60 * 1000;  // la sessió caduca a les 8 h
 const DEMO_PIN = "1234";
 
@@ -42,7 +42,7 @@ const state = {
   overview: null,
   list: [],
   filtered: [],
-  sort: { key: "ts", dir: "desc" },
+  sort: { key: "nom", dir: "asc" },   // per defecte: ordenat per nom A→Z
   filters: { q: "", week: "", status: "", group: "", swim: "", from: "", to: "" },
   groups: DEFAULT_GROUPS.slice(),
   groupWeek: "",
@@ -83,6 +83,9 @@ function init() {
   $("check-all").addEventListener("change", (e) => toggleSelectAll(e.target.checked));
   $("bulk-bar").querySelectorAll("[data-bulk]").forEach((b) =>
     b.addEventListener("click", () => bulkAction(b.dataset.bulk)));
+  $("tabbar").querySelectorAll(".tabbar__btn").forEach((b) =>
+    b.addEventListener("click", () => setMobileView(b.dataset.view)));
+  setMobileView("resum");
   $("drawer-close").addEventListener("click", closeDrawer);
   $("drawer-backdrop").addEventListener("click", closeDrawer);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
@@ -93,6 +96,20 @@ function init() {
   const exp = Number(sessionStorage.getItem(EXP_KEY) || 0);
   if (saved && exp && Date.now() < exp) { state.pin = saved; enter(); }
   else { sessionStorage.removeItem(PIN_KEY); sessionStorage.removeItem(EXP_KEY); $("pin").focus(); }
+}
+
+// Navegació inferior (mòbil): canvia quina secció es veu. A PC no té efecte visible
+// perquè la tab bar i l'ocultació de seccions només s'activen per media query.
+function setMobileView(view) {
+  const dash = $("dash");
+  if (!dash) return;
+  dash.dataset.view = view;
+  document.querySelectorAll("#tabbar .tabbar__btn").forEach((b) => {
+    const on = b.dataset.view === view;
+    b.classList.toggle("is-active", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 // Desa/recupera la vista (formulari + filtres + ordre) perquè un refresc no la perdi.
@@ -1247,38 +1264,105 @@ function printRosters() {
   const camp = (document.querySelector("[data-camp-name]") || {}).textContent || "Campus";
   const formName = (state.forms.find((f) => f.id === state.form) || {}).nombre || state.form || "";
 
+  const noSwimOf = (r) => r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
+  const logo = (() => { try { return new URL("logo.png", location.href).href; } catch (_) { return ""; } })();
+
   const sectionFor = (w) => {
     const kids = state.list.filter((r) => (r.weekIds || []).includes(w.id));
     const byColor = {}; groups.forEach((g) => (byColor[g.color] = []));
     kids.forEach((r) => { const c = groupColorOf(r, w.id); (byColor[c] = byColor[c] || []).push(r); });
+    const noSwimWeek = kids.filter(noSwimOf).length;
+
     const cols = groups.map((g) => {
+      const hex = GROUP_HEX[g.color] || "#888";
       const ll = (byColor[g.color] || []).slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
       const items = ll.map((r) => {
-        const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
-        return `<li>${esc(r.nom || "—")} <span class="age">${r.edat !== "" ? r.edat + "a" : ""}</span>${noSwim ? ' <span class="ns">no sap nedar</span>' : ""}</li>`;
+        const age = r.edat !== "" && r.edat != null ? `<span class="age">${esc(String(r.edat))} anys</span>` : "";
+        const ns = noSwimOf(r) ? '<span class="ns" title="No sap nedar">🚱 no neda</span>' : "";
+        return `<li><span class="nm">${esc(r.nom || "—")}</span><span class="meta">${age}${ns}</span></li>`;
       }).join("");
-      return `<div class="g"><h3 style="border-color:${GROUP_HEX[g.color] || "#888"}">${esc(g.label)} <span>(${ll.length})</span></h3><ol>${items || '<li class="empty">—</li>'}</ol></div>`;
+      return `<div class="grp" style="--gc:${hex}">
+        <div class="grp__head"><span class="grp__dot"></span><span class="grp__name">${esc(g.label)}</span><span class="grp__count">${ll.length}</span></div>
+        ${ll.length ? `<ol class="grp__list">${items}</ol>` : '<p class="grp__empty">Cap nen/a</p>'}
+      </div>`;
     }).join("");
-    return `<section><h2>${esc(w.etiqueta || w.id)} <small>${esc(w.fechas || "")}</small></h2><div class="cols">${cols}</div></section>`;
+
+    const stat = `${kids.length} ${kids.length === 1 ? "nen/a" : "nens/es"}${noSwimWeek ? ` · <b class="ns-stat">🚱 ${noSwimWeek} ${noSwimWeek === 1 ? "no neda" : "no neden"}</b>` : ""}`;
+    return `<section class="wk">
+      <div class="wk__head">
+        <div class="wk__title"><h2>${esc(w.etiqueta || w.id)}</h2>${w.fechas ? `<span class="wk__dates">${esc(w.fechas)}</span>` : ""}</div>
+        <span class="wk__stat">${stat}</span>
+      </div>
+      <div class="grid">${cols}</div>
+    </section>`;
   };
 
   const body = weeks.map(sectionFor).join("");
-  const css = `body{font-family:Arial,Helvetica,sans-serif;color:#16233D;margin:24px;}
-    h1{font-size:20px;margin:0 0 2px;} .sub{color:#5A6B86;font-size:13px;margin:0 0 18px;}
-    section{margin-bottom:26px;page-break-inside:avoid;} h2{font-size:16px;border-bottom:2px solid #0E2A63;padding-bottom:5px;}
-    h2 small{font-weight:normal;color:#5A6B86;font-size:13px;}
-    .cols{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;}
-    .g{flex:1;min-width:150px;} .g h3{font-size:13px;border-left:5px solid;padding-left:8px;margin:0 0 6px;}
-    .g h3 span{color:#5A6B86;font-weight:normal;} ol{margin:0;padding-left:20px;font-size:13px;line-height:1.7;}
-    .age{color:#5A6B86;font-size:11px;} .ns{color:#C0392B;font-size:11px;font-weight:bold;}
-    li.empty{list-style:none;color:#9aa;margin-left:-18px;}
-    @media print{button{display:none;}}`;
+  const totalKids = state.list.length;
+  const css = `
+    :root{--navy:#0E2A63;--blue:#1F5AE0;--ink:#16233D;--ink-soft:#5A6B86;--line:#D6DEEC;--paper:#EEF3FB;--danger:#C0392B;}
+    *{box-sizing:border-box;}
+    body{font-family:"Hanken Grotesk",system-ui,Arial,sans-serif;color:var(--ink);background:var(--paper);margin:0;padding:0 0 60px;-webkit-font-smoothing:antialiased;}
+    .wrap{max-width:1000px;margin:0 auto;padding:18px 16px;}
+    .top{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.92);backdrop-filter:saturate(160%) blur(8px);border-bottom:1px solid var(--line);}
+    .top__in{max-width:1000px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:12px 16px;}
+    .emblem{width:42px;height:42px;border-radius:11px;overflow:hidden;flex:0 0 auto;box-shadow:0 4px 12px rgba(31,90,224,.26);}
+    .emblem img{width:100%;height:100%;object-fit:cover;display:block;}
+    .top h1{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.02em;font-size:1.15rem;color:var(--navy);margin:0;line-height:1.1;}
+    .top .sub{font-size:.78rem;color:var(--ink-soft);font-weight:600;}
+    .printbtn{margin-left:auto;border:0;cursor:pointer;font-family:inherit;font-weight:700;font-size:.9rem;color:#fff;background:var(--blue);border-radius:999px;padding:10px 20px;box-shadow:0 6px 18px rgba(31,90,224,.32);display:inline-flex;align-items:center;gap:7px;}
+    .printbtn:active{transform:translateY(1px);}
+    .wk{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(14,42,99,.05),0 10px 30px rgba(14,42,99,.06);padding:18px;margin-bottom:18px;page-break-inside:avoid;}
+    .wk__head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:2px solid var(--paper);padding-bottom:12px;margin-bottom:14px;}
+    .wk__title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+    .wk__title h2{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.01em;font-size:1.25rem;color:var(--navy);margin:0;}
+    .wk__dates{color:var(--ink-soft);font-size:.85rem;font-weight:600;}
+    .wk__stat{font-size:.82rem;color:var(--ink-soft);font-weight:600;}
+    .wk__stat .ns-stat{color:var(--danger);}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+    .grp{border:1px solid var(--line);border-top:3px solid var(--gc);border-radius:12px;background:#fbfcfe;overflow:hidden;}
+    .grp__head{display:flex;align-items:center;gap:8px;padding:11px 12px;}
+    .grp__dot{width:11px;height:11px;border-radius:50%;background:var(--gc);flex:0 0 auto;}
+    .grp__name{font-weight:800;color:var(--navy);font-size:.95rem;}
+    .grp__count{margin-left:auto;font-weight:800;color:var(--gc);background:#fff;border:1.5px solid var(--gc);border-radius:999px;min-width:26px;text-align:center;padding:1px 8px;font-size:.82rem;}
+    .grp__list{list-style:none;margin:0;padding:4px 8px 10px;counter-reset:n;}
+    .grp__list li{display:flex;align-items:center;gap:8px;padding:7px 6px;border-bottom:1px solid var(--paper);font-size:.9rem;}
+    .grp__list li:last-child{border-bottom:0;}
+    .grp__list li::before{counter-increment:n;content:counter(n);flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--paper);color:var(--ink-soft);font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
+    .nm{font-weight:600;color:var(--ink);flex:1;min-width:0;}
+    .meta{display:flex;align-items:center;gap:6px;flex:0 0 auto;}
+    .age{color:var(--ink-soft);font-size:.76rem;font-weight:600;white-space:nowrap;}
+    .ns{color:var(--danger);font-size:.72rem;font-weight:800;white-space:nowrap;background:#FDECEA;border-radius:6px;padding:1px 6px;}
+    .grp__empty{color:var(--ink-soft);font-size:.82rem;text-align:center;padding:14px 0;opacity:.7;margin:0;}
+    @media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr);}}
+    @media(max-width:560px){
+      .grid{grid-template-columns:1fr;}
+      .top h1{font-size:1rem;} .top .sub{display:none;}
+      .printbtn{padding:9px 14px;font-size:.84rem;}
+      .wk{padding:14px;border-radius:14px;}
+      .wk__title h2{font-size:1.1rem;}
+    }
+    @media print{
+      body{background:#fff;} .top{position:static;background:#fff;border-bottom:1px solid #ccc;}
+      .printbtn{display:none;} .wk{box-shadow:none;border:1px solid #ccc;}
+      .grid{grid-template-columns:repeat(4,1fr);}
+    }`;
   const win = window.open("", "_blank");
   if (!win) return toast("Permet les finestres emergents per imprimir.", true);
-  win.document.write(`<!DOCTYPE html><html lang="ca"><head><meta charset="utf-8"><title>Llistes de vestidor</title><style>${css}</style></head>
-    <body><h1>${esc(camp)} — Llistes de vestidor</h1><p class="sub">${esc(formName)} · generat ${new Date().toLocaleDateString("ca-ES")}</p>
-    <button onclick="window.print()" style="margin-bottom:16px;padding:8px 16px;cursor:pointer">Imprimir</button>
-    ${body}</body></html>`);
+  win.document.write(`<!DOCTYPE html><html lang="ca"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Llistes de vestidor · ${esc(camp)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>${css}</style></head>
+    <body>
+      <div class="top"><div class="top__in">
+        ${logo ? `<span class="emblem"><img src="${logo}" alt=""></span>` : ""}
+        <div><h1>Llistes de vestidor</h1><div class="sub">${esc(camp)} · ${esc(formName)} · ${totalKids} inscrits · ${new Date().toLocaleDateString("ca-ES")}</div></div>
+        <button class="printbtn" onclick="window.print()">🖨️ Imprimir</button>
+      </div></div>
+      <div class="wrap">${body}</div>
+    </body></html>`);
   win.document.close();
 }
 
