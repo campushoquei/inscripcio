@@ -117,6 +117,8 @@ let currentFormIdx = 0;         // índex actiu al slider del hero
 let heroTouchStartX = 0;        // per al swipe tàctil
 let childCount = 1;            // quants jugadors/es s'estan inscrivint alhora
 let returningDismissed = false; // l'usuari ha tancat la barra "ja t'havíem vist"
+let wizardSteps = [];          // llista de .section del wizard (buit = sense wizard)
+let wizardStep  = 0;           // índex del pas actual
 let draftSaveTimer = null;
 const fileStore = {};
 const els = {};
@@ -183,7 +185,6 @@ async function load() {
   els.form.hidden = true; els.done.hidden = true;
   hideReturning();
   startHintCycle();
-  renderSkeleton();
   try {
     CONFIG = await fetchConfig();
     applySettings(CONFIG.settings || {});
@@ -432,6 +433,282 @@ function renderForm() {
   // Mou el consentiment dins de l'última secció (Protecció de dades)
   const lastSection = els.sections.querySelector(".section:last-child");
   if (lastSection && consentEl) lastSection.appendChild(consentEl);
+
+  initWizard();
+}
+
+// ---- Wizard de passos ----
+function initWizard() {
+  // Elimina wizard anterior (re-render)
+  const oldNav = document.getElementById("wizard-nav");
+  if (oldNav) { if (oldNav._removeScroll) oldNav._removeScroll(); oldNav.remove(); }
+  document.body.classList.remove("has-wizard");
+
+  // Restaura visibilitat per defecte
+  const priceCard  = document.getElementById("price-total-card");
+  const submitRow  = els.form.querySelector(".submit-row");
+  if (priceCard) priceCard.hidden = false;
+  if (submitRow) submitRow.hidden = false;
+  // (res a netejar — el padding ja no s'aplica)
+
+  wizardSteps = [...els.sections.querySelectorAll(".section")];
+  wizardStep  = 0;
+
+  // Al PC (pointer: fine) mostrem el formulari complet sense wizard
+  if (!window.matchMedia("(pointer: coarse)").matches) {
+    wizardSteps = [];
+    // Assegura que totes les seccions siguin visibles
+    els.sections.querySelectorAll(".section").forEach((s) => { s.hidden = false; });
+    return;
+  }
+
+  if (wizardSteps.length <= 1) { wizardSteps = []; return; }
+
+  // Amaga el botó d'enviament original; en creem un al wizard nav
+  if (submitRow) submitRow.hidden = true;
+
+  // scroll-padding-bottom al CSS fa que scrollIntoView respecti la barra sense afegir espai visual
+
+  // Barra de navegació inferior (sticky)
+  const nav = document.createElement("div");
+  nav.id = "wizard-nav";
+  nav.className = "wizard-nav";
+  const submitLabel = (CONFIG && CONFIG.settings && CONFIG.settings.texto_boton)
+    || (els.submitBtn && els.submitBtn.querySelector(".btn__label") && els.submitBtn.querySelector(".btn__label").textContent)
+    || "Enviar inscripció";
+  const PEOPLE_SVG =
+    `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+      `<circle cx="8" cy="7" r="3.5"/>` +
+      `<path d="M2 21v-1.5a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4V21"/>` +
+      `<path d="M18 8.5a3 3 0 0 1 0 5"/>` +
+      `<path d="M21.5 21v-1a3.5 3.5 0 0 0-3-3.47"/>` +
+    `</svg>`;
+  const CHEVRON_UP =
+    `<svg class="wc__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+      `<polyline points="18 15 12 9 6 15"/>` +
+    `</svg>`;
+  nav.innerHTML =
+    // Popup de fills (s'obre cap amunt)
+    `<div class="wizard-children-popup" id="wizard-children-popup" hidden>` +
+      `<div class="wcp__list" id="wcp-list"></div>` +
+    `</div>` +
+    `<p class="wizard-nav__note" id="wizard-note" aria-live="polite" role="alert"></p>` +
+    `<div class="wizard-nav__row">` +
+      `<div class="wizard-nav__left">` +
+        `<button type="button" class="btn btn--ghost wizard-nav__back" id="wizard-back">‹ Enrere</button>` +
+        `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
+          PEOPLE_SVG +
+          `<span id="wizard-children-label"></span>` +
+          CHEVRON_UP +
+        `</button>` +
+      `</div>` +
+      `<span class="wizard-nav__indicator" id="wizard-indicator"></span>` +
+      `<div class="wizard-nav__action">` +
+        `<button type="button" class="btn btn--primary wizard-nav__next" id="wizard-next">Següent ›</button>` +
+        `<button type="submit" class="btn btn--primary wizard-nav__submit" id="wizard-submit" disabled hidden>` +
+          `<span class="btn__label">${escapeHtml(submitLabel)}</span>` +
+          `<span class="btn__spinner" aria-hidden="true"></span>` +
+        `</button>` +
+      `</div>` +
+    `</div>`;
+  document.body.appendChild(nav);
+  document.body.classList.add("has-wizard");
+
+  document.getElementById("wizard-back").addEventListener("click", wizardBack);
+  document.getElementById("wizard-next").addEventListener("click", wizardNext);
+  document.getElementById("wizard-children-info").addEventListener("click", toggleChildrenPopup);
+
+  // Compressió de la barra en scroll (només mòbil)
+  if (window.matchMedia("(pointer: coarse)").matches) {
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      nav.classList.toggle("wizard-nav--compact", y > lastY && y > 40);
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    nav._removeScroll = () => window.removeEventListener("scroll", onScroll);
+  }
+
+  // Actualitza el comptador de fills en temps real quan l'usuari escriu el nom
+  if (!els.sections.dataset.childInputWatch) {
+    els.sections.dataset.childInputWatch = "1";
+    els.sections.addEventListener("input", (e) => {
+      if (wizardSteps.length && e.target.closest(".child-block")) renderWizardNav();
+    });
+  }
+
+  renderWizardStep(true);
+}
+
+function renderWizardStep(scrollTop) {
+  const isLast = wizardStep === wizardSteps.length - 1;
+
+  // Mostra només el pas actiu
+  wizardSteps.forEach((s, i) => { s.hidden = i !== wizardStep; });
+
+  // Targeta de preus i botó d'enviament: només a l'últim pas
+  const priceCard = document.getElementById("price-total-card");
+  if (priceCard) priceCard.hidden = !isLast;
+
+  renderWizardNav();
+  if (scrollTop) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderWizardNav() {
+  const isLast    = wizardStep === wizardSteps.length - 1;
+  const backBtn   = document.getElementById("wizard-back");
+  const nextBtn   = document.getElementById("wizard-next");
+  const submitBtn = document.getElementById("wizard-submit");
+  const indicator = document.getElementById("wizard-indicator");
+  // Zona esquerra: resum de fills (pas 1) o botó enrere (resta de passos)
+  const isChildrenStep  = wizardSteps[wizardStep] && wizardSteps[wizardStep].id === "children-section";
+  const nChildren       = document.querySelectorAll(".child-block").length;
+  const showChildrenInfo = isChildrenStep && nChildren > 1;
+  const childrenInfo    = document.getElementById("wizard-children-info");
+  const childrenLabel   = document.getElementById("wizard-children-label");
+
+  if (backBtn) {
+    backBtn.hidden = showChildrenInfo;
+    if (!showChildrenInfo) backBtn.style.visibility = wizardStep === 0 ? "hidden" : "visible";
+  }
+  if (childrenInfo) {
+    childrenInfo.hidden = !showChildrenInfo;
+    if (showChildrenInfo && childrenLabel) {
+      // Comptador: només fills amb el nom omplert
+      const nFilled = [...document.querySelectorAll(".child-block")].filter(getChildName).length;
+      childrenLabel.textContent = String(nFilled);
+    }
+  }
+
+  // next i submit comparteixen la mateixa cel·la (.wizard-nav__action): un a la vegada
+  if (nextBtn)   nextBtn.hidden   = isLast;
+  if (submitBtn) submitBtn.hidden = !isLast;
+  if (indicator) indicator.textContent = `Pas ${wizardStep + 1} de ${wizardSteps.length}`;
+}
+
+// ---- Children popup ----
+function getChildName(block) {
+  const inp = block.querySelector(
+    'input[data-field*="nom"], input[data-field*="name"], input[data-field*="nombre"]'
+  );
+  if (inp && inp.value.trim()) return inp.value.trim();
+  const first = block.querySelector('input[type="text"]');
+  return first && first.value.trim() ? first.value.trim() : null;
+}
+
+function renderChildrenPopup() {
+  const list = document.getElementById("wcp-list");
+  if (!list) return;
+  list.innerHTML = "";
+  [...document.querySelectorAll(".child-block")].forEach((block, idx) => {
+    const name   = getChildName(block);
+    const label  = name || `Fill ${idx + 1}`;
+    const filled = !!name;
+
+    const item = document.createElement("div");
+    item.className = "wcp__item";
+
+    const scrollBtn = document.createElement("button");
+    scrollBtn.type = "button";
+    scrollBtn.className = "wcp__scroll-btn";
+    scrollBtn.innerHTML =
+      `<span class="wcp__avatar">${escapeHtml(label.charAt(0).toUpperCase())}</span>` +
+      `<span class="wcp__name">${escapeHtml(label)}</span>` +
+      (!filled ? `<span class="wcp__incomplete">incomplert</span>` : "");
+    scrollBtn.addEventListener("click", () => {
+      closeChildrenPopup();
+      expandChild(block);
+      block.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "wcp__del";
+    delBtn.setAttribute("aria-label", `Eliminar ${label}`);
+    delBtn.innerHTML =
+      `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeChildBlock(block);
+      if (document.querySelectorAll(".child-block").length <= 1) { closeChildrenPopup(); return; }
+      renderChildrenPopup();
+      renderWizardNav();
+    });
+
+    item.append(scrollBtn, delBtn);
+    list.appendChild(item);
+  });
+}
+
+function openChildrenPopup() {
+  const popup   = document.getElementById("wizard-children-popup");
+  const trigger = document.getElementById("wizard-children-info");
+  if (!popup) return;
+  renderChildrenPopup();
+  popup.hidden = false;
+  trigger && trigger.classList.add("is-open");
+  document.addEventListener("click", onOutsidePopupClick);
+}
+
+function closeChildrenPopup() {
+  const popup   = document.getElementById("wizard-children-popup");
+  const trigger = document.getElementById("wizard-children-info");
+  if (!popup || popup.hidden) return;
+  popup.hidden = true;
+  trigger && trigger.classList.remove("is-open");
+  document.removeEventListener("click", onOutsidePopupClick);
+}
+
+function onOutsidePopupClick(e) {
+  const popup   = document.getElementById("wizard-children-popup");
+  const trigger = document.getElementById("wizard-children-info");
+  if (popup && trigger && !popup.contains(e.target) && !trigger.contains(e.target)) {
+    closeChildrenPopup();
+  }
+}
+
+function toggleChildrenPopup() {
+  const popup = document.getElementById("wizard-children-popup");
+  if (!popup || popup.hidden) openChildrenPopup();
+  else closeChildrenPopup();
+}
+
+function validateWizardStep() {
+  const step = wizardSteps[wizardStep];
+  if (!step) return true;
+  let ok = true, firstBad = null;
+  step.querySelectorAll(".field[data-required='1']").forEach((wrap) => {
+    const valid = validateSingleField(wrap);
+    if (!valid) { ok = false; if (!firstBad) firstBad = wrap; }
+  });
+  if (CONFIG && CONFIG.settings && CONFIG.settings.semanas_obligatorias && weeksForCampus().length) {
+    step.querySelectorAll("[data-weeks]").forEach((wrap) => {
+      const none = !wrap.querySelector('input[type="checkbox"]:checked');
+      wrap.classList.toggle("field--invalid", none);
+      if (none) { ok = false; if (!firstBad) firstBad = wrap; }
+    });
+  }
+  if (firstBad) firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
+  return ok;
+}
+
+function wizardNext() {
+  if (!validateWizardStep()) { flashNote("Revisa els camps marcats."); return; }
+  clearNote();
+  wizardStep = Math.min(wizardStep + 1, wizardSteps.length - 1);
+  // A partir del pas 2, el banner "returning" ja no cal
+  if (wizardStep > 0) hideReturning();
+  renderWizardStep(true);
+  updateProgress();
+}
+
+function wizardBack() {
+  clearNote();
+  wizardStep = Math.max(wizardStep - 1, 0);
+  // Torna al pas 1 → re-avalua el banner (maybeShowReturning ja comprova dismissed i neteja inline styles)
+  if (wizardStep === 0) maybeShowReturning();
+  renderWizardStep(true);
 }
 
 // El grup "per jugador/a" es repeteix per cada fill. Detectem-lo pel nom; si no,
@@ -459,12 +736,22 @@ function childrenSectionEl(num, group, fileFields) {
 function childBlockEl(group, i, fileFields) {
   const block = document.createElement("div"); block.className = "child-block"; block.dataset.child = String(i);
   const head = document.createElement("div"); head.className = "child-block__head";
-  head.innerHTML = `<span class="child-block__title"></span>`;
+  head.innerHTML =
+    `<span class="child-block__title"></span>` +
+    `<span class="child-block__summary" aria-hidden="true"></span>` +
+    `<svg class="child-block__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>`;
   const rm = document.createElement("button");
   rm.type = "button"; rm.className = "child-block__remove"; rm.setAttribute("aria-label", "Treure aquest jugador/a");
   rm.innerHTML = `✕ Treure`;
   rm.addEventListener("click", () => removeChildBlock(block));
   head.appendChild(rm);
+  // Toggle col·laps en clicar el cap (mòbil, quan hi ha >1 fills)
+  head.addEventListener("click", (e) => {
+    if (e.target.closest(".child-block__remove")) return;
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    if (document.querySelectorAll(".child-block").length <= 1) return;
+    toggleCollapseChild(block);
+  });
   block.appendChild(head);
   group.fields.forEach((f) => block.appendChild(fieldEl(f, i)));
   // Camps de fitxer: un per fill, amb clau de magatzem única (c0__fieldId, c1__fieldId…)
@@ -475,12 +762,33 @@ function childBlockEl(group, i, fileFields) {
   block.appendChild(childWeeksEl(i));
   return block;
 }
+function collapseChild(block) {
+  if (!block) return;
+  const summary = block.querySelector(".child-block__summary");
+  if (summary) summary.textContent = getChildName(block) || "";
+  block.classList.add("child-block--collapsed");
+}
+function expandChild(block) {
+  if (!block) return;
+  block.classList.remove("child-block--collapsed");
+}
+function toggleCollapseChild(block) {
+  block.classList.contains("child-block--collapsed") ? expandChild(block) : collapseChild(block);
+}
+
 function addChildBlock(wrap, group, fileFields) {
+  // Col·lapsa els blocs existents (mòbil)
+  if (window.matchMedia("(pointer: coarse)").matches) {
+    wrap.querySelectorAll(".child-block").forEach(collapseChild);
+  }
   const i = wrap.querySelectorAll(".child-block").length;
   wrap.appendChild(childBlockEl(group, i, fileFields));
   childCount = wrap.querySelectorAll(".child-block").length;
   renumberChildren(wrap);
-  wrap.lastElementChild.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (window.matchMedia("(pointer: coarse)").matches) {
+    wrap.lastElementChild.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  renderWizardNav();
   updateProgress();
   updateAllPrices();
 }
@@ -492,6 +800,7 @@ function removeChildBlock(block) {
   childCount = wrap.querySelectorAll(".child-block").length || 1;
   renumberChildren(wrap);
   scheduleDraftSave();
+  renderWizardNav();
   updateProgress();
   updateAllPrices();
 }
@@ -509,10 +818,13 @@ function reindexChildBlock(block, idx) {
 }
 function renumberChildren(wrap) {
   const blocks = [...wrap.querySelectorAll(".child-block")];
+  const multi = blocks.length > 1;
   blocks.forEach((b, idx) => {
-    b.querySelector(".child-block__title").textContent = blocks.length > 1 ? `Jugador/a ${idx + 1}` : "Dades del jugador/a";
+    b.querySelector(".child-block__title").textContent = multi ? `Jugador/a ${idx + 1}` : "Dades del jugador/a";
     const rm = b.querySelector(".child-block__remove");
-    if (rm) rm.style.display = blocks.length > 1 ? "" : "none";
+    if (rm) rm.style.display = multi ? "" : "none";
+    // Quan hi ha múltiples fills, el primer rep caixa igual que els altres
+    b.classList.toggle("child-block--multiple", multi);
   });
 }
 function refreshChildWeeks() {
@@ -654,6 +966,7 @@ function fieldEl(f, scope) {
     if (AC[f.id]) control.autocomplete = AC[f.id];
     if (f.id === "codi_postal") control.inputMode = "numeric";
     if (new Set(["nom_jugador", "nom_tutor", "adreca", "poblacio"]).has(f.id)) control.setAttribute("autocapitalize", "words");
+    if (f.id === "nif") control.setAttribute("autocapitalize", "characters");
   }
 
   wrap.appendChild(control);
@@ -683,12 +996,40 @@ function fileControl(f, labId, scope) {
   const box = document.createElement("div");
   box.className = "filebox-wrap"; box.dataset.field = f.id; box.dataset.type = "file"; box.id = labId;
   const accept = f.opciones || "image/*,application/pdf";
-  const drop = document.createElement("label"); drop.className = "filebox";
-  drop.innerHTML = `<input type="file" accept="${escapeHtml(accept)}" multiple />
-    <div class="filebox__icon" aria-hidden="true">📎</div>
-    <div class="filebox__text">Tria fitxers o arrossega'ls aquí</div>
-    <div class="filebox__hint">Fins a ${MAX_FILE_MB} MB per fitxer</div>`;
-  const input = drop.querySelector("input");
+  const isTouch = window.matchMedia("(pointer: coarse)").matches;
+
+  // Al mòbil: dos botons separats (càmera / arxiu). A l'escriptori: zona de drag-and-drop.
+  let drop, input;
+  if (isTouch) {
+    drop = document.createElement("div"); drop.className = "filebox filebox--mobile";
+    const btnCam = document.createElement("label"); btnCam.className = "filebox__mobile-btn";
+    const inputCam = document.createElement("input");
+    inputCam.type = "file"; inputCam.accept = "image/*"; inputCam.capture = "environment";
+    btnCam.innerHTML = `<span class="filebox__mobile-icon" aria-hidden="true">📷</span><span>Fes una foto</span>`;
+    btnCam.prepend(inputCam);
+
+    const btnFile = document.createElement("label"); btnFile.className = "filebox__mobile-btn";
+    const inputFile = document.createElement("input");
+    inputFile.type = "file"; inputFile.accept = escapeHtml(accept); inputFile.multiple = true;
+    btnFile.innerHTML = `<span class="filebox__mobile-icon" aria-hidden="true">📁</span><span>Tria un arxiu</span>`;
+    btnFile.prepend(inputFile);
+
+    const hint = document.createElement("p"); hint.className = "filebox__hint filebox__hint--mobile";
+    hint.textContent = `Fins a ${MAX_FILE_MB} MB · Fotos i PDF`;
+
+    drop.append(btnCam, btnFile, hint);
+    // input principal = el d'arxius (el de càmera afegirà fitxers per separat)
+    input = inputFile;
+    // també enganxem addFiles al botó de càmera
+    inputCam.addEventListener("change", (e) => addFiles(e.target.files, e.target));
+  } else {
+    drop = document.createElement("label"); drop.className = "filebox";
+    drop.innerHTML = `<input type="file" accept="${escapeHtml(accept)}" multiple />
+      <div class="filebox__icon" aria-hidden="true">📎</div>
+      <div class="filebox__text">Tria fitxers o arrossega'ls aquí</div>
+      <div class="filebox__hint">Fins a ${MAX_FILE_MB} MB per fitxer</div>`;
+    input = drop.querySelector("input");
+  }
   const chips = document.createElement("div"); chips.className = "file-chips";
 
   const renderChips = () => {
@@ -704,15 +1045,16 @@ function fileControl(f, labId, scope) {
       chips.appendChild(chip);
     });
   };
-  const addFiles = async (list) => {
+  const addFiles = async (list, srcInput) => {
     for (const file of list) {
       if (file.size > MAX_FILE_MB * 1024 * 1024) { flashNote(`"${file.name}" supera els ${MAX_FILE_MB} MB.`); continue; }
       try { const dataBase64 = await readFileBase64(file); fileStore[storeKey].push({ name: file.name, mimeType: file.type, dataBase64, size: file.size }); renderChips(); }
       catch { flashNote(`No s'ha pogut llegir "${file.name}".`); }
     }
-    input.value = "";
+    // Reseta l'input que ha disparat l'event (per poder repetir la mateixa foto/arxiu)
+    if (srcInput) srcInput.value = ""; else input.value = "";
   };
-  input.addEventListener("change", (e) => addFiles(e.target.files));
+  input.addEventListener("change", (e) => addFiles(e.target.files, e.target));
   ["dragover", "dragenter"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("is-drag"); }));
   ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("is-drag"); }));
   drop.addEventListener("drop", (e) => { if (e.dataTransfer?.files) addFiles(e.dataTransfer.files); });
@@ -946,16 +1288,31 @@ function validate() {
       if (none && !firstBad) firstBad = wrap; if (none) ok = false;
     });
   }
-  if (firstBad) firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
-  return ok;
+  return { ok, firstBad };
 }
 
 // ---- Enviament ----
 async function onSubmit(e) {
   e.preventDefault();
-  els.submitNote.textContent = ""; els.submitNote.classList.remove("is-error");
+  clearNote();
   if (!document.getElementById("consent").checked) return flashNote("Cal acceptar la política de protecció de dades.");
-  if (!validate()) return flashNote("Revisa els camps marcats.");
+  const { ok: formOk, firstBad } = validate();
+  if (!formOk) {
+    // En mode wizard, salta al pas que conté el primer error
+    if (wizardSteps.length && firstBad) {
+      const parentSection = firstBad.closest(".section");
+      const stepIdx = parentSection ? wizardSteps.indexOf(parentSection) : -1;
+      if (stepIdx >= 0 && stepIdx !== wizardStep) {
+        wizardStep = stepIdx;
+        wizardSteps.forEach((s, i) => { s.hidden = i !== wizardStep; });
+        const priceCard = document.getElementById("price-total-card");
+        if (priceCard) priceCard.hidden = wizardStep !== wizardSteps.length - 1;
+        renderWizardNav();
+      }
+    }
+    if (firstBad) firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
+    return flashNote("Revisa els camps marcats.");
+  }
   const { shared, children } = collect();
   // Comprova la mida total de tots els fitxers de tots els fills.
   const totalBytes = children.reduce((sum, ch) =>
@@ -1006,8 +1363,21 @@ async function send(payload) {
   if (!out.ok) throw new Error(out.error || "error servidor");
   return out;
 }
-function setLoading(on) { els.submitBtn.disabled = on; els.submitBtn.classList.toggle("is-loading", on); }
-function flashNote(msg) { els.submitNote.textContent = msg; els.submitNote.classList.add("is-error"); }
+function clearNote() {
+  [els.submitNote, document.getElementById("wizard-note")].forEach((n) => {
+    if (!n) return; n.textContent = ""; n.classList.remove("is-error");
+  });
+}
+function setLoading(on) {
+  [els.submitBtn, document.getElementById("wizard-submit")].forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = on; btn.classList.toggle("is-loading", on);
+  });
+}
+function flashNote(msg) {
+  const target = document.getElementById("wizard-note") || els.submitNote;
+  target.textContent = msg; target.classList.add("is-error");
+}
 
 // ---- Èxit ----
 function showDone(shared, children, campusName, result) {
@@ -1216,7 +1586,7 @@ function maybeShowReturning() {
       if (f.children.length !== 2) allBtn.textContent = `Tots ${f.children.length} fills`;
       allBtn.addEventListener("click", () => {
         prefillFamilySelection(f, f.children.map((_, idx) => idx));
-        els.returning.hidden = true;
+        returningDismissed = true; hideReturning();
       });
       actions.appendChild(allBtn);
     }
@@ -1236,7 +1606,7 @@ function maybeShowReturning() {
       b.append(nameSpan, delSpan);
       b.addEventListener("click", () => {
         prefillFamilySelection(f, [idx]);
-        els.returning.hidden = true;
+        returningDismissed = true; hideReturning();
       });
       actions.appendChild(b);
     });
@@ -1474,6 +1844,10 @@ function updateProgress() {
     progressEl.classList.remove("is-complete");
     label.textContent = `${filled} de ${total} camps completats`;
   }
+
+  // Habilita el botó d'enviar només quan el formulari és complet (100 %)
+  const wizardSubmitBtn = document.getElementById("wizard-submit");
+  if (wizardSubmitBtn) wizardSubmitBtn.disabled = pct < 100;
 }
 
 // ---- 2. Preus en temps real ----

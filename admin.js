@@ -75,6 +75,7 @@ function init() {
   $("filter-from").addEventListener("change", (e) => { state.filters.from = e.target.value; applyFilters(); });
   $("filter-to").addEventListener("change", (e) => { state.filters.to = e.target.value; applyFilters(); });
   $("clear-filters").addEventListener("click", clearFilters);
+  $("filters-toggle").addEventListener("click", toggleFiltersPanel);
   $("export-btn").addEventListener("click", () => exportCsv());
   $("emails-btn").addEventListener("click", exportEmails);
   $("groups-config-btn").addEventListener("click", toggleGroupsConfig);
@@ -571,10 +572,12 @@ function renderGroupsBoard() {
       const manual = r.grups && r.grups[week];
       const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
       const opts = groups.map((gg) => `<option value="${esc(gg.color)}"${gg.color === g.color ? " selected" : ""}>${esc(gg.label)}</option>`).join("");
+      // 🚱 a l'esquerra del nom (si no sap nedar) i l'edat sempre a la dreta.
+      const ns = noSwim ? '<span class="gchip__noswim" title="No sap nedar">🚱</span>' : "";
       return `<div class="gchip${manual ? " gchip--manual" : ""}" title="${manual ? "Mogut manualment" : "Assignat per edat"}">
+        ${ns}
         <span class="gchip__name" title="${esc(r.nom || "")}">${esc(r.nom || "—")}</span>
         <span class="gchip__age">${r.edat !== "" ? r.edat + "a" : ""}</span>
-        ${noSwim ? '<span class="gchip__noswim" title="No sap nedar">🚱</span>' : ""}
         <select class="gchip__move" data-move="${esc(r.id)}" aria-label="Mou de grup">${opts}</select>
       </div>`;
     }).join("");
@@ -714,6 +717,19 @@ function updateFilterMeta() {
   }
   const clear = $("clear-filters");
   if (clear) clear.hidden = !active;
+  // Comptador de filtres actius (sense la cerca) per al badge del botó de filtres (mòbil)
+  const n = ["week", "status", "group", "swim", "from", "to"].filter((k) => f[k]).length;
+  const badge = $("filters-badge");
+  if (badge) { badge.hidden = n === 0; badge.textContent = String(n); }
+  const tgl = $("filters-toggle");
+  if (tgl) tgl.classList.toggle("is-active", n > 0);
+}
+
+// Desplega/plega el panell de filtres a mòbil.
+function toggleFiltersPanel() {
+  const panel = $("filters");
+  const open = panel.classList.toggle("is-open");
+  $("filters-toggle").setAttribute("aria-expanded", open ? "true" : "false");
 }
 
 function clearFilters() {
@@ -1267,86 +1283,156 @@ function printRosters() {
   const noSwimOf = (r) => r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
   const logo = (() => { try { return new URL("logo.png", location.href).href; } catch (_) { return ""; } })();
 
+  // Targeta-equip d'un grup (vestidor) per a una setmana.
+  const PER_COL = 15;   // noms per columna abans de passar a multicolumna (evita partir el grup entre pàgines)
+  const teamFor = (g, list) => {
+    const hex = GROUP_HEX[g.color] || "#64748B";
+    const ll = list.slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
+    const items = ll.map((r) => {
+      // 🚱 a l'esquerra (si no sap nedar) i l'edat sempre a la dreta.
+      const ns = noSwimOf(r) ? '<span class="ns" title="No sap nedar">🚱</span>' : "";
+      const age = r.edat !== "" && r.edat != null ? `<span class="age">${esc(String(r.edat))}a</span>` : "";
+      return `<li>${ns}<span class="nm">${esc(r.nom || "—")}</span>${age}</li>`;
+    }).join("");
+    // Si el grup és gran, ocupa tota l'amplada i reparteix els noms en columnes
+    // perquè càpiga en una sola pàgina en lloc de desbordar-se.
+    const ncols = ll.length > PER_COL ? Math.min(3, Math.ceil(ll.length / PER_COL)) : 1;
+    const wide = ncols > 1 ? " team--wide" : "";
+    return `<div class="team${ll.length ? "" : " team--empty"}${wide}" style="--gc:${hex};--cols:${ncols}">
+      <div class="team__head">
+        <span class="team__badge">${ll.length}</span>
+        <span class="team__name">${esc(g.label)}</span>
+      </div>
+      ${ll.length ? `<ol class="team__list">${items}</ol>` : '<p class="team__empty">Cap nen/a</p>'}
+    </div>`;
+  };
+
   const sectionFor = (w) => {
     const kids = state.list.filter((r) => (r.weekIds || []).includes(w.id));
     const byColor = {}; groups.forEach((g) => (byColor[g.color] = []));
     kids.forEach((r) => { const c = groupColorOf(r, w.id); (byColor[c] = byColor[c] || []).push(r); });
     const noSwimWeek = kids.filter(noSwimOf).length;
-
-    const cols = groups.map((g) => {
-      const hex = GROUP_HEX[g.color] || "#888";
-      const ll = (byColor[g.color] || []).slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
-      const items = ll.map((r) => {
-        const age = r.edat !== "" && r.edat != null ? `<span class="age">${esc(String(r.edat))} anys</span>` : "";
-        const ns = noSwimOf(r) ? '<span class="ns" title="No sap nedar">🚱 no neda</span>' : "";
-        return `<li><span class="nm">${esc(r.nom || "—")}</span><span class="meta">${age}${ns}</span></li>`;
-      }).join("");
-      return `<div class="grp" style="--gc:${hex}">
-        <div class="grp__head"><span class="grp__dot"></span><span class="grp__name">${esc(g.label)}</span><span class="grp__count">${ll.length}</span></div>
-        ${ll.length ? `<ol class="grp__list">${items}</ol>` : '<p class="grp__empty">Cap nen/a</p>'}
-      </div>`;
-    }).join("");
-
-    const stat = `${kids.length} ${kids.length === 1 ? "nen/a" : "nens/es"}${noSwimWeek ? ` · <b class="ns-stat">🚱 ${noSwimWeek} ${noSwimWeek === 1 ? "no neda" : "no neden"}</b>` : ""}`;
-    return `<section class="wk">
-      <div class="wk__head">
-        <div class="wk__title"><h2>${esc(w.etiqueta || w.id)}</h2>${w.fechas ? `<span class="wk__dates">${esc(w.fechas)}</span>` : ""}</div>
-        <span class="wk__stat">${stat}</span>
+    const teams = groups.map((g) => teamFor(g, byColor[g.color] || [])).join("");
+    const nsPill = noSwimWeek ? `<span class="kpi kpi--ns">🚱 ${noSwimWeek} ${noSwimWeek === 1 ? "no neda" : "no neden"}</span>` : "";
+    return `<section class="wk" data-week="${esc(w.id)}">
+      <div class="wk__banner">
+        <div class="wk__bannerL">
+          <span class="wk__tag">SETMANA</span>
+          <h2 class="wk__name">${esc(w.etiqueta || w.id)}</h2>
+          ${w.fechas ? `<span class="wk__dates">${esc(w.fechas)}</span>` : ""}
+        </div>
+        <div class="wk__kpis">
+          <span class="kpi"><b>${kids.length}</b> ${kids.length === 1 ? "nen/a" : "nens/es"}</span>
+          ${nsPill}
+        </div>
       </div>
-      <div class="grid">${cols}</div>
+      <div class="teams">${teams}</div>
     </section>`;
   };
 
   const body = weeks.map(sectionFor).join("");
   const totalKids = state.list.length;
+  const chips = `<button class="chip on" data-week="all">Totes</button>` +
+    weeks.map((w) => `<button class="chip" data-week="${esc(w.id)}">${esc(w.etiqueta || w.id)}</button>`).join("");
+
   const css = `
-    :root{--navy:#0E2A63;--blue:#1F5AE0;--ink:#16233D;--ink-soft:#5A6B86;--line:#D6DEEC;--paper:#EEF3FB;--danger:#C0392B;}
+    :root{--navy:#0E2A63;--blue:#1F5AE0;--ink:#16233D;--ink-soft:#5A6B86;--line:#E2E8F4;--paper:#0E1C3D;--danger:#E11D48;}
     *{box-sizing:border-box;}
-    body{font-family:"Hanken Grotesk",system-ui,Arial,sans-serif;color:var(--ink);background:var(--paper);margin:0;padding:0 0 60px;-webkit-font-smoothing:antialiased;}
-    .wrap{max-width:1000px;margin:0 auto;padding:18px 16px;}
-    .top{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.92);backdrop-filter:saturate(160%) blur(8px);border-bottom:1px solid var(--line);}
-    .top__in{max-width:1000px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:12px 16px;}
-    .emblem{width:42px;height:42px;border-radius:11px;overflow:hidden;flex:0 0 auto;box-shadow:0 4px 12px rgba(31,90,224,.26);}
+    [hidden]{display:none!important;}
+    body{font-family:"Hanken Grotesk",system-ui,Arial,sans-serif;color:var(--ink);margin:0;padding:0 0 70px;-webkit-font-smoothing:antialiased;
+      background:radial-gradient(1200px 700px at 10% -10%,rgba(31,90,224,.20),transparent 55%),
+      radial-gradient(1000px 600px at 110% 0%,rgba(99,102,241,.18),transparent 55%),var(--paper);}
+    /* Capçalera */
+    .hero{position:sticky;top:0;z-index:9;background:rgba(14,28,61,.78);backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
+    .hero__in{max-width:880px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:14px 18px;}
+    .emblem{width:46px;height:46px;border-radius:13px;overflow:hidden;flex:0 0 auto;box-shadow:0 8px 22px rgba(0,0,0,.4);}
     .emblem img{width:100%;height:100%;object-fit:cover;display:block;}
-    .top h1{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.02em;font-size:1.15rem;color:var(--navy);margin:0;line-height:1.1;}
-    .top .sub{font-size:.78rem;color:var(--ink-soft);font-weight:600;}
-    .printbtn{margin-left:auto;border:0;cursor:pointer;font-family:inherit;font-weight:700;font-size:.9rem;color:#fff;background:var(--blue);border-radius:999px;padding:10px 20px;box-shadow:0 6px 18px rgba(31,90,224,.32);display:inline-flex;align-items:center;gap:7px;}
+    .hero h1{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:1.25rem;color:#fff;margin:0;line-height:1;}
+    .hero .sub{font-size:.76rem;color:rgba(255,255,255,.65);font-weight:600;margin-top:3px;}
+    .printbtn{margin-left:auto;border:0;cursor:pointer;font-family:inherit;font-weight:800;font-size:.9rem;color:var(--navy);background:#fff;border-radius:999px;padding:11px 20px;box-shadow:0 8px 22px rgba(0,0,0,.3);display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
     .printbtn:active{transform:translateY(1px);}
-    .wk{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(14,42,99,.05),0 10px 30px rgba(14,42,99,.06);padding:18px;margin-bottom:18px;page-break-inside:avoid;}
-    .wk__head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:2px solid var(--paper);padding-bottom:12px;margin-bottom:14px;}
-    .wk__title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
-    .wk__title h2{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.01em;font-size:1.25rem;color:var(--navy);margin:0;}
-    .wk__dates{color:var(--ink-soft);font-size:.85rem;font-weight:600;}
-    .wk__stat{font-size:.82rem;color:var(--ink-soft);font-weight:600;}
-    .wk__stat .ns-stat{color:var(--danger);}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
-    .grp{border:1px solid var(--line);border-top:3px solid var(--gc);border-radius:12px;background:#fbfcfe;overflow:hidden;}
-    .grp__head{display:flex;align-items:center;gap:8px;padding:11px 12px;}
-    .grp__dot{width:11px;height:11px;border-radius:50%;background:var(--gc);flex:0 0 auto;}
-    .grp__name{font-weight:800;color:var(--navy);font-size:.95rem;}
-    .grp__count{margin-left:auto;font-weight:800;color:var(--gc);background:#fff;border:1.5px solid var(--gc);border-radius:999px;min-width:26px;text-align:center;padding:1px 8px;font-size:.82rem;}
-    .grp__list{list-style:none;margin:0;padding:4px 8px 10px;counter-reset:n;}
-    .grp__list li{display:flex;align-items:center;gap:8px;padding:7px 6px;border-bottom:1px solid var(--paper);font-size:.9rem;}
-    .grp__list li:last-child{border-bottom:0;}
-    .grp__list li::before{counter-increment:n;content:counter(n);flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--paper);color:var(--ink-soft);font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
-    .nm{font-weight:600;color:var(--ink);flex:1;min-width:0;}
-    .meta{display:flex;align-items:center;gap:6px;flex:0 0 auto;}
-    .age{color:var(--ink-soft);font-size:.76rem;font-weight:600;white-space:nowrap;}
-    .ns{color:var(--danger);font-size:.72rem;font-weight:800;white-space:nowrap;background:#FDECEA;border-radius:6px;padding:1px 6px;}
-    .grp__empty{color:var(--ink-soft);font-size:.82rem;text-align:center;padding:14px 0;opacity:.7;margin:0;}
-    @media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr);}}
-    @media(max-width:560px){
-      .grid{grid-template-columns:1fr;}
-      .top h1{font-size:1rem;} .top .sub{display:none;}
-      .printbtn{padding:9px 14px;font-size:.84rem;}
-      .wk{padding:14px;border-radius:14px;}
-      .wk__title h2{font-size:1.1rem;}
+    /* Selector de setmanes */
+    .picker{max-width:880px;margin:0 auto;padding:16px 18px 4px;}
+    .picker__hint{color:rgba(255,255,255,.6);font-size:.76rem;font-weight:600;margin:0 0 9px;}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;}
+    .chip{border:1.5px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-family:inherit;font-weight:700;font-size:.85rem;border-radius:999px;padding:8px 16px;cursor:pointer;transition:all .15s ease;}
+    .chip:hover{border-color:#fff;background:rgba(255,255,255,.14);}
+    .chip.on{background:#fff;color:var(--navy);border-color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.25);}
+    /* Setmana */
+    .wrap{max-width:880px;margin:0 auto;padding:10px 18px;}
+    .wk{margin:14px 0 26px;}
+    .wk__banner{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;
+      background:linear-gradient(120deg,var(--blue),#6366F1);border-radius:20px 20px 6px 6px;padding:18px 22px;color:#fff;box-shadow:0 14px 34px rgba(31,90,224,.35);}
+    .wk__tag{font-size:.66rem;font-weight:800;letter-spacing:.22em;opacity:.8;}
+    .wk__name{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.01em;font-size:1.9rem;line-height:.95;margin:2px 0 0;}
+    .wk__dates{font-size:.9rem;font-weight:600;opacity:.9;}
+    .wk__kpis{display:flex;gap:8px;flex-wrap:wrap;}
+    .kpi{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:6px 13px;font-size:.82rem;font-weight:700;white-space:nowrap;}
+    .kpi b{font-size:.95rem;}
+    .kpi--ns{background:rgba(0,0,0,.22);}
+    /* Targetes-equip */
+    .teams{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:14px;}
+    .team{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.22);display:flex;flex-direction:column;}
+    .team--wide{grid-column:1 / -1;}
+    .team--wide .team__list{column-count:var(--cols,2);column-gap:6px;}
+    .team__head{display:flex;align-items:center;gap:12px;padding:13px 16px;color:#fff;
+      background:linear-gradient(135deg,var(--gc),color-mix(in srgb,var(--gc) 62%,#0b1430));}
+    .team__badge{flex:0 0 auto;min-width:34px;height:34px;border-radius:50%;background:#fff;color:var(--gc);
+      font-family:"Anton",sans-serif;font-size:1.1rem;display:flex;align-items:center;justify-content:center;padding:0 8px;box-shadow:0 3px 8px rgba(0,0,0,.25);}
+    .team__name{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.02em;font-size:1.2rem;}
+    .team__list{list-style:none;margin:0;padding:6px 8px 10px;counter-reset:n;}
+    .team__list li{display:flex;align-items:center;gap:10px;padding:8px 8px;font-size:.95rem;border-radius:9px;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .team__list li:nth-child(odd){background:color-mix(in srgb,var(--gc) 7%,#fff);}
+    .team__list li::before{counter-increment:n;content:counter(n);flex:0 0 auto;width:22px;height:22px;border-radius:7px;
+      background:color-mix(in srgb,var(--gc) 16%,#fff);color:color-mix(in srgb,var(--gc) 78%,#10203f);font-size:.72rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
+    .nm{font-weight:700;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .meta{display:flex;align-items:center;gap:7px;flex:0 0 auto;}
+    .age{color:#fff;background:color-mix(in srgb,var(--gc) 70%,#10203f);border-radius:6px;padding:1px 7px;font-size:.72rem;font-weight:800;white-space:nowrap;min-width:24px;text-align:center;}
+    .ns{flex:0 0 auto;font-size:.95rem;line-height:1;}
+    .team--empty{opacity:.55;}
+    .team__empty{color:var(--ink-soft);font-size:.85rem;text-align:center;padding:16px 0;margin:0;}
+    /* Peu */
+    .foot{max-width:880px;margin:18px auto 0;padding:0 18px;color:rgba(255,255,255,.45);font-size:.74rem;text-align:center;}
+    @media(max-width:600px){
+      .hero h1{font-size:1.05rem;} .hero .sub{display:none;}
+      .printbtn{padding:9px 14px;font-size:.82rem;}
+      .teams{grid-template-columns:1fr;}
+      .wk__name{font-size:1.5rem;}
     }
     @media print{
-      body{background:#fff;} .top{position:static;background:#fff;border-bottom:1px solid #ccc;}
-      .printbtn{display:none;} .wk{box-shadow:none;border:1px solid #ccc;}
-      .grid{grid-template-columns:repeat(4,1fr);}
+      @page{margin:11mm;}
+      *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      body{background:#fff!important;padding:0;}
+      .hero,.picker,.foot{display:none!important;}
+      .wk{margin:0 0 10px;}
+      /* Quan s'imprimeixen totes les setmanes, cada una comença en una fulla nova */
+      body[data-show="all"] .wk + .wk{break-before:page;page-break-before:always;}
+      .wk__banner{box-shadow:none;break-after:avoid;border-radius:10px;padding:12px 16px;}
+      .wk__name{font-size:1.4rem;}
+      /* Teams en multicolumna tipus diari: dins d'un multicol, break-inside:avoid SÍ
+         es respecta → cada grup queda sencer en una pàgina. Els grups petits flueixen
+         en 2 columnes; un grup gran ocupa tota l'amplada (column-span) amb columnes internes. */
+      .teams{display:block;column-count:2;column-gap:12px;margin-top:10px;}
+      .team{display:block;width:100%;overflow:visible;box-shadow:none;border:1px solid #ccc;margin:0 0 10px;
+            break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid;}
+      .team--wide{column-span:all;-webkit-column-span:all;}
+      .team__head{padding:9px 13px;}
+      .team__name{font-size:1.05rem;}
+      .team__badge{min-width:28px;height:28px;font-size:.95rem;}
+      .team__list{padding:4px 7px 7px;}
+      .team__list li{padding:4px 7px;font-size:.84rem;}
+      .team__list li::before{width:18px;height:18px;}
     }`;
+
+  const js = `
+    function pick(w){
+      document.body.dataset.show=w;
+      document.querySelectorAll('.wk').forEach(function(s){ s.hidden = (w!=='all' && s.dataset.week!==w); });
+      document.querySelectorAll('.chip').forEach(function(c){ c.classList.toggle('on', c.dataset.week===w); });
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+    document.querySelectorAll('.chip').forEach(function(c){ c.addEventListener('click', function(){ pick(c.dataset.week); }); });`;
+
   const win = window.open("", "_blank");
   if (!win) return toast("Permet les finestres emergents per imprimir.", true);
   win.document.write(`<!DOCTYPE html><html lang="ca"><head><meta charset="utf-8">
@@ -1355,13 +1441,19 @@ function printRosters() {
     <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>${css}</style></head>
-    <body>
-      <div class="top"><div class="top__in">
+    <body data-show="all">
+      <div class="hero"><div class="hero__in">
         ${logo ? `<span class="emblem"><img src="${logo}" alt=""></span>` : ""}
-        <div><h1>Llistes de vestidor</h1><div class="sub">${esc(camp)} · ${esc(formName)} · ${totalKids} inscrits · ${new Date().toLocaleDateString("ca-ES")}</div></div>
+        <div><h1>Grups i vestidors</h1><div class="sub">${esc(camp)} · ${esc(formName)} · ${new Date().toLocaleDateString("ca-ES")}</div></div>
         <button class="printbtn" onclick="window.print()">🖨️ Imprimir</button>
       </div></div>
+      <div class="picker">
+        <p class="picker__hint">Tria una setmana per compartir-la (captura de pantalla) o imprimir-la · «Totes» per veure-les juntes</p>
+        <div class="chips">${chips}</div>
+      </div>
       <div class="wrap">${body}</div>
+      <p class="foot">${esc(camp)} · ${totalKids} inscrits en total</p>
+      <script>${js}<\/script>
     </body></html>`);
   win.document.close();
 }

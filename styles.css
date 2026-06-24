@@ -337,6 +337,7 @@ body {
 
 /* ---------- Estats ---------- */
 .state { text-align: center; padding: 56px 20px; color: var(--ink-soft); }
+#loading.state { padding: 0; }
 .state__title { font-weight: 700; color: var(--ink); margin: 0 0 6px; }
 .state__hint { margin: 0 0 16px; }
 .closed__mark { font-size: 2rem; margin-bottom: 12px; }
@@ -599,11 +600,13 @@ body {
 .page--done .hero,
 .page--done .returning { display: none; }
 /* Pantalla de càrrega inicial — ocupa tot l'espai disponible */
-.page--loading #loading {
-  min-height: calc(100vh - 60px);
-  padding: 48px 20px 64px;
-  display: flex; flex-direction: column; align-items: center;
+#loading {
+  position: fixed; inset: 0; z-index: 49;
+  background: var(--paper);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px;
 }
+#loading[hidden] { display: none !important; }
 /* Animació de càrrega: estic d'hoquei patins xutant la pilota */
 .load-shot {
   width: 96px; height: 78px;
@@ -744,9 +747,34 @@ body {
   scroll-margin-top: 84px; /* deixa espai sota la barra fixa en fer scroll automàtic */
 }
 .child-block:first-child { border-top: none; padding-top: 4px; background: transparent; border-left: none; border-right: none; border-bottom: none; }
-.child-block__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+/* Quan hi ha múltiples fills, el primer té caixa (expandit o col·lapsat) */
+.child-block:first-child.child-block--multiple {
+  border: 1.5px solid var(--line-ink); background: var(--paper);
+  padding: 16px 16px 4px;
+}
+.child-block:first-child.child-block--multiple.child-block--collapsed {
+  padding: 16px;
+}
+.child-block__head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .child-block__title { font-weight: 700; color: var(--navy); font-size: .98rem; }
+/* Resum visible quan el bloc és col·lapsat */
+.child-block__summary {
+  flex: 1; font-size: .85rem; color: var(--ink-soft); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: none; min-width: 0;
+}
+.child-block__chevron { display: none; flex-shrink: 0; stroke: var(--ink-soft); }
+/* Estat col·lapsat (mòbil) */
+.child-block--collapsed {
+  padding-bottom: 16px;
+  cursor: pointer;
+}
+.child-block--collapsed .child-block__head { margin-bottom: 0; }
+.child-block--collapsed .child-block__summary { display: block; }
+.child-block--collapsed .child-block__chevron { display: block; }
+.child-block--collapsed > *:not(.child-block__head) { display: none !important; }
 .child-block__remove {
+  margin-left: auto; flex-shrink: 0;
   background: none; border: 1px solid var(--line-ink); border-radius: 999px; cursor: pointer;
   color: var(--ink-soft); font-size: .8rem; font-weight: 600; padding: 5px 11px; line-height: 1; font-family: inherit;
 }
@@ -1374,10 +1402,173 @@ body {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 4px;
 }
 
+/* ---------- Filebox versió mòbil (2 botons) ---------- */
+.filebox--mobile {
+  display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+  padding: 14px 12px 10px;
+  border: 1.5px dashed var(--rink-line);
+  border-radius: calc(var(--radius-sm) + 2px);
+  background: linear-gradient(180deg, #fff 0%, #f7faff 100%);
+}
+.filebox__mobile-btn {
+  flex: 1; min-width: 120px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 14px 10px;
+  background: var(--blue-soft); border: 1.5px solid rgba(31,90,224,.2);
+  border-radius: var(--radius-sm); cursor: pointer;
+  font-family: inherit; font-size: .9rem; font-weight: 600; color: var(--navy);
+  text-align: center; transition: background .15s, border-color .15s;
+}
+.filebox__mobile-btn:active { background: rgba(31,90,224,.18); border-color: var(--blue); }
+.filebox__mobile-btn input { display: none; }
+.filebox__mobile-icon { font-size: 1.6rem; line-height: 1; }
+.filebox__hint--mobile {
+  width: 100%; text-align: center;
+  font-size: .78rem; color: var(--ink-soft); margin: 2px 0 0;
+}
+
+/* ---------- Wizard de passos ---------- */
+.wizard-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+  background: var(--card);
+  border-top: 1px solid var(--line-ink);
+  box-shadow: 0 -2px 16px rgba(14,42,99,.09);
+}
+/* Quan el wizard és actiu, empeny el contingut per sobre de la barra fixa */
+body.has-wizard { padding-bottom: 52px; }
+/* Fila d'error (sempre reserva espai per no fer saltar la nav) */
+.wizard-nav__note {
+  display: block;
+  margin: 0;
+  min-height: 0; max-height: 0; overflow: hidden;
+  text-align: center; font-size: .82rem; color: var(--danger);
+  padding-inline: 20px;
+  transition: max-height .2s ease, padding .2s ease;
+}
+.wizard-nav__note.is-error {
+  max-height: 48px;
+  padding-block: 6px;
+}
+/* Fila de botons: exactament 3 fills → Enrere | Indicador | Acció */
+.wizard-nav__row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding: 6px 20px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+}
+/* Zona esquerra: contenidor de botó enrere + resum de fills */
+.wizard-nav__left { justify-self: start; display: flex; align-items: center; }
+.wizard-nav__back[hidden] { display: none !important; }
+/* Botó trigger de fills */
+.wizard-nav__children {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 10px; border-radius: 999px;
+  background: var(--blue-soft); border: none;
+  font-family: inherit; font-size: .78rem; font-weight: 700; color: var(--navy);
+  cursor: pointer; white-space: nowrap;
+  transition: background .15s;
+}
+.wizard-nav__children:active { background: #d0dcf8; }
+.wizard-nav__children[hidden] { display: none !important; }
+.wizard-nav__children svg { flex-shrink: 0; stroke: var(--blue); }
+.wc__chevron { stroke: var(--ink-soft); transition: transform .2s ease; }
+.wizard-nav__children.is-open .wc__chevron { transform: rotate(180deg); }
+#wizard-children-label { min-width: 8px; }
+
+/* Popup de fills (s'obre cap amunt sobre la barra) */
+.wizard-children-popup {
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  background: var(--card);
+  border-top: 1px solid var(--line-ink);
+  border-bottom: none;
+  box-shadow: 0 -6px 24px rgba(14,42,99,.13);
+  border-radius: 14px 14px 0 0;
+  padding: 8px 14px 4px;
+  max-height: 55vh; overflow-y: auto;
+}
+.wcp__list { display: flex; flex-direction: column; gap: 2px; }
+.wcp__item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 2px 0;
+}
+.wcp__scroll-btn {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  background: none; border: none; padding: 9px 8px;
+  border-radius: 10px; cursor: pointer; text-align: left;
+  font-family: inherit; color: var(--ink);
+  transition: background .12s;
+}
+.wcp__scroll-btn:active { background: var(--blue-soft); }
+.wcp__avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: var(--blue); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .82rem; font-weight: 700;
+}
+.wcp__name { font-size: .88rem; font-weight: 600; }
+.wcp__incomplete {
+  font-size: .72rem; color: var(--danger); font-weight: 500;
+  background: #fdecea; padding: 2px 6px; border-radius: 999px;
+}
+.wcp__del {
+  flex-shrink: 0; background: none; border: none;
+  padding: 8px; border-radius: 8px; cursor: pointer;
+  color: var(--ink-soft); display: flex; align-items: center;
+  transition: color .12s, background .12s;
+}
+.wcp__del:active { color: var(--danger); background: #fdecea; }
+.wizard-nav__indicator {
+  text-align: center; white-space: nowrap;
+  font-size: .8rem; font-weight: 600;
+  color: var(--ink-soft); letter-spacing: .02em;
+  overflow: hidden; max-width: 120px;
+  transition: opacity .2s ease, max-width .2s ease;
+}
+/* Quan l'usuari fa scroll avall, l'indicador desapareix (compressió de barra, mòbil) */
+.wizard-nav--compact .wizard-nav__indicator { opacity: 0; max-width: 0; }
+/* Contenidor de l'acció (3r fill del grid): sempre ocupa la cel·la de la dreta */
+.wizard-nav__action {
+  justify-self: end;
+  display: flex; align-items: center;
+}
+.wizard-nav .btn {
+  padding: 8px 16px; font-size: .88rem;
+  white-space: nowrap; min-height: 40px;
+}
+/* scrollIntoView deixa marge per la barra fixa */
+html { scroll-padding-bottom: 54px; }
+/* .btn té display:inline-flex que guanya contra [hidden] del navegador → forcem */
+.wizard-nav__action .btn[hidden] { display: none !important; }
+/* Botó d'enviament deshabilitat fins que el formulari és complet */
+#wizard-submit:disabled {
+  opacity: .38; cursor: not-allowed;
+  box-shadow: none !important; transform: none !important;
+  pointer-events: none;
+}
+/* Pantalles molt petites: botons més compactes */
+@media (max-width: 360px) {
+  .wizard-nav .btn { padding: 10px 12px; font-size: .82rem; }
+  .wizard-nav__indicator { font-size: .72rem; }
+}
+/* Amaga l'etiqueta de text del progrés al mòbil (el wizard-nav ja informa) */
+@media (max-width: 520px) {
+  .form-progress__label { display: none; }
+  /* Footer no aporta res al mòbil amb wizard actiu */
+  body.has-wizard .foot { display: none; }
+}
+/* Oculta el wizard-nav a la pantalla d'èxit i durant la càrrega */
+.page--done #wizard-nav,
+.page--loading #wizard-nav { display: none; }
+
 /* ---- Print ---- */
 @media print {
   .topbar, .hero, .returning, .form, #loading, #load-error, #closed,
-  .foot, .done__actions, .confetti-container, #form-progress { display: none !important; }
+  .foot, .done__actions, .confetti-container, #form-progress,
+  #wizard-nav { display: none !important; }
   body { background: #fff; color: #000; -webkit-print-color-adjust: exact; }
   .main { padding-block: 0; }
   .done {
