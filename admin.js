@@ -11,11 +11,9 @@
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
 let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxxDapcQ_Fbwxl0ohzRN_NfQ23eMhrCpNYGibrZXMTRRS6SMqfoDYblGWJwOHFVgX6ibg/exec";
 
-const PIN_KEY = "casal_admin_pin";
-const EXP_KEY = "casal_admin_exp";      // caducitat de sessió (timestamp)
-const VIEW_KEY = "casal_admin_view2";   // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
-const SESSION_MS = 8 * 60 * 60 * 1000;  // la sessió caduca a les 8 h
-const DEMO_PIN = "1234";
+const TOKEN_KEY = "casal_admin_token";  // token de sessió UUID (no el PIN)
+const VIEW_KEY  = "casal_admin_view2";  // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
+const DEMO_PIN  = "1234";
 
 // Colors fixos dels grups (vestidors). Els intervals d'edat són configurables.
 const GROUP_HEX = { blau: "#1F5AE0", verd: "#16A34A", taronja: "#D97706", vermell: "#DC2626" };
@@ -37,7 +35,7 @@ function orderGroups(groups) {
 
 // ---- Estat ----
 const state = {
-  pin: "",
+  token: "",
   form: "",
   forms: [],
   overview: null,
@@ -98,10 +96,9 @@ function init() {
   document.querySelectorAll(".dtable th[data-sort]").forEach((th) =>
     th.addEventListener("click", () => toggleSort(th.dataset.sort)));
 
-  const saved = sessionStorage.getItem(PIN_KEY);
-  const exp = Number(sessionStorage.getItem(EXP_KEY) || 0);
-  if (saved && exp && Date.now() < exp) { state.pin = saved; enter(); }
-  else { sessionStorage.removeItem(PIN_KEY); sessionStorage.removeItem(EXP_KEY); $("pin").focus(); }
+  const saved = sessionStorage.getItem(TOKEN_KEY);
+  if (saved) { state.token = saved; enter(); }
+  else { $("pin").focus(); }
 }
 
 // Navegació inferior (mòbil): canvia quina secció es veu. A PC no té efecte visible
@@ -169,7 +166,7 @@ function setFormScope(scope) {
 // ---- API ----
 async function api(action, extra) {
   if (!SCRIPT_URL) return demoApi(action, extra);
-  const body = Object.assign({ action, pin: state.pin, form: state.form }, extra || {});
+  const body = Object.assign({ action, token: state.token, form: state.form }, extra || {});
   const res = await fetch(SCRIPT_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -185,16 +182,14 @@ async function onLogin(e) {
   e.preventDefault();
   const pin = $("pin").value.trim();
   if (!pin) return;
-  state.pin = pin;
   const btn = $("login-btn"); btn.classList.add("is-loading"); btn.disabled = true;
   $("login-note").textContent = "";
   try {
-    const out = await api("admin_login");
-    // El login vàlid sempre porta la llista de formularis. Si no hi és, el backend
-    // desplegat és l'antic (sense panell) i acceptaria qualsevol codi: ho bloquegem.
+    // El PIN s'envia una sola vegada; el servidor retorna un token UUID de sessió.
+    const out = await api("admin_login", { pin });
     if (!out.forms) throw new Error("not-deployed");
-    sessionStorage.setItem(PIN_KEY, pin);
-    sessionStorage.setItem(EXP_KEY, String(Date.now() + SESSION_MS));
+    state.token = out.token || "";
+    sessionStorage.setItem(TOKEN_KEY, state.token);
     state.forms = out.forms || [];
     if (out.settings && out.settings.SCRIPT_URL) SCRIPT_URL = out.settings.SCRIPT_URL.trim();
     if (out.settings && out.settings.nombre_campus) {
@@ -202,12 +197,14 @@ async function onLogin(e) {
     }
     enter();
   } catch (err) {
-    state.pin = "";
-    $("login-note").textContent = err.message === "unauthorized"
-      ? "Codi incorrecte. Torna-ho a provar."
-      : err.message === "not-deployed"
-        ? "El servidor encara no té el panell. Publica una versió nova de l'Apps Script."
-        : "No s'ha pogut connectar. Comprova la configuració.";
+    state.token = "";
+    $("login-note").textContent = err.message === "locked"
+      ? "Massa intents fallits. Espera 15 minuts i torna-ho a provar."
+      : err.message === "unauthorized"
+        ? "Codi incorrecte. Torna-ho a provar."
+        : err.message === "not-deployed"
+          ? "El servidor encara no té el panell. Publica una versió nova de l'Apps Script."
+          : "No s'ha pogut connectar. Comprova la configuració.";
     $("pin").select();
   } finally {
     btn.classList.remove("is-loading"); btn.disabled = false;
@@ -218,7 +215,7 @@ async function enter() {
   $("login").hidden = true;
   $("app").hidden = false;
   if (!state.forms.length) {
-    try { const out = await api("admin_login"); state.forms = out.forms || []; if (out.settings && out.settings.SCRIPT_URL) SCRIPT_URL = out.settings.SCRIPT_URL.trim(); if (out.settings) document.querySelectorAll("[data-camp-name]").forEach((n) => (n.textContent = out.settings.nombre_campus || n.textContent)); }
+    try { const out = await api("admin_session"); state.forms = out.forms || []; if (out.settings && out.settings.SCRIPT_URL) SCRIPT_URL = out.settings.SCRIPT_URL.trim(); if (out.settings) document.querySelectorAll("[data-camp-name]").forEach((n) => (n.textContent = out.settings.nombre_campus || n.textContent)); }
     catch (err) { return logout(); }
   }
   restoreView();
@@ -244,13 +241,17 @@ function syncFilterInputs() {
 }
 
 function logout() {
-  sessionStorage.removeItem(PIN_KEY);
-  sessionStorage.removeItem(EXP_KEY);
-  state.pin = "";
+  const tok = state.token;
+  sessionStorage.removeItem(TOKEN_KEY);
+  state.token = "";
   $("app").hidden = true;
   $("login").hidden = false;
   $("pin").value = "";
   $("pin").focus();
+  // Invalida el token al servidor (best-effort, sense bloquejar la UI).
+  if (tok && SCRIPT_URL) {
+    fetch(SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "admin_logout", token: tok }) }).catch(() => {});
+  }
 }
 
 function renderFormSelect() {
@@ -1667,7 +1668,10 @@ function demoOverview(d) {
 async function demoApi(action, extra) {
   await new Promise((r) => setTimeout(r, 120));
   if (action === "admin_login") {
-    if (state.pin !== DEMO_PIN) throw new Error("unauthorized");
+    if ((extra && extra.pin) !== DEMO_PIN) throw new Error("unauthorized");
+    return { ok: true, token: "DEMO-TOKEN", forms: DEMO_FORMS, settings: { nombre_campus: "Campus d'Hoquei Riudebitlles", club: "El plaer de jugar!" } };
+  }
+  if (action === "admin_session" || action === "admin_logout") {
     return { ok: true, forms: DEMO_FORMS, settings: { nombre_campus: "Campus d'Hoquei Riudebitlles", club: "El plaer de jugar!" } };
   }
   const d = demoData((extra && extra.form) || state.form);
