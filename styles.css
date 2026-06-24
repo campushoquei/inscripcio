@@ -1442,12 +1442,18 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 /* ---------- Wizard de passos ---------- */
 .wizard-nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
-  background: var(--card);
-  border-top: 1px solid var(--line-ink);
-  box-shadow: 0 -2px 16px rgba(14,42,99,.09);
+  background: rgba(255,255,255,.82);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+  border-top: 1px solid rgba(214,222,236,.6);
+  box-shadow: 0 -10px 34px rgba(14,42,99,.09);
+}
+/* Sense suport de backdrop-filter, fons sòlid per no quedar translúcid */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .wizard-nav { background: var(--card); }
 }
 /* Quan el wizard és actiu, empeny el contingut per sobre de la barra fixa */
-body.has-wizard { padding-bottom: 52px; }
+body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 /* Fila d'error (sempre reserva espai per no fer saltar la nav) */
 .wizard-nav__note {
   display: block;
@@ -1469,24 +1475,32 @@ body.has-wizard { padding-bottom: 52px; }
   gap: 6px;
   max-width: var(--maxw);
   margin-inline: auto;
-  padding: 6px 20px;
-  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 /* Zona esquerra: contenidor de botó enrere + resum de fills */
 .wizard-nav__left { justify-self: start; display: flex; align-items: center; }
 .wizard-nav__back[hidden] { display: none !important; }
+/* Botó "Enrere": pastilla suau, sense vora dura */
+.wizard-nav__back {
+  background: var(--blue-soft); border-color: transparent; color: var(--navy);
+  padding-inline: 16px;
+}
+.wizard-nav__back .wz-chev { stroke: var(--navy); }
 /* Botó trigger de fills */
 .wizard-nav__children {
-  display: flex; align-items: center; gap: 5px;
-  padding: 6px 10px; border-radius: 999px;
-  background: var(--blue-soft); border: none;
-  font-family: inherit; font-size: .78rem; font-weight: 700; color: var(--navy);
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: 999px;
+  background: var(--blue-soft); border: none; min-height: 44px;
+  font-family: inherit; font-size: .82rem; font-weight: 700; color: var(--navy);
   cursor: pointer; white-space: nowrap;
   transition: background .15s;
 }
 .wizard-nav__children:active { background: #d0dcf8; }
 .wizard-nav__children[hidden] { display: none !important; }
 .wizard-nav__children svg { flex-shrink: 0; stroke: var(--blue); }
+/* Icona de persones plena (sòlida, sense contorn) */
+.wc__people { fill: var(--blue); stroke: none; }
 .wc__chevron { stroke: var(--ink-soft); transition: transform .2s ease; }
 .wizard-nav__children.is-open .wc__chevron { transform: rotate(180deg); }
 #wizard-children-label { min-width: 8px; }
@@ -1533,33 +1547,36 @@ body.has-wizard { padding-bottom: 52px; }
   transition: color .12s, background .12s;
 }
 .wcp__del:active { color: var(--danger); background: #fdecea; }
+/* Indicador de progrés amb punts; el pas actiu s'allarga en una píndola */
 .wizard-nav__indicator {
-  text-align: center; white-space: nowrap;
-  font-size: .8rem; font-weight: 600;
-  color: var(--ink-soft); letter-spacing: .02em;
-  overflow: hidden; max-width: 120px;
-  transition: opacity .2s ease, max-width .2s ease;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
 }
-/* Quan l'usuari fa scroll avall, l'indicador desapareix (compressió de barra, mòbil) */
-.wizard-nav--compact .wizard-nav__indicator { opacity: 0; max-width: 0; }
+.wzdot {
+  width: 7px; height: 7px; border-radius: 999px;
+  background: var(--line-ink); flex-shrink: 0;
+  transition: width .28s cubic-bezier(.4,0,.2,1), background .28s ease;
+}
+.wzdot.is-done { background: var(--blue); }
+.wzdot.is-active { width: 22px; background: var(--blue); }
 /* Contenidor de l'acció (3r fill del grid): sempre ocupa la cel·la de la dreta */
 .wizard-nav__action {
   justify-self: end;
   display: flex; align-items: center;
 }
 .wizard-nav .btn {
-  padding: 8px 16px; font-size: .88rem;
-  white-space: nowrap; min-height: 40px;
+  padding: 10px 18px; font-size: .9rem; gap: 6px;
+  white-space: nowrap; min-height: 44px;
 }
+.wizard-nav .btn .wz-chev { flex-shrink: 0; }
 /* Botons de la barra: ombra continguda i neta (el glow gran del CTA gran
    es veuria com un blur estrany al voltant d'aquests botons petits). */
 .wizard-nav .btn--primary { box-shadow: 0 2px 6px rgba(31,90,224,.28); }
 .wizard-nav .btn--primary:active:not(:disabled) { box-shadow: 0 1px 3px rgba(31,90,224,.3); }
-/* El botó "Següent" sempre amb el blau fosc (no el clar que canviava en clicar). */
+/* El botó "Següent" sempre amb el blau fosc (no el clar que canviava en clicar) i sense ombres. */
 .wizard-nav__next,
-.wizard-nav__next:active:not(:disabled) { background: var(--blue-deep); }
+.wizard-nav__next:active:not(:disabled) { background: var(--blue-deep); box-shadow: none; }
 /* scrollIntoView deixa marge per la barra fixa */
-html { scroll-padding-bottom: 54px; }
+html { scroll-padding-bottom: 84px; }
 /* .btn té display:inline-flex que guanya contra [hidden] del navegador → forcem */
 .wizard-nav__action .btn[hidden] { display: none !important; }
 /* Botó d'enviament deshabilitat fins que el formulari és complet */
@@ -1570,8 +1587,8 @@ html { scroll-padding-bottom: 54px; }
 }
 /* Pantalles molt petites: botons més compactes */
 @media (max-width: 360px) {
-  .wizard-nav .btn { padding: 10px 12px; font-size: .82rem; }
-  .wizard-nav__indicator { font-size: .72rem; }
+  .wizard-nav .btn { padding: 10px 13px; font-size: .84rem; }
+  .wizard-nav__row { padding-inline: 12px; gap: 4px; }
 }
 /* Amaga l'etiqueta de text del progrés al mòbil (el wizard-nav ja informa) */
 @media (max-width: 520px) {

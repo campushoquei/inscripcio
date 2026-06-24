@@ -479,16 +479,17 @@ function initWizard() {
     || (els.submitBtn && els.submitBtn.querySelector(".btn__label") && els.submitBtn.querySelector(".btn__label").textContent)
     || "Enviar inscripció";
   const PEOPLE_SVG =
-    `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
-      `<circle cx="8" cy="7" r="3.5"/>` +
-      `<path d="M2 21v-1.5a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4V21"/>` +
-      `<path d="M18 8.5a3 3 0 0 1 0 5"/>` +
-      `<path d="M21.5 21v-1a3.5 3.5 0 0 0-3-3.47"/>` +
+    `<svg class="wc__people" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">` +
+      `<path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>` +
     `</svg>`;
   const CHEVRON_UP =
     `<svg class="wc__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
       `<polyline points="18 15 12 9 6 15"/>` +
     `</svg>`;
+  const CHEV_LEFT =
+    `<svg class="wz-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>`;
+  const CHEV_RIGHT =
+    `<svg class="wz-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>`;
   nav.innerHTML =
     // Popup de fills (s'obre cap amunt)
     `<div class="wizard-children-popup" id="wizard-children-popup" hidden>` +
@@ -497,7 +498,7 @@ function initWizard() {
     `<p class="wizard-nav__note" id="wizard-note" aria-live="polite" role="alert"></p>` +
     `<div class="wizard-nav__row">` +
       `<div class="wizard-nav__left">` +
-        `<button type="button" class="btn btn--ghost wizard-nav__back" id="wizard-back">‹ Enrere</button>` +
+        `<button type="button" class="btn btn--ghost wizard-nav__back" id="wizard-back">` + CHEV_LEFT + `<span>Enrere</span></button>` +
         `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
           PEOPLE_SVG +
           `<span id="wizard-children-label"></span>` +
@@ -506,7 +507,7 @@ function initWizard() {
       `</div>` +
       `<span class="wizard-nav__indicator" id="wizard-indicator"></span>` +
       `<div class="wizard-nav__action">` +
-        `<button type="button" class="btn btn--primary wizard-nav__next" id="wizard-next">Següent ›</button>` +
+        `<button type="button" class="btn btn--primary wizard-nav__next" id="wizard-next"><span>Següent</span>` + CHEV_RIGHT + `</button>` +
         `<button type="submit" form="form" class="btn btn--primary wizard-nav__submit" id="wizard-submit" hidden>` +
           `<span class="btn__label">${escapeHtml(submitLabel)}</span>` +
           `<span class="btn__spinner" aria-hidden="true"></span>` +
@@ -574,7 +575,14 @@ function renderWizardNav() {
   // next i submit comparteixen la mateixa cel·la (.wizard-nav__action): un a la vegada
   if (nextBtn)   nextBtn.hidden   = isLast;
   if (submitBtn) submitBtn.hidden = !isLast;
-  if (indicator) indicator.textContent = `Pas ${wizardStep + 1} de ${wizardSteps.length}`;
+  // Indicador de progrés amb punts: el pas actiu s'allarga en una píndola.
+  if (indicator) {
+    const n = wizardSteps.length;
+    indicator.innerHTML = Array.from({ length: n }, (_, i) =>
+      `<span class="wzdot${i < wizardStep ? " is-done" : i === wizardStep ? " is-active" : ""}"></span>`
+    ).join("");
+    indicator.setAttribute("aria-label", `Pas ${wizardStep + 1} de ${n}`);
+  }
 }
 
 // ---- Children popup ----

@@ -28,6 +28,110 @@ var SHEETS = {
 var _cache = { tables: {}, subs: {} };
 function resetCache() { _cache = { tables: {}, subs: {} }; }
 
+/* ---------- Rate limiting & Seguretat d'admin ---------- */
+var SUB_RATE_LIMIT  = 30;    // màx. enviaments per minut (global)
+var ADMIN_MAX_FAILS = 5;     // intents fallits fins al bloqueig
+var ADMIN_LOCK_SECS = 900;   // 15 minuts de bloqueig
+var ADMIN_TOK_SECS  = 28800; // 8 hores de sessió
+
+function checkSubmissionRateLimit() {
+  var cache = CacheService.getScriptCache();
+  var win   = Math.floor(Date.now() / 60000);
+  var key   = "rl_" + win;
+  var count = parseInt(cache.get(key) || "0");
+  if (count >= SUB_RATE_LIMIT) return false;
+  cache.put(key, String(count + 1), 120);
+  return true;
+}
+function isAdminLocked() {
+  return CacheService.getScriptCache().get("adm_lk") === "1";
+}
+function recordAdminFailure() {
+  var cache = CacheService.getScriptCache();
+  var fails = parseInt(cache.get("adm_f") || "0") + 1;
+  if (fails >= ADMIN_MAX_FAILS) {
+    cache.put("adm_lk", "1", ADMIN_LOCK_SECS);
+    cache.remove("adm_f");
+  } else {
+    cache.put("adm_f", String(fails), ADMIN_LOCK_SECS);
+  }
+}
+function clearAdminFailures() {
+  var cache = CacheService.getScriptCache();
+  cache.remove("adm_f");
+  cache.remove("adm_lk");
+}
+function createAdminToken() {
+  var tok = Utilities.getUuid();
+  CacheService.getScriptCache().put("tok_" + tok, "1", ADMIN_TOK_SECS);
+  return tok;
+}
+function validateAdminToken(tok) {
+  if (!tok) return false;
+  return CacheService.getScriptCache().get("tok_" + String(tok)) === "1";
+}
+function revokeAdminToken(tok) {
+  if (tok) CacheService.getScriptCache().remove("tok_" + String(tok));
+}
+
+// Valida els camps de la inscripció al servidor. Retorna { ok } o { ok: false, error }.
+function validatePayload(payload, entries) {
+  var ALLOWED_MIME = {
+    "image/jpeg": 1, "image/jpg": 1, "image/png": 1,
+    "image/heic": 1, "image/webp": 1, "application/pdf": 1
+  };
+  var MAX_FILE_B  = 5  * 1024 * 1024; // 5 MB per fitxer
+  var MAX_TOTAL_B = 12 * 1024 * 1024; // 12 MB en total
+
+  var shared = payload.shared || {};
+
+  // Email: obligatori i amb format bàsic vàlid.
+  var email = findEmail(shared);
+  if (!email) {
+    for (var i = 0; i < (entries || []).length && !email; i++) email = findEmail((entries[i].data) || {});
+  }
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { ok: false, error: "Adreça de correu electrònic no vàlida o absent." };
+  }
+
+  // NIF/NIE: si és present, validar format.
+  var nif = pickFirstValue(shared, [/^nif$/i, /document/i, /dni/i]);
+  if (nif && !/^\d{8}[A-Za-z]$|^[XYZxyz]\d{7}[A-Za-z]$/.test(str(nif).replace(/\s/g, ""))) {
+    return { ok: false, error: "Format de NIF/NIE no vàlid." };
+  }
+
+  // Telèfon: si és present, validar format (7–15 caràcters numèrics/+/-/espai).
+  var tel = pickFirstValue(shared, [/^telefon$|^telefono$|^mobil$|^movil$|^phone$/i]);
+  if (tel && !/^[0-9\s+\-.]{7,15}$/.test(str(tel))) {
+    return { ok: false, error: "Format de telèfon no vàlid." };
+  }
+
+  // Codi postal: si és present, ha de ser exactament 5 dígits.
+  var cp = pickFirstValue(shared, [/codi_postal|codigo_postal|codipostal|postal_code/i]);
+  if (cp && !/^\d{5}$/.test(str(cp).trim())) {
+    return { ok: false, error: "El codi postal ha de tenir 5 dígits." };
+  }
+
+  // Fitxers: tipus MIME permès i mida màxima.
+  var totalBytes = 0;
+  for (var j = 0; j < (entries || []).length; j++) {
+    var files = (entries[j] && entries[j].files) || [];
+    for (var k = 0; k < files.length; k++) {
+      var f = files[k];
+      var mime = str(f.mimeType).toLowerCase();
+      if (mime && !ALLOWED_MIME[mime]) {
+        return { ok: false, error: "Tipus de fitxer no permès: " + mime };
+      }
+      var sz = f.dataBase64 ? Math.round(f.dataBase64.length * 0.75) : 0;
+      if (sz > MAX_FILE_B) return { ok: false, error: "El fitxer \"" + str(f.name) + "\" supera els 5 MB." };
+      totalBytes += sz;
+    }
+  }
+  if (totalBytes > MAX_TOTAL_B) return { ok: false, error: "El total de fitxers adjunts supera els 12 MB." };
+
+  return { ok: true };
+}
+
 function doGet(e) {
   resetCache();
   try {
@@ -44,6 +148,8 @@ function doPost(e) {
   var pre = null;
   try { pre = JSON.parse(e.postData.contents); } catch (_) { pre = null; }
   if (pre && pre.action) return json(handleAdmin(pre));
+
+  if (!checkSubmissionRateLimit()) return json({ ok: false, error: "Massa sol·licituds. Espera un moment i torna-ho a provar." });
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -62,6 +168,9 @@ function doPost(e) {
     var entries = (payload.children && payload.children.length)
       ? payload.children
       : [{ data: payload.data || {}, weeks: payload.weeks || [], weekLabels: payload.weekLabels || [], files: payload.files || [] }];
+
+    var v = validatePayload(payload, entries);
+    if (!v.ok) return json({ ok: false, error: v.error });
 
     removeExistingSubmissionRows(form, shared);
 
@@ -671,12 +780,15 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function
    Sense admin_pin configurat, el panell queda bloquejat.
    ============================================================ */
 
-// Comprova el PIN d'administració (definit a Ajustes → admin_pin).
+// Comprova el PIN d'administració i gestiona el bloqueig per intents fallits.
 function adminAuth(pin) {
+  if (isAdminLocked()) return { ok: false, locked: true };
   var s = readSettings("");
   var real = str(s.admin_pin);
-  if (!real) return false;                 // cal configurar-lo per poder entrar
-  return str(pin) === real;
+  if (!real) return { ok: false, error: "no_pin" };
+  if (str(pin) === real) { clearAdminFailures(); return { ok: true }; }
+  recordAdminFailure();
+  return { ok: false, locked: isAdminLocked() };
 }
 
 // Llista de formularis per al selector del panell (sempre amb el per defecte).
@@ -694,11 +806,27 @@ function adminForms() {
 // Router de les accions d'administració.
 function handleAdmin(p) {
   try {
-    if (!adminAuth(p.pin)) return { ok: false, error: "unauthorized" };
+    // Login: autentica amb PIN i retorna un token de sessió UUID.
+    if (p.action === "admin_login") {
+      var auth = adminAuth(p.pin);
+      if (!auth.ok) return { ok: false, error: auth.locked ? "locked" : "unauthorized" };
+      var tok = createAdminToken();
+      var cfg = readSettings("");
+      return { ok: true, token: tok, forms: adminForms(), settings: { nombre_campus: str(cfg.nombre_campus), club: str(cfg.club), SCRIPT_URL: str(cfg.SCRIPT_URL) } };
+    }
+    // Logout: invalida el token immediatament.
+    if (p.action === "admin_logout") { revokeAdminToken(p.token); return { ok: true }; }
+
+    // Totes les altres accions requereixen un token vàlid (no el PIN).
+    if (!validateAdminToken(p.token)) return { ok: false, error: "unauthorized" };
+
     var form = str(p.form);
     if (!form) { var g = readSettings(""); form = str(g.form_defecto); }
     switch (p.action) {
-      case "admin_login":      return { ok: true, forms: adminForms(), settings: { nombre_campus: str(readSettings("").nombre_campus), club: str(readSettings("").club) } };
+      case "admin_session": {    // restaura la sessió sense enviar el PIN de nou
+        var sc = readSettings("");
+        return { ok: true, forms: adminForms(), settings: { nombre_campus: str(sc.nombre_campus), club: str(sc.club) } };
+      }
       case "admin_data": {       // overview + llista en una sola petició (cau compartida)
         var ov = adminOverview(form);
         var ls = adminList(form);

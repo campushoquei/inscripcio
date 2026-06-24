@@ -3,6 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- CSP: frame-ancestors no funciona via <meta> (cal capçalera HTTP); GitHub Pages no ho permet. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src  'self';
+    style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src    https://fonts.gstatic.com;
+    img-src     'self';
+    connect-src https://script.google.com;
+    form-action 'self';
+    base-uri    'self';
+    object-src  'none'
+  " />
   <title>Panell d'administració · Campus d'Hoquei Riudebitlles</title>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#0E2A63" />

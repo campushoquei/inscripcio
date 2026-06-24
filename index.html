@@ -3,6 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- CSP: frame-ancestors no funciona via <meta> (cal capçalera HTTP); GitHub Pages no ho permet. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src  'self';
+    style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src    https://fonts.gstatic.com;
+    img-src     'self' data:;
+    connect-src https://script.google.com;
+    form-action 'self';
+    base-uri    'self';
+    object-src  'none'
+  " />
   <title>Inscripcions · Campus d'Hoquei Riudebitlles</title>
   <meta name="description" content="Inscriu-te als campus i casals d'hoquei de Riudebitlles. Activitats durant tot l'any: tria les setmanes i formalitza la inscripció en pocs minuts." />
   <meta name="keywords" content="campus hoquei, hoquei Riudebitlles, casal d'hoquei, inscripcions hoquei, hoquei patins, campus esportiu nens, activitats hoquei Riudebitlles" />
