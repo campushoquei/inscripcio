@@ -566,15 +566,22 @@ function renderWizardStep(scrollTop, dir) {
   if (scrollTop) scrollToFormTop();
 }
 
-// Posiciona la vista al començament del formulari (just sota el topbar), deixant el
-// hero fora de pantalla perquè en canviar de pas la transició sigui més natural.
+// Posiciona la vista just després del hero, amagant-lo del tot darrere el topbar sticky
+// (sense deixar cap franja visible de la seva vora inferior).
 function scrollToFormTop() {
-  const anchor = els.form || els.sections;
-  if (!anchor) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
   const topbar = document.querySelector(".topbar");
   const tbH = topbar ? topbar.offsetHeight : 66;
-  const y = anchor.getBoundingClientRect().top + window.scrollY - tbH - 8;
-  window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+  const hero = document.getElementById("hero");
+  let y;
+  if (hero) {
+    // Scroll fins que la base del hero coincideixi amb la base del topbar → hero tapat del tot.
+    y = hero.getBoundingClientRect().bottom + window.scrollY - tbH;
+  } else {
+    const anchor = els.form || els.sections;
+    y = anchor ? anchor.getBoundingClientRect().top + window.scrollY - tbH : 0;
+  }
+  // Math.ceil evita deixar un píxel subpíxel del hero per sota del topbar.
+  window.scrollTo({ top: Math.max(0, Math.ceil(y)), behavior: "smooth" });
 }
 
 function renderWizardNav() {
