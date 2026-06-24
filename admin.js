@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw-U8tBXNGjESgeCG_7sY7BfUNQipRpXchBzI-VnFxY0Rmc3DD-06JhHT1tWPmDlgWXzQ/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxBmr_cLfJ1wgpYBSxaMLwhhJyr-UXTZPPGeXBJEHrml8834c9Z6T2GC7mm5mgHMBYl/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const EXP_KEY = "casal_admin_exp";      // caducitat de sessió (timestamp)
@@ -46,7 +46,8 @@ const state = {
   filters: { q: "", week: "", status: "", group: "", swim: "", from: "", to: "" },
   groups: DEFAULT_GROUPS.slice(),
   groupWeek: "",
-  selected: new Set()
+  selected: new Set(),
+  formScope: "all"   // "all" = tots els formularis · "active" = només habilitado=TRUE
 };
 
 const $ = (id) => document.getElementById(id);
@@ -64,6 +65,8 @@ function init() {
   $("logout-btn").addEventListener("click", logout);
   $("refresh-btn").addEventListener("click", () => loadAll(true));
   $("form-select").addEventListener("change", (e) => { state.form = e.target.value; state.selected.clear(); saveView(); loadAll(); });
+  document.querySelectorAll("#form-scope .form-scope__btn").forEach((b) =>
+    b.addEventListener("click", () => setFormScope(b.dataset.scope)));
   $("search").addEventListener("input", (e) => { state.filters.q = e.target.value.toLowerCase(); applyFilters(); });
   $("filter-week").addEventListener("change", (e) => { state.filters.week = e.target.value; applyFilters(); });
   $("filter-status").addEventListener("change", (e) => { state.filters.status = e.target.value; applyFilters(); });
@@ -94,16 +97,50 @@ function init() {
 
 // Desa/recupera la vista (formulari + filtres + ordre) perquè un refresc no la perdi.
 function saveView() {
-  try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ form: state.form, filters: state.filters, sort: state.sort })); } catch (_) {}
+  try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ form: state.form, formScope: state.formScope, filters: state.filters, sort: state.sort })); } catch (_) {}
 }
 function restoreView() {
   try {
     const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "null");
     if (!v) return;
+    if (v.formScope === "active" || v.formScope === "all") state.formScope = v.formScope;
     if (v.filters) state.filters = Object.assign({ q: "", week: "", status: "", group: "", swim: "", from: "", to: "" }, v.filters);
     if (v.sort && v.sort.key) state.sort = v.sort;
     if (v.form && state.forms.some((f) => f.id === v.form)) state.form = v.form;
   } catch (_) {}
+}
+
+// Formularis visibles al selector segons l'àmbit triat ("tots" o "només actius").
+// Un formulari és actiu si el camp "habilitado" no és FALSE (per defecte ho és).
+function visibleForms() {
+  if (state.formScope === "active") {
+    const act = state.forms.filter((f) => f.habilitado !== false);
+    return act.length ? act : state.forms;   // si no n'hi ha cap d'actiu, mostra'ls tots
+  }
+  return state.forms;
+}
+function renderFormScope() {
+  document.querySelectorAll("#form-scope .form-scope__btn").forEach((b) =>
+    b.classList.toggle("is-active", b.dataset.scope === state.formScope));
+}
+function setFormScope(scope) {
+  if (scope !== "all" && scope !== "active") return;
+  if (scope === state.formScope) return;
+  state.formScope = scope;
+  renderFormScope();
+  renderFormSelect();
+  saveView();
+  const vis = visibleForms();
+  // Si el formulari obert ja no és visible amb el nou àmbit, en triem el primer.
+  if (!vis.some((f) => f.id === state.form)) {
+    state.form = vis[0] ? vis[0].id : "";
+    $("form-select").value = state.form;
+    state.selected.clear();
+    saveView();
+    loadAll();
+  } else {
+    $("form-select").value = state.form;
+  }
 }
 
 // ---- API ----
@@ -161,9 +198,11 @@ async function enter() {
     catch (err) { return logout(); }
   }
   restoreView();
+  renderFormScope();
   renderFormSelect();
-  if (!state.form || !state.forms.some((f) => f.id === state.form)) {
-    state.form = state.forms[0] ? state.forms[0].id : "";
+  const vis = visibleForms();
+  if (!state.form || !vis.some((f) => f.id === state.form)) {
+    state.form = vis[0] ? vis[0].id : "";
   }
   $("form-select").value = state.form;
   syncFilterInputs();
@@ -192,7 +231,7 @@ function logout() {
 
 function renderFormSelect() {
   const sel = $("form-select");
-  sel.innerHTML = state.forms.map((f) => `<option value="${esc(f.id)}">${esc(f.nombre || f.id)}</option>`).join("");
+  sel.innerHTML = visibleForms().map((f) => `<option value="${esc(f.id)}">${esc(f.nombre || f.id)}</option>`).join("");
 }
 
 // ---- Càrrega de dades ----
@@ -1324,9 +1363,9 @@ function toast(msg, isError) {
    ============================================================ */
 // Llista de formularis del mode demo (el selector de dalt).
 const DEMO_FORMS = [
-  { id: "estiu", nombre: "Casal d'Estiu 2026" },
-  { id: "primavera", nombre: "Casal de Primavera 2027" },
-  { id: "hivern", nombre: "Casal de Nadal 2026" }
+  { id: "estiu", nombre: "Casal d'Estiu 2026", habilitado: true },
+  { id: "primavera", nombre: "Casal de Primavera 2027", habilitado: true },
+  { id: "hivern", nombre: "Casal de Nadal 2026", habilitado: false }
 ];
 
 // Cada formulari té el seu propi conjunt de dades (setmanes, nom i quantitat),

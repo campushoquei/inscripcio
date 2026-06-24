@@ -102,6 +102,10 @@ body.adm {
 .abar__title { font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .03em; font-size: 1rem; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .abar__sub { font-size: .74rem; color: var(--ink-soft); font-weight: 600; }
 .abar__tools { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+.form-scope { display: inline-flex; background: #fff; border: 1.5px solid var(--line); border-radius: 999px; padding: 2px; gap: 2px; flex: 0 0 auto; }
+.form-scope__btn { border: 0; background: transparent; color: var(--ink-soft); font-family: inherit; font-weight: 700; font-size: .82rem; padding: 6px 13px; border-radius: 999px; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.form-scope__btn:hover { color: var(--blue); }
+.form-scope__btn.is-active { background: var(--navy); color: #fff; }
 .select-wrap { position: relative; }
 .abar__select, .filters select {
   appearance: none; -webkit-appearance: none;
