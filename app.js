@@ -6,7 +6,7 @@
 
 // 🔧 Enganxa aquí la URL del teu Apps Script (acaba en /exec).
 // Buida = MODE DEMO amb dades d'exemple.
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPx4yj5A0QhqHqgyNGbq2aiH1_HpMTLonlaRo6OQqe9xylU96gi0am1U4K9y3BaqwFqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
 
 // 🔧 Quin formulari es mostra. Es llegeix de la URL: ...index.html?form=primavera
 // Buit = formulari per defecte (les files del full sense columna "form").
@@ -523,6 +523,14 @@ function refreshChildWeeks() {
   });
 }
 function weeksTitle() { return ((CONFIG && CONFIG.settings) || {}).setmanes_titulo || "Setmanes del casal"; }
+// Mostrar o no el comptador "X places disponibles" d'una setmana.
+// Es controla amb la columna "mostrar_plazas" del full Semanas: només s'amaga
+// si val FALSE/no/0/off. Buida o no definida → es mostra.
+function showPlacesLeft(w) {
+  const v = w && w.mostrar_plazas;
+  if (v == null || String(v).trim() === "") return true;
+  return !/^(false|no|0|off)$/i.test(String(v).trim());
+}
 function sectionEl(num, title, children) {
   const sec = document.createElement("section"); sec.className = "section";
   const head = document.createElement("div"); head.className = "section__head";
@@ -578,14 +586,28 @@ function fieldEl(f, scope) {
   wrap.appendChild(label);
 
   const choiceLike = ["radio", "checkbox", "file"].includes(f.tipo);
+  // Drets d'imatge: checkbox d'acceptació única, amb el mateix mecanisme que el
+  // consentiment de protecció de dades (el text d'ajuda fa de text de la casella).
+  const isAccept = f.id === "drets_imatge";
   // ajuda a sobre per a opcions/fitxers (text contextual abans del control)
-  if (f.ayuda && choiceLike) {
+  if (f.ayuda && choiceLike && !isAccept) {
     const help = document.createElement("p"); help.className = "field__help field__help--above";
     help.textContent = f.ayuda; wrap.appendChild(help);
   }
 
   let control;
   const opts = (f.opciones || "").split("|").map((o) => o.trim()).filter(Boolean);
+  if (isAccept) {
+    control = document.createElement("div");
+    control.className = "choices";
+    const c = document.createElement("label"); c.className = "check";
+    const input = document.createElement("input");
+    input.type = "checkbox"; input.name = nm; input.value = "Sí"; input.id = labId;
+    const box = document.createElement("span"); box.className = "check__box"; box.setAttribute("aria-hidden", "true");
+    const span = document.createElement("span"); span.className = "check__label";
+    span.textContent = f.ayuda || f.etiqueta;
+    c.append(input, box, span); control.appendChild(c);
+  } else
   switch (f.tipo) {
     case "file": control = fileControl(f, labId, scope); break;
     case "textarea": control = el("textarea", "textarea"); break;
@@ -614,7 +636,7 @@ function fieldEl(f, scope) {
       if (f.placeholder) control.placeholder = f.placeholder;
   }
   if (!control.id) control.id = labId;
-  control.dataset.field = f.id; control.dataset.type = f.tipo || "text";
+  control.dataset.field = f.id; control.dataset.type = isAccept ? "checkbox" : (f.tipo || "text");
   control.dataset.name = nm;
   if (scoped) control.dataset.scope = String(scope);
 
@@ -762,7 +784,7 @@ function childWeeksEl(i) {
     const input = document.createElement("input");
     input.type = "checkbox"; input.value = w.id; input.name = `c${i}__weeks`; input.disabled = full;
     input.addEventListener("change", () => { lab.classList.toggle("is-selected", input.checked); if (navigator.vibrate) navigator.vibrate(10); });
-    const placesMeta = (!full && w.plazas_restantes != null) ? ` · ${w.plazas_restantes} places disponibles` : "";
+    const placesMeta = (!full && w.plazas_restantes != null && showPlacesLeft(w)) ? ` · ${w.plazas_restantes} places disponibles` : "";
     const fullTag = full ? `<span class="week__tag">Complet</span>` : "";
     lab.innerHTML = `<span class="week__num">${idx + 1}</span>
       <span class="week__body"><span class="week__label">${escapeHtml(w.etiqueta)}</span>
@@ -798,6 +820,8 @@ function validateSingleField(wrap) {
     empty = !(fileStore[key] && fileStore[key].length);
   } else if (c.dataset.type === "checkbox" || c.dataset.type === "radio") {
     empty = !wrap.querySelector("input:checked");
+    // Drets d'imatge: casella d'acceptació obligatòria, com el consentiment de protecció de dades.
+    if (empty && c.dataset.field === "drets_imatge" && errEl) errEl.textContent = "Cal acceptar els drets d'imatge per continuar.";
   } else {
     const val = c.value.trim();
     empty = !val;
@@ -1388,6 +1412,16 @@ function updateProgress() {
   const label = document.getElementById("form-progress-label");
   if (!progressEl || !bar || !label || els.form.hidden) return;
 
+  // La línia inferior només es mostra quan la barra queda enganxada sota el topbar.
+  // rootMargin top = -alçada del topbar; quan està fixada, l'IntersectionRatio baixa de 1.
+  if (!progressEl.dataset.stickyWatch) {
+    progressEl.dataset.stickyWatch = "1";
+    new IntersectionObserver(
+      ([e]) => progressEl.classList.toggle("is-stuck", e.intersectionRatio < 1),
+      { threshold: [1], rootMargin: "-67px 0px 0px 0px" }
+    ).observe(progressEl);
+  }
+
   let total = 0, filled = 0;
 
   els.sections.querySelectorAll(".field[data-required='1']").forEach((wrap) => {
@@ -1417,7 +1451,7 @@ function updateProgress() {
   }
 
   const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
-  progressEl.hidden = false;
+  progressEl.hidden = filled === 0;
   bar.style.width = pct + "%";
   bar.setAttribute("role", "progressbar");
   bar.setAttribute("aria-valuenow", String(pct));

@@ -201,15 +201,16 @@ body.adm {
 .week-tab:hover { border-color: var(--blue); color: var(--blue); }
 .week-tab.is-active { background: var(--navy); border-color: var(--navy); color: #fff; }
 .groups-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.gcol { border: 1px solid var(--line); border-top: 3px solid var(--gc, var(--blue)); border-radius: var(--radius-sm); background: #fbfcfe; display: flex; flex-direction: column; min-height: 90px; }
+.gcol { border: 1px solid var(--line); border-top: 3px solid var(--gc, var(--blue)); border-radius: var(--radius-sm); background: #fbfcfe; display: flex; flex-direction: column; min-height: 90px; min-width: 0; }
 .gcol__head { display: flex; align-items: center; gap: 8px; padding: 11px 13px 6px; }
 .gcol__dot { width: 11px; height: 11px; border-radius: 50%; background: var(--gc); flex: 0 0 auto; }
 .gcol__name { font-weight: 800; color: var(--navy); font-size: .92rem; }
 .gcol__count { margin-left: auto; font-weight: 800; color: var(--gc); font-variant-numeric: tabular-nums; background: #fff; border: 1.5px solid var(--gc); border-radius: 999px; min-width: 26px; text-align: center; padding: 1px 7px; font-size: .82rem; }
-.gcol__range { font-size: .72rem; color: var(--ink-soft); padding: 0 13px 9px; border-bottom: 1px solid var(--line-soft); }
-.gcol__list { display: flex; flex-direction: column; gap: 6px; padding: 10px; flex: 1; }
+.gcol__range { font-size: .72rem; color: var(--ink-soft); padding: 0 13px 9px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gcol__med { font-size: .72rem; font-weight: 700; color: var(--warn); white-space: nowrap; }
+.gcol__list { display: flex; flex-direction: column; gap: 6px; padding: 10px; flex: 1; min-width: 0; }
 .gcol__empty { color: var(--ink-soft); font-size: .82rem; text-align: center; margin: 8px 0; opacity: .7; }
-.gchip { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .86rem; transition: border-color .15s ease, box-shadow .15s ease; }
+.gchip { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .86rem; min-width: 0; transition: border-color .15s ease, box-shadow .15s ease; }
 .gchip:hover { border-color: var(--gc); box-shadow: 0 2px 8px rgba(14,42,99,.08); }
 .gchip--manual { border-style: dashed; border-color: var(--gc); }
 .gchip__name { font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -256,7 +257,7 @@ body.adm {
 .dtable tr:last-child td { border-bottom: 0; }
 .dtable tbody tr { cursor: pointer; transition: background .12s ease; }
 .dtable tbody tr:hover { background: var(--blue-soft); }
-.dtable .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.dtable .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
 .cell-name { font-weight: 700; color: var(--navy); }
 .cell-sub { font-size: .78rem; color: var(--ink-soft); }
 .weeks-pills { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -321,6 +322,57 @@ span.estat { cursor: default; }
 .drawer__actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .drawer__price { background: var(--blue-soft); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
 .drawer__price b { font-family: "Anton", sans-serif; font-size: 1.5rem; color: var(--blue-deep); }
+
+/* ---------- Indicadors clau + comparativa ---------- */
+.groups-head-tools { display: flex; gap: 4px; flex-wrap: wrap; }
+.compare { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.compare__row { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: 12px; }
+.compare__name { font-weight: 700; color: var(--navy); font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compare__track { height: 12px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
+.compare__bar { height: 100%; width: 0; background: linear-gradient(90deg, #4F8EFF, var(--blue)); border-radius: 999px; transition: width .8s cubic-bezier(.2,.8,.2,1); }
+.compare__val { font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; font-size: .85rem; white-space: nowrap; }
+.compare__sub { font-size: .78rem; color: var(--ink-soft); font-weight: 600; }
+.compare__loading { color: var(--ink-soft); font-size: .85rem; font-weight: 600; }
+
+/* ---------- Filtres de data ---------- */
+.date-filter { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--ink-soft); font-weight: 600; }
+.date-filter input { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-family: inherit; font-size: .85rem; color: var(--navy); }
+.date-filter input:focus { outline: 0; border-color: var(--blue); }
+
+/* ---------- Barra d'accions en lot ---------- */
+.bulk-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 11px 20px; background: var(--navy); color: #fff; }
+.bulk-bar__count { font-weight: 800; font-size: .88rem; white-space: nowrap; }
+.bulk-bar__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.bulk-bar .btn--ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.28); }
+.bulk-bar .btn--ghost:hover { background: rgba(255,255,255,.22); border-color: #fff; color: #fff; }
+.bulk-bar .bulk-danger:hover { background: var(--danger); border-color: var(--danger); }
+
+/* ---------- Caselles de selecció a la taula ---------- */
+.sel-th, .sel-cell { width: 38px; text-align: center; padding-left: 14px; padding-right: 4px; cursor: default; }
+.sel-th { cursor: default; }
+.row-check, #check-all { width: 16px; height: 16px; accent-color: var(--blue); cursor: pointer; vertical-align: middle; }
+
+/* ---------- Editor de contacte (calaix) ---------- */
+.edit-form { display: flex; flex-direction: column; gap: 10px; background: var(--line-soft); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 22px; }
+.edit-form label { font-size: .78rem; font-weight: 700; color: var(--ink-soft); display: flex; flex-direction: column; gap: 5px; }
+.edit-form input { border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 11px; font-family: inherit; font-size: .9rem; color: var(--ink); }
+.edit-form input:focus { outline: 0; border-color: var(--blue); }
+.edit-form__actions { display: flex; gap: 8px; margin-top: 4px; }
+.btn--danger { background: var(--danger); color: #fff; }
+.btn--danger:hover { background: #a93226; }
+.drawer__actions .btn--danger-ghost { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+.drawer__actions .btn--danger-ghost:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* ---------- Confirm modal ---------- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(14,42,99,.45); backdrop-filter: blur(2px); z-index: 95; animation: fade .2s ease; }
+.confirm {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 96;
+  width: min(420px, 92vw); background: var(--card); border-radius: 18px; box-shadow: var(--shadow-lg);
+  padding: 26px 26px 22px; border: 1px solid var(--line); animation: pop .28s cubic-bezier(.2,.9,.3,1.2);
+}
+.confirm__title { font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .02em; font-size: 1.15rem; color: var(--navy); margin: 0 0 8px; }
+.confirm__msg { color: var(--ink-soft); font-size: .92rem; line-height: 1.55; margin: 0 0 20px; }
+.confirm__actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 /* ---------- Toast ---------- */
 .toast {

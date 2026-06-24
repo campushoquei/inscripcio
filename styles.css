@@ -1067,8 +1067,14 @@ body {
 
 /* ---- 1. Indicador de progrés ---- */
 .form-progress {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 22px;
+  display: flex; align-items: center; gap: 12px;
+  position: sticky; top: 66px; z-index: 20;
+  margin: -22px -20px 6px; padding: 11px 20px;
+  background: var(--paper);
+  border-bottom: 1px solid transparent;
 }
+.form-progress.is-stuck { border-bottom-color: var(--line-ink); }
+.form-progress[hidden] { display: none; }
 .form-progress__track {
   flex: 1; height: 6px; border-radius: 999px;
   background: var(--line-ink); overflow: hidden;

@@ -89,13 +89,25 @@
           <div class="card__head"><h2 class="card__title">Descomptes aplicats</h2></div>
           <div class="chips-stats" id="chart-discounts"></div>
         </div>
+
+        <div class="card card--span2">
+          <div class="card__head">
+            <h2 class="card__title">Indicadors clau</h2>
+            <button class="iconbtn iconbtn--text" id="compare-btn">Compara formularis…</button>
+          </div>
+          <div class="chips-stats" id="chart-insights"></div>
+          <div class="compare" id="compare-box" hidden></div>
+        </div>
       </section>
 
       <!-- Grups i vestidors -->
       <section class="card groups-section" id="groups-section">
         <div class="card__head">
           <h2 class="card__title">Grups i vestidors</h2>
-          <button class="iconbtn iconbtn--text" id="groups-config-btn">Edats dels grups…</button>
+          <div class="groups-head-tools">
+            <button class="iconbtn iconbtn--text" id="groups-print-btn">Imprimir llistes…</button>
+            <button class="iconbtn iconbtn--text" id="groups-config-btn">Edats dels grups…</button>
+          </div>
         </div>
         <div class="groups-config" id="groups-config" hidden></div>
         <div class="week-tabs" id="groups-week-tabs"></div>
@@ -123,9 +135,15 @@
               <option value="si">Sap nedar</option>
               <option value="no">No sap nedar</option>
             </select>
+            <label class="date-filter">Des de <input id="filter-from" type="date" aria-label="Data des de"></label>
+            <label class="date-filter">Fins <input id="filter-to" type="date" aria-label="Data fins"></label>
             <button class="btn btn--ghost btn--sm" id="clear-filters" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
               Esborra
+            </button>
+            <button class="btn btn--ghost btn--sm" id="emails-btn" title="Exporta els correus dels resultats">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m4 6 8 6 8-6"/></svg>
+              Emails
             </button>
             <button class="btn btn--ghost btn--sm" id="export-btn">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -133,11 +151,26 @@
             </button>
           </div>
         </div>
+
+        <!-- Barra d'accions en lot (apareix quan hi ha files seleccionades) -->
+        <div class="bulk-bar" id="bulk-bar" hidden>
+          <span class="bulk-bar__count" id="bulk-count">0 seleccionades</span>
+          <div class="bulk-bar__actions">
+            <button class="btn btn--ghost btn--sm" data-bulk="paid">Marca pagades</button>
+            <button class="btn btn--ghost btn--sm" data-bulk="pending">Marca pendents</button>
+            <button class="btn btn--ghost btn--sm" data-bulk="remind">Recordatori</button>
+            <button class="btn btn--ghost btn--sm" data-bulk="export">Exporta selecció</button>
+            <button class="btn btn--ghost btn--sm bulk-danger" data-bulk="cancel">Anul·la</button>
+            <button class="btn btn--ghost btn--sm" data-bulk="clear">Treu selecció</button>
+          </div>
+        </div>
+
         <div class="table-count" id="table-count" hidden></div>
         <div class="table-scroll">
           <table class="dtable" id="table">
             <thead>
               <tr>
+                <th class="sel-th"><input type="checkbox" id="check-all" aria-label="Selecciona tots els resultats"></th>
                 <th data-sort="ts">Data</th>
                 <th data-sort="nom">Jugador/a</th>
                 <th data-sort="tutor">Tutor/a</th>
@@ -164,6 +197,17 @@
     </div>
     <div class="drawer__body" id="drawer-body"></div>
   </aside>
+
+  <!-- ====== Confirm modal ====== -->
+  <div class="modal-backdrop" id="confirm-backdrop" hidden></div>
+  <div class="confirm" id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <h3 class="confirm__title" id="confirm-title">Confirmar</h3>
+    <p class="confirm__msg" id="confirm-msg"></p>
+    <div class="confirm__actions">
+      <button class="btn btn--ghost btn--sm" id="confirm-cancel" type="button">Cancel·la</button>
+      <button class="btn btn--primary btn--sm" id="confirm-ok" type="button">Confirma</button>
+    </div>
+  </div>
 
   <!-- Toast -->
   <div class="toast" id="toast" hidden></div>

@@ -8,9 +8,12 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPx4yj5A0QhqHqgyNGbq2aiH1_HpMTLonlaRo6OQqe9xylU96gi0am1U4K9y3BaqwFqg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNyjCaVv3J6qg--enkktrreZAmjHL00gJXa_6ym0wme1VJnkAC88gGJbaaukBccE5Tqg/exec";
 
 const PIN_KEY = "casal_admin_pin";
+const EXP_KEY = "casal_admin_exp";      // caducitat de sessió (timestamp)
+const VIEW_KEY = "casal_admin_view";    // formulari + filtres + ordre desats
+const SESSION_MS = 8 * 60 * 60 * 1000;  // la sessió caduca a les 8 h
 const DEMO_PIN = "1234";
 
 // Colors fixos dels grups (vestidors). Els intervals d'edat són configurables.
@@ -40,14 +43,16 @@ const state = {
   list: [],
   filtered: [],
   sort: { key: "ts", dir: "desc" },
-  filters: { q: "", week: "", status: "", group: "", swim: "" },
+  filters: { q: "", week: "", status: "", group: "", swim: "", from: "", to: "" },
   groups: DEFAULT_GROUPS.slice(),
-  groupWeek: ""
+  groupWeek: "",
+  selected: new Set()
 };
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const eur = (n) => `${Math.round(Number(n) || 0).toLocaleString("ca-ES")} €`;
+// Espai indivisible ( ) entre xifra i €: així el símbol no salta mai de línia.
+const eur = (n) => `${Math.round(Number(n) || 0).toLocaleString("ca-ES")} €`;
 // Normalitza per cercar: minúscules i sense accents (josé → jose).
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
 const norm = (s) => String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(DIACRITICS, "");
@@ -58,15 +63,23 @@ function init() {
   $("login-form").addEventListener("submit", onLogin);
   $("logout-btn").addEventListener("click", logout);
   $("refresh-btn").addEventListener("click", () => loadAll(true));
-  $("form-select").addEventListener("change", (e) => { state.form = e.target.value; loadAll(); });
+  $("form-select").addEventListener("change", (e) => { state.form = e.target.value; state.selected.clear(); saveView(); loadAll(); });
   $("search").addEventListener("input", (e) => { state.filters.q = e.target.value.toLowerCase(); applyFilters(); });
   $("filter-week").addEventListener("change", (e) => { state.filters.week = e.target.value; applyFilters(); });
   $("filter-status").addEventListener("change", (e) => { state.filters.status = e.target.value; applyFilters(); });
   $("filter-group").addEventListener("change", (e) => { state.filters.group = e.target.value; applyFilters(); });
   $("filter-swim").addEventListener("change", (e) => { state.filters.swim = e.target.value; applyFilters(); });
+  $("filter-from").addEventListener("change", (e) => { state.filters.from = e.target.value; applyFilters(); });
+  $("filter-to").addEventListener("change", (e) => { state.filters.to = e.target.value; applyFilters(); });
   $("clear-filters").addEventListener("click", clearFilters);
-  $("export-btn").addEventListener("click", exportCsv);
+  $("export-btn").addEventListener("click", () => exportCsv());
+  $("emails-btn").addEventListener("click", exportEmails);
   $("groups-config-btn").addEventListener("click", toggleGroupsConfig);
+  $("groups-print-btn").addEventListener("click", printRosters);
+  $("compare-btn").addEventListener("click", loadComparison);
+  $("check-all").addEventListener("change", (e) => toggleSelectAll(e.target.checked));
+  $("bulk-bar").querySelectorAll("[data-bulk]").forEach((b) =>
+    b.addEventListener("click", () => bulkAction(b.dataset.bulk)));
   $("drawer-close").addEventListener("click", closeDrawer);
   $("drawer-backdrop").addEventListener("click", closeDrawer);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
@@ -74,7 +87,23 @@ function init() {
     th.addEventListener("click", () => toggleSort(th.dataset.sort)));
 
   const saved = sessionStorage.getItem(PIN_KEY);
-  if (saved) { state.pin = saved; enter(); } else { $("pin").focus(); }
+  const exp = Number(sessionStorage.getItem(EXP_KEY) || 0);
+  if (saved && exp && Date.now() < exp) { state.pin = saved; enter(); }
+  else { sessionStorage.removeItem(PIN_KEY); sessionStorage.removeItem(EXP_KEY); $("pin").focus(); }
+}
+
+// Desa/recupera la vista (formulari + filtres + ordre) perquè un refresc no la perdi.
+function saveView() {
+  try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ form: state.form, filters: state.filters, sort: state.sort })); } catch (_) {}
+}
+function restoreView() {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "null");
+    if (!v) return;
+    if (v.filters) state.filters = Object.assign({ q: "", week: "", status: "", group: "", swim: "", from: "", to: "" }, v.filters);
+    if (v.sort && v.sort.key) state.sort = v.sort;
+    if (v.form && state.forms.some((f) => f.id === v.form)) state.form = v.form;
+  } catch (_) {}
 }
 
 // ---- API ----
@@ -105,6 +134,7 @@ async function onLogin(e) {
     // desplegat és l'antic (sense panell) i acceptaria qualsevol codi: ho bloquegem.
     if (!out.forms) throw new Error("not-deployed");
     sessionStorage.setItem(PIN_KEY, pin);
+    sessionStorage.setItem(EXP_KEY, String(Date.now() + SESSION_MS));
     state.forms = out.forms || [];
     if (out.settings && out.settings.nombre_campus) {
       document.querySelectorAll("[data-camp-name]").forEach((n) => (n.textContent = out.settings.nombre_campus));
@@ -130,14 +160,29 @@ async function enter() {
     try { const out = await api("admin_login"); state.forms = out.forms || []; if (out.settings) document.querySelectorAll("[data-camp-name]").forEach((n) => (n.textContent = out.settings.nombre_campus || n.textContent)); }
     catch (err) { return logout(); }
   }
+  restoreView();
   renderFormSelect();
-  state.form = state.forms[0] ? state.forms[0].id : "";
+  if (!state.form || !state.forms.some((f) => f.id === state.form)) {
+    state.form = state.forms[0] ? state.forms[0].id : "";
+  }
   $("form-select").value = state.form;
+  syncFilterInputs();
   loadAll();
+}
+
+// Posa els controls de filtre d'acord amb l'estat (en restaurar la vista o netejar).
+function syncFilterInputs() {
+  $("search").value = state.filters.q || "";
+  $("filter-status").value = state.filters.status || "";
+  $("filter-swim").value = state.filters.swim || "";
+  $("filter-from").value = state.filters.from || "";
+  $("filter-to").value = state.filters.to || "";
+  // week i group depenen de les dades carregades; es posen a renderWeekFilter/renderGroupFilter.
 }
 
 function logout() {
   sessionStorage.removeItem(PIN_KEY);
+  sessionStorage.removeItem(EXP_KEY);
   state.pin = "";
   $("app").hidden = true;
   $("login").hidden = false;
@@ -173,7 +218,12 @@ async function loadAll(spin) {
     }
     state.overview = ov;
     state.list = list;
+    state.filtered = list.slice();
+    // Treu de la selecció els ID que ja no existeixen (canvi de formulari/refresc).
+    const ids = new Set(list.map((r) => r.id));
+    state.selected.forEach((id) => { if (!ids.has(id)) state.selected.delete(id); });
     state.groups = orderGroups((ov.groups && ov.groups.length) ? ov.groups : DEFAULT_GROUPS);
+    const cbox = $("compare-box"); if (cbox) { cbox.hidden = true; cbox.innerHTML = ""; cbox.dataset.loaded = ""; }
     renderOverview();
     renderWeekFilter();
     renderGroupFilter();
@@ -210,6 +260,7 @@ function renderOverview() {
   renderPayments();
   renderAges();
   renderDiscounts();
+  renderInsights();
 }
 
 // animate=true → compte enrere des de 0 (càrrega inicial); false → valor directe
@@ -298,8 +349,17 @@ function renderOccupancy() {
 /* ============================================================
    RENDER — Inscripcions per dia (area chart SVG)
    ============================================================ */
+// Recompte d'inscripcions per dia a partir d'un conjunt de files (respecta els filtres).
+function computePerDay(rows) {
+  const m = {};
+  (rows || []).forEach((r) => { if (r.ts) m[r.ts] = (m[r.ts] || 0) + 1; });
+  return Object.keys(m).sort().map((k) => ({ date: k, count: m[k] }));
+}
+
 function renderTimeline() {
-  const data = (state.overview.perDay || []).slice();
+  // Es calcula sobre les files filtrades perquè el rang de dates i la resta de
+  // filtres es reflecteixin a la corba (no sobre l'agregat fix del servidor).
+  const data = computePerDay(state.filtered && state.filtered.length ? state.filtered : state.list);
   const box = $("chart-timeline");
   if (data.length < 2) {
     box.innerHTML = `<p class="card__hint" style="padding:20px 0">${data.length ? "Cal més d'un dia amb inscripcions per dibuixar la tendència." : "Encara no hi ha inscripcions."}</p>`;
@@ -456,15 +516,17 @@ function renderGroupsBoard() {
       const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
       const opts = groups.map((gg) => `<option value="${esc(gg.color)}"${gg.color === g.color ? " selected" : ""}>${esc(gg.label)}</option>`).join("");
       return `<div class="gchip${manual ? " gchip--manual" : ""}" title="${manual ? "Mogut manualment" : "Assignat per edat"}">
-        <span class="gchip__name">${esc(r.nom || "—")}</span>
+        <span class="gchip__name" title="${esc(r.nom || "")}">${esc(r.nom || "—")}</span>
         <span class="gchip__age">${r.edat !== "" ? r.edat + "a" : ""}</span>
         ${noSwim ? '<span class="gchip__noswim" title="No sap nedar">🚱</span>' : ""}
         <select class="gchip__move" data-move="${esc(r.id)}" aria-label="Mou de grup">${opts}</select>
       </div>`;
     }).join("");
+    const noSwimCount = list.filter((r) => r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim())).length;
+    const medBadge = noSwimCount ? `<span class="gcol__med" title="No saben nedar">🚱 ${noSwimCount}</span>` : "";
     return `<div class="gcol" style="--gc:${hex}">
       <div class="gcol__head"><span class="gcol__dot"></span><span class="gcol__name">${esc(g.label)}</span><span class="gcol__count">${list.length}</span></div>
-      <div class="gcol__range">${g.min}–${g.max} anys</div>
+      <div class="gcol__range"><span>${g.min}–${g.max} anys</span>${medBadge}</div>
       <div class="gcol__list">${chips || '<p class="gcol__empty">Cap nen/a</p>'}</div>
     </div>`;
   }).join("");
@@ -556,11 +618,13 @@ function rowHaystack(r) {
 }
 
 function applyFilters() {
-  const { q, week, status, group, swim } = state.filters;
+  const { q, week, status, group, swim, from, to } = state.filters;
   const nq = norm(q);
   state.filtered = state.list.filter((r) => {
     if (status && r.estat !== status) return false;
     if (week && !(r.weekIds || []).includes(week)) return false;
+    if (from && (!r.ts || r.ts < from)) return false;
+    if (to && (!r.ts || r.ts > to)) return false;
     if (group) {
       // Si hi ha setmana triada, mirem el grup d'aquella setmana; si no, qualsevol setmana.
       const match = week ? groupColorOf(r, week) === group : (r.weekIds || []).some((w) => groupColorOf(r, w) === group);
@@ -576,13 +640,15 @@ function applyFilters() {
   });
   sortRows();
   renderTable();
+  renderTimeline();
   updateFilterMeta();
+  saveView();
 }
 
 // Comptador de resultats + visibilitat del botó "Esborra filtres".
 function updateFilterMeta() {
   const f = state.filters;
-  const active = !!(f.q || f.week || f.status || f.group || f.swim);
+  const active = !!(f.q || f.week || f.status || f.group || f.swim || f.from || f.to);
   const countEl = $("table-count");
   if (countEl) {
     countEl.hidden = false;
@@ -595,12 +661,10 @@ function updateFilterMeta() {
 }
 
 function clearFilters() {
-  state.filters = { q: "", week: "", status: "", group: "", swim: "" };
-  $("search").value = "";
+  state.filters = { q: "", week: "", status: "", group: "", swim: "", from: "", to: "" };
   $("filter-week").value = "";
-  $("filter-status").value = "";
   $("filter-group").value = "";
-  $("filter-swim").value = "";
+  syncFilterInputs();
   applyFilters();
 }
 
@@ -609,6 +673,7 @@ function toggleSort(key) {
   else { state.sort.key = key; state.sort.dir = key === "ts" || key === "preu" ? "desc" : "asc"; }
   sortRows();
   renderTable();
+  saveView();
 }
 
 function sortRows() {
@@ -639,7 +704,12 @@ function renderTable() {
       const gl = GROUP_LABEL[color] || color;
       return `<span class="wpill${isPaid ? " wpill--paid" : ""}" style="--wc:${hex}" title="${esc(w)} · ${esc(gl)} · ${isPaid ? "Pagada" : "Pendent"}">${esc(w)}${isPaid ? ' <span class="wpill__chk">✓</span>' : ""}</span>`;
     }).join("");
+    const canRemind = r.estat !== "Pagat" && r.email;
+    const remindBtn = canRemind
+      ? `<button class="iconbtn" data-remind="${esc(r.id)}" title="Recordatori de pagament" aria-label="Recordatori de pagament"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>`
+      : "";
     return `<tr data-i="${i}">
+      <td class="sel-cell"><input type="checkbox" class="row-check" data-check="${esc(r.id)}"${state.selected.has(r.id) ? " checked" : ""} aria-label="Selecciona inscripció"></td>
       <td>${esc(fmtDate(r.ts))}</td>
       <td><div class="cell-name">${esc(r.nom || "—")}</div>${r.edat !== "" ? `<div class="cell-sub">${r.edat} anys</div>` : ""}</td>
       <td>${esc(r.tutor || "—")}<div class="cell-sub">${esc(r.email || "")}</div></td>
@@ -647,6 +717,7 @@ function renderTable() {
       <td class="num">${r.preu ? eur(r.preu) : "—"}</td>
       <td>${estatBadge(r, true)}</td>
       <td><div class="row-actions">
+        ${remindBtn}
         <button class="iconbtn" data-resend="${esc(r.id)}" title="Reenviar correu" aria-label="Reenviar correu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
       </div></td>
     </tr>`;
@@ -654,7 +725,8 @@ function renderTable() {
 
   tbody.querySelectorAll("tr").forEach((tr) => {
     tr.addEventListener("click", (e) => {
-      if (e.target.closest("[data-toggle]") || e.target.closest("[data-resend]")) return;
+      if (e.target.closest("[data-toggle]") || e.target.closest("[data-resend]") ||
+          e.target.closest("[data-remind]") || e.target.closest("[data-check]")) return;
       openDrawer(state.filtered[Number(tr.dataset.i)]);
     });
   });
@@ -662,6 +734,12 @@ function renderTable() {
     b.addEventListener("click", (e) => { e.stopPropagation(); toggleAllPaid(b.dataset.toggle); }));
   tbody.querySelectorAll("[data-resend]").forEach((b) =>
     b.addEventListener("click", (e) => { e.stopPropagation(); resend(b.dataset.resend); }));
+  tbody.querySelectorAll("[data-remind]").forEach((b) =>
+    b.addEventListener("click", (e) => { e.stopPropagation(); remind(b.dataset.remind); }));
+  tbody.querySelectorAll("[data-check]").forEach((c) =>
+    c.addEventListener("change", (e) => { e.stopPropagation(); toggleSelect(c.dataset.check, c.checked); }));
+
+  updateBulkBar();
 }
 
 // Etiqueta d'estat de pagament. clickable=true → botó que marca/desmarca totes les setmanes.
@@ -727,30 +805,215 @@ function toggleWeekPaid(id, weekId) {
 
 function recomputePayments() {
   const o = state.overview; if (!o) return;
-  let pagat = 0, parcial = 0, pendent = 0, cobrats = 0;
+  let pagat = 0, parcial = 0, pendent = 0, cobrats = 0, total = 0, ambPreu = 0;
+  const families = {}, enviaments = {};
   state.list.forEach((r) => {
     const reg = (r.weekIds || []).length;
     const paid = (r.paidWeeks || []).filter((w) => (r.weekIds || []).includes(w)).length;
     if (r.estat === "Pagat") pagat++;
     else if (r.estat === "Parcial") parcial++;
     else pendent++;
-    if (reg) cobrats += (Number(r.preu) || 0) * (paid / reg);
+    const preu = Number(r.preu) || 0;
+    total += preu;
+    if (preu > 0) ambPreu++;
+    if (reg) cobrats += preu * (paid / reg);
+    if (r.tutor) families[norm(r.tutor)] = true;
+    if (r.baseId) enviaments[r.baseId] = true;
   });
   o.payments = { Pagat: pagat, Parcial: parcial, Pendent: pendent };
+  // Recalculem també els totals: així es manté coherent en anul·lar inscripcions
+  // (en marcar pagaments els totals no canvien, però el càlcul és idempotent).
+  o.kpis.jugadors = state.list.length;
+  o.kpis.families = Object.keys(families).length;
+  o.kpis.enviaments = Object.keys(enviaments).length;
+  o.kpis.ingressos_total = Math.round(total);
+  o.kpis.preu_mitja = ambPreu ? Math.round(total / ambPreu) : 0;
   o.kpis.ingressos_cobrats = Math.round(cobrats);
-  o.kpis.ingressos_pendents = Math.round((o.kpis.ingressos_total || 0) - cobrats);
-  // Només actualitzem el que canvia en marcar pagaments: KPIs (sense reanimar) i el donut.
+  o.kpis.ingressos_pendents = Math.round(total - cobrats);
   renderKpis(false);
   renderPayments();
 }
 
+// Refresc complet després d'anul·lar inscripcions (totals, ocupació, grups, taula).
+function refreshAfterCancel() {
+  recomputePayments();
+  renderOccupancy();
+  renderInsights();
+  applyFilters();
+  renderGroups();
+}
+
 async function resend(id) {
-  if (!confirm("Reenviar el correu de confirmació d'aquesta inscripció?")) return;
+  const ok = await confirmModal({
+    title: "Segur que vols enviar el correu?",
+    message: "Es reenviarà el correu de confirmació d'aquesta inscripció.",
+    confirmLabel: "Reenvia"
+  });
+  if (!ok) return;
   try {
     const out = await api("admin_resend", { id });
     toast(out.to ? `Correu reenviat a ${out.to}.` : "Correu reenviat.");
   } catch (err) {
     toast("No s'ha pogut reenviar: " + err.message, true);
+  }
+}
+
+/* ============================================================
+   Confirm modal (pas de seguretat reutilitzable)
+   ============================================================ */
+function confirmModal({ title, message, confirmLabel = "Confirma", danger = false } = {}) {
+  return new Promise((resolve) => {
+    const bd = $("confirm-backdrop"), box = $("confirm");
+    const ok = $("confirm-ok"), cancel = $("confirm-cancel");
+    $("confirm-title").textContent = title || "Confirmar";
+    $("confirm-msg").textContent = message || "";
+    ok.textContent = confirmLabel;
+    ok.classList.toggle("btn--danger", !!danger);
+    ok.classList.toggle("btn--primary", !danger);
+    bd.hidden = false; box.hidden = false;
+    ok.focus();
+    function cleanup(val) {
+      bd.hidden = true; box.hidden = true;
+      ok.removeEventListener("click", onOk);
+      cancel.removeEventListener("click", onCancel);
+      bd.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey, true);
+      resolve(val);
+    }
+    const onOk = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    // Capturem la tecla per evitar que l'Escape global tanqui també el calaix.
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.stopPropagation(); cleanup(false); }
+      else if (e.key === "Enter") { e.stopPropagation(); cleanup(true); }
+    };
+    ok.addEventListener("click", onOk);
+    cancel.addEventListener("click", onCancel);
+    bd.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey, true);
+  });
+}
+
+/* ============================================================
+   Recordatoris de pagament (punt 1)
+   ============================================================ */
+// Envia un recordatori a una inscripció (id) o a un grup d'ids. Sempre demana
+// confirmació abans (pas de seguretat contra clics accidentals).
+async function remind(ids) {
+  const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
+  const targets = list.map((id) => state.list.find((r) => r.id === id)).filter(Boolean);
+  // Només té sentit recordar als qui deuen diners i tenen correu.
+  const pending = targets.filter((r) => r.estat !== "Pagat" && r.email);
+  if (!pending.length) return toast("Cap inscripció amb pagament pendent i correu.", true);
+
+  const msg = pending.length === 1
+    ? `S'enviarà un recordatori de pagament a ${pending[0].email}.`
+    : `S'enviarà un recordatori de pagament a ${pending.length} famílies amb pagament pendent.`;
+  const ok = await confirmModal({ title: "Segur que vols enviar el correu?", message: msg, confirmLabel: "Envia recordatori" });
+  if (!ok) return;
+
+  try {
+    const out = await api("admin_reminder", { ids: pending.map((r) => r.id) });
+    const n = (out && out.sent != null) ? out.sent : pending.length;
+    toast(`Recordatori enviat a ${n} ${n === 1 ? "família" : "famílies"}.`);
+  } catch (err) {
+    toast("No s'ha pogut enviar: " + err.message, true);
+  }
+}
+
+/* ============================================================
+   Selecció múltiple + accions en lot (punt 2)
+   ============================================================ */
+function toggleSelect(id, on) {
+  if (on) state.selected.add(id); else state.selected.delete(id);
+  updateBulkBar();
+}
+function toggleSelectAll(on) {
+  state.filtered.forEach((r) => { if (on) state.selected.add(r.id); else state.selected.delete(r.id); });
+  renderTable();
+}
+function updateBulkBar() {
+  const n = state.selected.size;
+  const bar = $("bulk-bar");
+  if (bar) {
+    bar.hidden = n === 0;
+    if (n) $("bulk-count").textContent = `${n} seleccionada${n > 1 ? "es" : ""}`;
+  }
+  const all = $("check-all");
+  if (all) {
+    const ids = state.filtered.map((r) => r.id);
+    const sel = ids.filter((id) => state.selected.has(id)).length;
+    all.checked = ids.length > 0 && sel === ids.length;
+    all.indeterminate = sel > 0 && sel < ids.length;
+  }
+}
+function selectedRows() {
+  return state.list.filter((r) => state.selected.has(r.id));
+}
+
+async function bulkAction(kind) {
+  const rows = selectedRows();
+  if (kind === "clear") { state.selected.clear(); renderTable(); return; }
+  if (!rows.length) return;
+
+  if (kind === "remind") return remind(rows.map((r) => r.id));
+  if (kind === "export") return exportCsv(rows);
+
+  if (kind === "paid" || kind === "pending") {
+    const setPaid = kind === "paid";
+    const ok = await confirmModal({
+      title: setPaid ? "Marcar com a pagades?" : "Marcar com a pendents?",
+      message: `S'aplicarà a ${rows.length} inscripci${rows.length > 1 ? "ons" : "ó"} (totes les setmanes).`,
+      confirmLabel: setPaid ? "Marca pagades" : "Marca pendents"
+    });
+    if (!ok) return;
+    for (const r of rows) await setPayment(r.id, setPaid ? (r.weekIds || []).slice() : []);
+    toast(`${rows.length} inscripcions actualitzades.`);
+    return;
+  }
+
+  if (kind === "cancel") {
+    const ok = await confirmModal({
+      title: "Anul·lar inscripcions?",
+      message: `S'arxivaran ${rows.length} inscripci${rows.length > 1 ? "ons" : "ó"} i deixaran de comptar. Aquesta acció no es pot desfer des del panell.`,
+      confirmLabel: "Anul·la", danger: true
+    });
+    if (!ok) return;
+    for (const r of rows) await cancelRegistration(r.id, true);
+    state.selected.clear();
+    refreshAfterCancel();
+    toast(`${rows.length} inscripcions anul·lades.`);
+    return;
+  }
+}
+
+/* ============================================================
+   Edició / anul·lació d'una inscripció (punt 2)
+   ============================================================ */
+async function cancelRegistration(id, silent) {
+  const idx = state.list.findIndex((r) => r.id === id);
+  if (idx < 0) return;
+  if (!silent) {
+    const ok = await confirmModal({
+      title: "Anul·lar aquesta inscripció?",
+      message: "S'arxivarà i deixarà de comptar als totals. Aquesta acció no es pot desfer des del panell.",
+      confirmLabel: "Anul·la", danger: true
+    });
+    if (!ok) return;
+  }
+  const removed = state.list.splice(idx, 1)[0];
+  state.selected.delete(id);
+  try {
+    await api("admin_cancel", { id });
+    if (!silent) {
+      closeDrawer();
+      refreshAfterCancel();
+      toast("Inscripció anul·lada.");
+    }
+  } catch (err) {
+    state.list.splice(idx, 0, removed);  // revert
+    if (!silent) { applyFilters(); toast("No s'ha pogut anul·lar: " + err.message, true); }
+    else throw err;
   }
 }
 
@@ -816,9 +1079,14 @@ function openDrawer(r) {
       ).join("") + `</div>`;
   });
 
+  const canRemind = r.estat !== "Pagat" && r.email;
   html += `<div class="drawer__actions">
     <button class="btn btn--ghost btn--sm" id="dw-resend">Reenviar correu</button>
-  </div>`;
+    ${canRemind ? `<button class="btn btn--ghost btn--sm" id="dw-remind">Recordatori de pagament</button>` : ""}
+    <button class="btn btn--ghost btn--sm" id="dw-edit">Edita contacte</button>
+    <button class="btn btn--ghost btn--sm btn--danger-ghost" id="dw-cancel">Anul·la inscripció</button>
+  </div>
+  <div id="dw-edit-box"></div>`;
 
   $("drawer-body").innerHTML = html;
   const payAll = $("drawer-body").querySelector("[data-payall]");
@@ -826,6 +1094,9 @@ function openDrawer(r) {
   $("drawer-body").querySelectorAll("[data-payweek]").forEach((b) =>
     b.addEventListener("click", () => toggleWeekPaid(r.id, b.dataset.payweek)));
   $("dw-resend").addEventListener("click", () => resend(r.id));
+  if (canRemind) $("dw-remind").addEventListener("click", () => remind(r.id));
+  $("dw-edit").addEventListener("click", () => openEditContact(r));
+  $("dw-cancel").addEventListener("click", () => cancelRegistration(r.id));
 
   $("drawer-backdrop").hidden = false;
   $("drawer").hidden = false;
@@ -836,11 +1107,57 @@ function closeDrawer() {
   $("drawer-backdrop").hidden = true;
 }
 
+// Editor en línia de les dades de contacte (corregir typos de correu/telèfon).
+function openEditContact(r) {
+  const box = $("dw-edit-box");
+  if (!box) return;
+  if (box.dataset.open === "1") { box.innerHTML = ""; box.dataset.open = "0"; return; }
+  box.dataset.open = "1";
+  box.innerHTML = `<form class="edit-form" id="edit-form">
+    <label>Correu electrònic
+      <input type="email" id="edit-email" value="${esc(r.email || "")}" placeholder="correu@exemple.cat">
+    </label>
+    <label>Telèfon
+      <input type="text" id="edit-telefon" value="${esc(r.telefon || "")}" placeholder="6XX XXX XXX">
+    </label>
+    <div class="edit-form__actions">
+      <button type="submit" class="btn btn--primary btn--sm">Desa</button>
+      <button type="button" class="btn btn--ghost btn--sm" id="edit-cancel">Cancel·la</button>
+    </div>
+  </form>`;
+  $("edit-cancel").addEventListener("click", () => { box.innerHTML = ""; box.dataset.open = "0"; });
+  $("edit-form").addEventListener("submit", (e) => { e.preventDefault(); saveContact(r.id); });
+  $("edit-email").focus();
+}
+
+async function saveContact(id) {
+  const row = state.list.find((r) => r.id === id);
+  if (!row) return;
+  const email = $("edit-email").value.trim();
+  const telefon = $("edit-telefon").value.trim();
+  const patch = {};
+  if (email !== (row.email || "")) patch.email = email;
+  if (telefon !== (row.telefon || "")) patch.telefon = telefon;
+  if (!Object.keys(patch).length) { toast("No hi ha canvis."); return; }
+  const prev = { email: row.email, telefon: row.telefon };
+  Object.assign(row, patch);          // optimista
+  openDrawer(row);
+  applyFilters();
+  try {
+    await api("admin_update", { id, patch });
+    toast("Dades de contacte desades.");
+  } catch (err) {
+    Object.assign(row, prev);
+    applyFilters();
+    toast("No s'ha pogut desar: " + err.message, true);
+  }
+}
+
 /* ============================================================
    Export CSV
    ============================================================ */
-function exportCsv() {
-  const rows = state.filtered;
+function exportCsv(rowsArg) {
+  const rows = rowsArg || state.filtered;
   if (!rows.length) return toast("No hi ha res per exportar.", true);
   const cols = ["ID", "Data", "Jugador/a", "Edat", "Tutor/a", "Email", "Telèfon", "Setmanes", "Grup", "Preu", "Descompte", "Estat"];
   const lines = [cols.join(";")];
@@ -848,13 +1165,25 @@ function exportCsv() {
     const vals = [r.id, fmtDate(r.ts), r.nom, r.edat, r.tutor, r.email, r.telefon, r.setmanes, csvGroups(r), r.preu, r.descompte, r.estat];
     lines.push(vals.map(csvCell).join(";"));
   });
-  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  downloadBlob("﻿" + lines.join("\r\n"), `inscripcions_${state.form || "campus"}_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv;charset=utf-8");
+  toast(`${rows.length} files exportades.`);
+}
+
+// Exporta la llista de correus únics dels resultats filtrats (per a comunicacions).
+function exportEmails() {
+  const emails = [...new Set(state.filtered.map((r) => r.email).filter(Boolean))];
+  if (!emails.length) return toast("Cap correu als resultats.", true);
+  downloadBlob(emails.join("\n"), `emails_${state.form || "campus"}_${new Date().toISOString().slice(0, 10)}.txt`, "text/plain;charset=utf-8");
+  toast(`${emails.length} correus exportats.`);
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `inscripcions_${state.form || "campus"}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.href = url; a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-  toast(`${rows.length} files exportades.`);
 }
 function csvCell(v) {
   const s = String(v == null ? "" : v);
@@ -867,6 +1196,113 @@ function csvGroups(r) {
   const uniq = [...new Set(cols)];
   if (uniq.length === 1) return GROUP_LABEL[uniq[0]] || uniq[0];
   return r.weekIds.map((w) => `${w}:${GROUP_LABEL[groupColorOf(r, w)] || groupColorOf(r, w)}`).join(" ");
+}
+
+/* ============================================================
+   Llistes de vestidor imprimibles (punt 3)
+   ============================================================ */
+function printRosters() {
+  const weeks = (state.overview && state.overview.weeks) || [];
+  if (!weeks.length) return toast("Sense setmanes per imprimir.", true);
+  const groups = state.groups || DEFAULT_GROUPS;
+  const camp = (document.querySelector("[data-camp-name]") || {}).textContent || "Campus";
+  const formName = (state.forms.find((f) => f.id === state.form) || {}).nombre || state.form || "";
+
+  const sectionFor = (w) => {
+    const kids = state.list.filter((r) => (r.weekIds || []).includes(w.id));
+    const byColor = {}; groups.forEach((g) => (byColor[g.color] = []));
+    kids.forEach((r) => { const c = groupColorOf(r, w.id); (byColor[c] = byColor[c] || []).push(r); });
+    const cols = groups.map((g) => {
+      const ll = (byColor[g.color] || []).slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
+      const items = ll.map((r) => {
+        const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
+        return `<li>${esc(r.nom || "—")} <span class="age">${r.edat !== "" ? r.edat + "a" : ""}</span>${noSwim ? ' <span class="ns">no sap nedar</span>' : ""}</li>`;
+      }).join("");
+      return `<div class="g"><h3 style="border-color:${GROUP_HEX[g.color] || "#888"}">${esc(g.label)} <span>(${ll.length})</span></h3><ol>${items || '<li class="empty">—</li>'}</ol></div>`;
+    }).join("");
+    return `<section><h2>${esc(w.etiqueta || w.id)} <small>${esc(w.fechas || "")}</small></h2><div class="cols">${cols}</div></section>`;
+  };
+
+  const body = weeks.map(sectionFor).join("");
+  const css = `body{font-family:Arial,Helvetica,sans-serif;color:#16233D;margin:24px;}
+    h1{font-size:20px;margin:0 0 2px;} .sub{color:#5A6B86;font-size:13px;margin:0 0 18px;}
+    section{margin-bottom:26px;page-break-inside:avoid;} h2{font-size:16px;border-bottom:2px solid #0E2A63;padding-bottom:5px;}
+    h2 small{font-weight:normal;color:#5A6B86;font-size:13px;}
+    .cols{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;}
+    .g{flex:1;min-width:150px;} .g h3{font-size:13px;border-left:5px solid;padding-left:8px;margin:0 0 6px;}
+    .g h3 span{color:#5A6B86;font-weight:normal;} ol{margin:0;padding-left:20px;font-size:13px;line-height:1.7;}
+    .age{color:#5A6B86;font-size:11px;} .ns{color:#C0392B;font-size:11px;font-weight:bold;}
+    li.empty{list-style:none;color:#9aa;margin-left:-18px;}
+    @media print{button{display:none;}}`;
+  const win = window.open("", "_blank");
+  if (!win) return toast("Permet les finestres emergents per imprimir.", true);
+  win.document.write(`<!DOCTYPE html><html lang="ca"><head><meta charset="utf-8"><title>Llistes de vestidor</title><style>${css}</style></head>
+    <body><h1>${esc(camp)} — Llistes de vestidor</h1><p class="sub">${esc(formName)} · generat ${new Date().toLocaleDateString("ca-ES")}</p>
+    <button onclick="window.print()" style="margin-bottom:16px;padding:8px 16px;cursor:pointer">Imprimir</button>
+    ${body}</body></html>`);
+  win.document.close();
+}
+
+/* ============================================================
+   Indicadors clau + comparativa entre formularis (punt 4)
+   ============================================================ */
+function renderInsights() {
+  const box = $("chart-insights");
+  if (!box) return;
+  const list = state.list || [];
+  const weeks = (state.overview && state.overview.weeks) || [];
+  // Ompliment global: places ocupades (segons inscrits per setmana) sobre places totals.
+  let cap = 0, occ = 0;
+  weeks.forEach((w) => {
+    const inscrits = list.filter((r) => (r.weekIds || []).includes(w.id)).length;
+    occ += inscrits;
+    if (w.plazas != null) cap += w.plazas;
+  });
+  const fill = cap > 0 ? Math.round((occ / cap) * 100) : null;
+  const totalWeeks = list.reduce((s, r) => s + (r.weekIds || []).length, 0);
+  const avgWeeks = list.length ? (totalWeeks / list.length) : 0;
+  const ages = list.map((r) => Number(r.edat)).filter((a) => !isNaN(a));
+  const avgAge = ages.length ? (ages.reduce((s, a) => s + a, 0) / ages.length) : 0;
+
+  const items = [
+    { val: fill != null ? fill + "%" : "—", lbl: "Ompliment global" + (cap ? ` (${occ}/${cap})` : "") },
+    { val: avgWeeks ? avgWeeks.toFixed(1) : "—", lbl: "Setmanes per nen/a (mitjana)" },
+    { val: avgAge ? avgAge.toFixed(1) : "—", lbl: "Edat mitjana" },
+    { val: occ, lbl: "Places ocupades (total)" }
+  ];
+  box.innerHTML = items.map((i) =>
+    `<div class="stat-chip"><span class="stat-chip__val">${esc(String(i.val))}</span><span class="stat-chip__lbl">${esc(i.lbl)}</span></div>`
+  ).join("");
+}
+
+// Compara jugadors i ingressos entre tots els formularis (càrrega sota demanda).
+async function loadComparison() {
+  const box = $("compare-box");
+  if (!box) return;
+  if (!box.hidden && box.dataset.loaded === "1") { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<p class="compare__loading">Carregant comparativa…</p>`;
+  try {
+    const results = await Promise.all(state.forms.map(async (f) => {
+      try {
+        const out = await api("admin_data", { form: f.id });
+        const k = (out.overview && out.overview.kpis) || {};
+        return { id: f.id, nombre: f.nombre || f.id, jugadors: k.jugadors || 0, ingressos: k.ingressos_total || 0 };
+      } catch (_) { return { id: f.id, nombre: f.nombre || f.id, jugadors: 0, ingressos: 0 }; }
+    }));
+    const maxJ = Math.max(1, ...results.map((r) => r.jugadors));
+    const rows = results.map((r) => `
+      <div class="compare__row">
+        <span class="compare__name">${esc(r.nombre)}</span>
+        <span class="compare__track"><span class="compare__bar" data-w="${Math.round((r.jugadors / maxJ) * 100)}"></span></span>
+        <span class="compare__val">${r.jugadors} <span class="compare__sub">· ${eur(r.ingressos)}</span></span>
+      </div>`).join("");
+    box.innerHTML = rows;
+    box.dataset.loaded = "1";
+    requestAnimationFrame(() => box.querySelectorAll(".compare__bar").forEach((b) => (b.style.width = b.dataset.w + "%")));
+  } catch (err) {
+    box.innerHTML = `<p class="compare__loading">No s'ha pogut carregar: ${esc(err.message)}</p>`;
+  }
 }
 
 /* ============================================================
@@ -1013,7 +1449,7 @@ async function demoApi(action, extra) {
     if (state.pin !== DEMO_PIN) throw new Error("unauthorized");
     return { ok: true, forms: DEMO_FORMS, settings: { nombre_campus: "Campus d'Hoquei Riudebitlles", club: "El plaer de jugar!" } };
   }
-  const d = demoData(state.form);
+  const d = demoData((extra && extra.form) || state.form);
   if (action === "admin_data") {
     return { ok: true, overview: demoOverview(d), list: d.rows.slice().reverse() };
   }
@@ -1051,6 +1487,27 @@ async function demoApi(action, extra) {
   if (action === "admin_resend") {
     const r = d.rows.find((x) => x.id === extra.id);
     return { ok: true, id: extra.id, to: r ? r.email : "" };
+  }
+  if (action === "admin_reminder") {
+    const ids = extra.ids || (extra.id ? [extra.id] : []);
+    let sent = 0;
+    ids.forEach((id) => { const r = d.rows.find((x) => x.id === id); if (r && r.email && r.estat !== "Pagat") sent++; });
+    return { ok: true, sent };
+  }
+  if (action === "admin_update") {
+    const r = d.rows.find((x) => x.id === extra.id);
+    if (r) {
+      const p = extra.patch || {};
+      if (p.email != null) r.email = p.email;
+      if (p.telefon != null) r.telefon = p.telefon;
+      return { ok: true, id: extra.id, updated: p };
+    }
+    return { ok: false, error: "row not found" };
+  }
+  if (action === "admin_cancel") {
+    const i = d.rows.findIndex((x) => x.id === extra.id);
+    if (i >= 0) { d.rows.splice(i, 1); return { ok: true, id: extra.id }; }
+    return { ok: false, error: "row not found" };
   }
   throw new Error("unknown action");
 }

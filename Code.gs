@@ -7,7 +7,7 @@
 
    Pestanyes (vegeu SETUP.md):
      · Ajustes        (Clave | Valor)
-     · Semanas        (id | etiqueta | fechas | precio | plazas)   [campus opcional]
+     · Semanas        (id | etiqueta | fechas | precio | plazas | mostrar_plazas)   [campus opcional]
      · Campos         (id | etiqueta | tipo | opciones | obligatorio | placeholder | ayuda | grupo | orden)
      · Inscripciones  (automàtica: hi escriu 1 columna per setmana + edat)
      · Campus         (opcional, per a més endavant)
@@ -175,6 +175,7 @@ function readWeeks(form) {
     var p1 = num(r.precio), p2 = num(r.precio_dto), p1r = num(r.precio_rdb), p2r = num(r.precio_rdb_dto);
     var w = {
       id: String(r.id).trim(), campus: str(r.campus), etiqueta: str(r.etiqueta), fechas: str(r.fechas),
+      mostrar_plazas: str(r.mostrar_plazas),
       precio: str(r.precio),
       p1: p1,
       p2: p2 != null ? p2 : p1,
@@ -456,7 +457,7 @@ function sendConfirmation(settings, payload, rows) {
   });
   var sharedBlock = sharedRows
     ? "<div style='margin:0 0 26px'>" +
-        "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#1F5AE0;font-weight:700;padding-bottom:8px;border-bottom:2px solid #EEF3FB;margin-bottom:12px'>Dades del tutor/a</div>" +
+        "<div class='em-section' style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#1F5AE0;font-weight:700;padding-bottom:8px;border-bottom:2px solid #EEF3FB;margin-bottom:12px'>Dades del tutor/a</div>" +
         "<table style='border-collapse:collapse;width:100%;table-layout:fixed;font-size:14px'>" + sharedRows + "</table>" +
       "</div>"
     : "";
@@ -491,8 +492,8 @@ function sendConfirmation(settings, payload, rows) {
       }).join("");
     }
     var weeksBlock = weekPills
-      ? "<div style='margin-top:14px;padding-top:13px;border-top:1px solid #EEF3FB'>" +
-          "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes</div>" +
+      ? "<div class='em-divider' style='margin-top:14px;padding-top:13px;border-top:1px solid #EEF3FB'>" +
+          "<div class='em-eyebrow' style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes</div>" +
           "<div>" + weekPills + "</div>" +
         "</div>"
       : "";
@@ -503,28 +504,28 @@ function sendConfirmation(settings, payload, rows) {
     var descompte = childEntry.descompte && childEntry.descompte !== "-" ? childEntry.descompte : "";
     if (preu != null && preu > 0) {
       preuBlock =
-        "<div style='background:#EEF3FB;border-left:4px solid #1F5AE0;border-radius:9px;padding:14px 16px;margin-top:16px'>" +
+        "<div class='em-soft' style='background:#EEF3FB;border-left:4px solid #1F5AE0;border-radius:9px;padding:14px 16px;margin-top:16px'>" +
           "<table style='border-collapse:collapse;width:100%'><tr>" +
-            "<td style='font-weight:700;color:#0E2A63;font-size:14px;vertical-align:middle'>Preu</td>" +
-            "<td style='text-align:right;font-size:22px;font-weight:800;color:#1F5AE0;vertical-align:middle'>" + preu + " €</td>" +
+            "<td class='em-price-label' style='font-weight:700;color:#0E2A63;font-size:14px;vertical-align:middle'>Preu</td>" +
+            "<td class='em-price-val' style='text-align:right;font-size:22px;font-weight:800;color:#1F5AE0;vertical-align:middle'>" + preu +" €</td>" +
           "</tr>" +
-          (descompte ? "<tr><td colspan='2' style='font-size:11px;color:#6B7C99;padding-top:5px'>Descomptes aplicats: " + esc(descompte) + "</td></tr>" : "") +
+          (descompte ? "<tr><td colspan='2' class='em-label' style='font-size:11px;color:#6B7C99;padding-top:5px'>Descomptes aplicats: " + esc(descompte) + "</td></tr>" : "") +
           "</table>" +
         "</div>";
     }
 
     // Fitxers
     var filesNote = (r.savedFiles && r.savedFiles.length)
-      ? "<p style='margin:12px 0 0;font-size:13px;color:#6B7C99'>📎 " + r.savedFiles.length + " document(s) rebut(s)</p>"
+      ? "<p class='em-muted' style='margin:12px 0 0;font-size:13px;color:#6B7C99'>📎 " + r.savedFiles.length + " document(s) rebut(s)</p>"
       : "";
 
     var blockTitle = multi
       ? ("Jugador/a " + (idx + 1) + (childName ? " · " + childName : ""))
       : (childName || "Jugador/a");
 
-    return "<div style='border:1.5px solid #D6DEEC;border-radius:11px;overflow:hidden;margin-bottom:14px'>" +
-             "<div style='background:#EEF3FB;background:linear-gradient(135deg,#EEF3FB 0%,#E2ECFB 100%);padding:13px 16px;border-bottom:1px solid #D6DEEC'>" +
-               "<span style='font-size:15px;font-weight:800;color:#0E2A63'>🏑 " + esc(blockTitle) + "</span>" +
+    return "<div class='em-cardborder' style='border:1.5px solid #D6DEEC;border-radius:11px;overflow:hidden;margin-bottom:14px'>" +
+             "<div class='em-chip' style='background:#EEF3FB;background:linear-gradient(135deg,#EEF3FB 0%,#E2ECFB 100%);padding:13px 16px;border-bottom:1px solid #D6DEEC'>" +
+               "<span class='em-chip-text' style='font-size:15px;font-weight:800;color:#0E2A63'>🏑 " + esc(blockTitle) + "</span>" +
              "</div>" +
              "<div style='padding:16px 16px 18px'>" +
                (childRows ? "<table style='border-collapse:collapse;width:100%;table-layout:fixed;font-size:14px'>" + childRows + "</table>" : "") +
@@ -537,8 +538,40 @@ function sendConfirmation(settings, payload, rows) {
 
   var badge = "✓ Rebuda correctament" + (multi ? " &nbsp;·&nbsp; " + rows.length + " jugadors/es" : "");
 
+  // Estils de mode fosc: els clients mòbils (Gmail app, Apple Mail) enfosqueixen
+  // els fons clars però sovint deixen el text fosc → text invisible. Declarem
+  // color-scheme i sobreescrivim els colors inline amb classes + !important.
+  var darkStyles =
+    "<style>" +
+      ":root{color-scheme:light dark;supported-color-schemes:light dark;}" +
+      "@media (prefers-color-scheme:dark){" +
+        ".em-body{background:#0b1220!important;color:#dfe7f5!important;}" +
+        ".em-card{background:#111b30!important;border-color:#27344f!important;}" +
+        ".em-cardborder{border-color:#27344f!important;}" +
+        ".em-muted{color:#aab9d6!important;}" +
+        ".em-label{color:#92a3c4!important;}" +
+        ".em-val{color:#e8eefb!important;}" +
+        ".em-chip{background:#1a2742!important;border-color:#27344f!important;}" +
+        ".em-chip-text{color:#cfe0ff!important;}" +
+        ".em-soft{background:#16223c!important;}" +
+        ".em-price-label{color:#cfe0ff!important;}" +
+        ".em-price-val{color:#7aa4ff!important;}" +
+        ".em-divider{border-color:#27344f!important;}" +
+        ".em-section{color:#7aa4ff!important;border-color:#27344f!important;}" +
+        ".em-eyebrow{color:#9dc0ff!important;}" +
+      "}" +
+    "</style>";
+
   var html =
-    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#f0f4fb;padding:20px 10px;color:#16233D'>" +
+    "<!DOCTYPE html><html lang='ca'><head>" +
+      "<meta charset='utf-8'>" +
+      "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
+      "<meta name='color-scheme' content='light dark'>" +
+      "<meta name='supported-color-schemes' content='light dark'>" +
+      darkStyles +
+    "</head><body style='margin:0;padding:0'>" +
+
+    "<div class='em-body' style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#f0f4fb;padding:20px 10px;color:#16233D'>" +
 
       // Capçalera
       "<div style='background:#0E2A63;background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:14px 14px 0 0;padding:30px 28px;border-top:4px solid #1F5AE0'>" +
@@ -548,13 +581,14 @@ function sendConfirmation(settings, payload, rows) {
       "</div>" +
 
       // Cos
-      "<div style='background:#fff;border:1px solid #D6DEEC;border-top:none;border-radius:0 0 14px 14px;padding:28px 28px 24px'>" +
-        "<p style='margin:0 0 24px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
+      "<div class='em-card' style='background:#fff;border:1px solid #D6DEEC;border-top:none;border-radius:0 0 14px 14px;padding:28px 28px 24px'>" +
+        "<p class='em-muted' style='margin:0 0 24px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
         sharedBlock +
         childrenBlocks +
       "</div>" +
 
-    "</div>";
+    "</div>" +
+    "</body></html>";
 
   MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: camp, replyTo: settings.email_contacto || undefined });
 }
@@ -572,8 +606,8 @@ function childGroupForForm(form) {
 }
 function emailRow(k, v) {
   return "<tr>" +
-    "<td style='width:40%;padding:7px 16px 7px 0;color:#6B7C99;vertical-align:top;font-size:14px;word-break:break-word'>" + esc(k) + "</td>" +
-    "<td style='width:60%;padding:7px 0;font-weight:600;color:#16233D;font-size:14px;word-break:break-word'>" + esc(fmtDate(v)) + "</td>" +
+    "<td class='em-label' style='width:40%;padding:7px 16px 7px 0;color:#6B7C99;vertical-align:top;font-size:14px;word-break:break-word'>" + esc(k) + "</td>" +
+    "<td class='em-val' style='width:60%;padding:7px 0;font-weight:600;color:#16233D;font-size:14px;word-break:break-word'>" + esc(fmtDate(v)) + "</td>" +
   "</tr>";
 }
 // Converteix dates en format ISO (YYYY-MM-DD) a DD/MM/YYYY. Deixa la resta de valors intactes.
@@ -677,6 +711,9 @@ function handleAdmin(p) {
       case "admin_set_group":   return adminSetGroup(form, p.id, p.week, p.color);
       case "admin_set_groups_config": return adminSetGroupsConfig(p.config);
       case "admin_resend":      return adminResend(form, p.id);
+      case "admin_reminder":    return adminReminder(form, p.ids || (p.id ? [p.id] : []));
+      case "admin_update":      return adminUpdate(form, p.id, p.patch);
+      case "admin_cancel":      return adminCancel(form, p.id);
       default:                 return { ok: false, error: "unknown action" };
     }
   } catch (err) {
@@ -1050,4 +1087,129 @@ function adminResend(form, id) {
   var rows = [{ id: id, data: merged, weekLabels: weekLabels, savedFiles: files }];
   sendConfirmation(settings, payload, rows);
   return { ok: true, id: id, to: shared.email };
+}
+
+/* ---------- Recordatori de pagament ----------
+   Envia un correu de recordatori a una o més inscripcions amb pagament
+   pendent o parcial. Les ja pagades s'ignoren (no hi ha res a recordar). */
+function adminReminder(form, ids) {
+  var settings = readSettings(form);
+  var data = readSubmissionRows(form);
+  var weekIds = readWeeks(form).map(function (w) { return w.id; });
+  var list = (ids || []).map(String);
+  var sent = 0, lastTo = "";
+  list.forEach(function (id) {
+    var match = null;
+    data.rows.forEach(function (r) { if (str(r.ID) === str(id)) match = r; });
+    if (!match) return;
+    var to = findEmail(match);
+    if (!to) return;
+    var registered = rowRegisteredWeeks(match, weekIds);
+    var paid = rowPaidWeeks(match, registered);
+    if (computeEstat(paid, registered) === "Pagat") return;   // res a recordar
+    sendReminder(settings, form, match, registered, paid);
+    sent++; lastTo = to;
+  });
+  return { ok: true, sent: sent, to: (list.length === 1 ? lastTo : undefined) };
+}
+
+function sendReminder(settings, form, row, registered, paid) {
+  var to = findEmail(row);
+  if (!to) return;
+  var camp = settings.nombre_campus || "Casal";
+  var name = adminRowName(row, form) || "la inscripció";
+  var preu = num(row.Preu) || 0;
+  var pendentSetmanes = registered.filter(function (w) { return paid.indexOf(w) === -1; });
+  var pendentImport = registered.length ? Math.round(preu * (pendentSetmanes.length / registered.length)) : 0;
+
+  var labelById = {};
+  readWeeks(form).forEach(function (w) { labelById[w.id] = w.etiqueta || w.id; });
+  var pills = pendentSetmanes.map(function (w) {
+    return "<span style='display:inline-block;background:#D97706;color:#fff;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;margin:0 5px 5px 0'>" + esc(labelById[w] || w) + "</span>";
+  }).join("");
+
+  var subject = settings.email_recordatori_asunto || ("Recordatori de pagament · " + camp);
+  var intro = settings.email_recordatori_intro ||
+    ("Et recordem que la inscripció de " + name + " encara té un pagament pendent. Si ja l'has fet, pots ignorar aquest missatge.");
+  var contacte = settings.email_contacto || "";
+
+  var html =
+    "<!DOCTYPE html><html lang='ca'><head><meta charset='utf-8'>" +
+    "<meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
+    "<body style='margin:0;padding:0'>" +
+    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#f0f4fb;padding:20px 10px;color:#16233D'>" +
+      "<div style='background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:14px 14px 0 0;padding:28px;border-top:4px solid #D97706'>" +
+        "<div style='font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#FCD9A6;font-weight:700;margin-bottom:10px'>🏑 " + esc(camp) + "</div>" +
+        "<div style='font-size:23px;font-weight:800;color:#fff;line-height:1.2'>Recordatori de pagament</div>" +
+      "</div>" +
+      "<div style='background:#fff;border:1px solid #D6DEEC;border-top:none;border-radius:0 0 14px 14px;padding:26px 28px'>" +
+        "<p style='margin:0 0 20px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
+        (pendentImport > 0
+          ? "<div style='background:#FEF3C7;border-left:4px solid #D97706;border-radius:9px;padding:14px 16px;margin-bottom:18px'>" +
+              "<table style='border-collapse:collapse;width:100%'><tr>" +
+                "<td style='font-weight:700;color:#0E2A63;font-size:14px'>Pendent de pagar</td>" +
+                "<td style='text-align:right;font-size:22px;font-weight:800;color:#B45309'>" + pendentImport + " €</td>" +
+              "</tr></table></div>"
+          : "") +
+        (pills ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes pendents</div><div style='margin-bottom:18px'>" + pills + "</div>" : "") +
+        (contacte ? "<p style='margin:0;color:#6B7C99;font-size:13px'>Per a qualsevol dubte, escriu-nos a <a href='mailto:" + esc(contacte) + "' style='color:#1F5AE0'>" + esc(contacte) + "</a>.</p>" : "") +
+      "</div>" +
+    "</div></body></html>";
+
+  MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: camp, replyTo: contacte || undefined });
+}
+
+/* ---------- Edició de dades de contacte ----------
+   Actualitza el correu i/o el telèfon d'una inscripció (corregir typos).
+   Escriu sobre la columna que ja conté aquell tipus de dada. */
+function adminUpdate(form, id, patch) {
+  patch = patch || {};
+  var data = readSubmissionRows(form);
+  var sheet = data.sheet;
+  if (!sheet) return { ok: false, error: "sheet not found" };
+  var target = null;
+  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
+  if (!target) return { ok: false, error: "row not found" };
+  var header = data.header;
+  var updated = {};
+
+  function writeFirst(re, value) {
+    for (var c = 0; c < header.length; c++) {
+      if (header[c] && re.test(header[c])) {
+        sheet.getRange(target.__row, c + 1, 1, 1).setValue(value);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (patch.email != null && writeFirst(/email|correu|correo/i, patch.email)) updated.email = patch.email;
+  if (patch.telefon != null && writeFirst(/telefon|telefono|mobil|movil|phone/i, patch.telefon)) updated.telefon = patch.telefon;
+  return { ok: true, id: id, updated: updated };
+}
+
+/* ---------- Anul·lació d'inscripció ----------
+   Mou la fila a la pestanya d'historial i l'esborra de la principal
+   (mateix patró que removeExistingSubmissionRows). */
+function adminCancel(form, id) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var data = readSubmissionRows(form);
+  var sheet = data.sheet;
+  if (!sheet) return { ok: false, error: "sheet not found" };
+  var target = null;
+  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
+  if (!target) return { ok: false, error: "row not found" };
+
+  var header = data.header;
+  var rowValues = sheet.getRange(target.__row, 1, 1, header.length).getValues()[0];
+  var histName = subsSheetName(form) + "_Historial";
+  var hist = ss.getSheetByName(histName);
+  if (!hist) {
+    hist = ss.insertSheet(histName);
+    hist.getRange(1, 1, 1, header.length + 1).setValues([header.concat(["Arxivada"])]);
+    hist.setFrozenRows(1);
+  }
+  hist.appendRow(rowValues.concat([new Date()]));
+  sheet.deleteRow(target.__row);
+  return { ok: true, id: id };
 }
