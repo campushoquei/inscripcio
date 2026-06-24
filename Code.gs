@@ -457,7 +457,7 @@ function sendConfirmation(settings, payload, rows) {
   });
   var sharedBlock = sharedRows
     ? "<div style='margin:0 0 26px'>" +
-        "<div class='em-section' style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#7aa4ff;font-weight:700;padding-bottom:8px;border-bottom:2px solid #27344f;margin-bottom:12px'>Dades del tutor/a</div>" +
+        "<div class='em-section' style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#1F5AE0;font-weight:700;padding-bottom:8px;border-bottom:2px solid #EEF3FB;margin-bottom:12px'>Dades del tutor/a</div>" +
         "<table style='border-collapse:collapse;width:100%;table-layout:fixed;font-size:14px'>" + sharedRows + "</table>" +
       "</div>"
     : "";
@@ -492,7 +492,7 @@ function sendConfirmation(settings, payload, rows) {
       }).join("");
     }
     var weeksBlock = weekPills
-      ? "<div class='em-divider' style='margin-top:14px;padding-top:13px;border-top:1px solid #27344f'>" +
+      ? "<div class='em-divider' style='margin-top:14px;padding-top:13px;border-top:1px solid #EEF3FB'>" +
           "<div class='em-eyebrow' style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes</div>" +
           "<div>" + weekPills + "</div>" +
         "</div>"
@@ -504,30 +504,28 @@ function sendConfirmation(settings, payload, rows) {
     var descompte = childEntry.descompte && childEntry.descompte !== "-" ? childEntry.descompte : "";
     if (preu != null && preu > 0) {
       preuBlock =
-        "<div class='em-soft' style='background:#16223c;border-left:4px solid #1F5AE0;border-radius:9px;padding:14px 16px;margin-top:16px'>" +
+        "<div class='em-soft' style='background:#EEF3FB;border-left:4px solid #1F5AE0;border-radius:9px;padding:14px 16px;margin-top:16px'>" +
           "<table style='border-collapse:collapse;width:100%'><tr>" +
-            "<td class='em-price-label' style='font-weight:700;color:#cfe0ff;font-size:14px;vertical-align:middle'>Preu</td>" +
-            "<td class='em-price-val' style='text-align:right;font-size:22px;font-weight:800;color:#7aa4ff;vertical-align:middle'>" + preu +" €</td>" +
+            "<td class='em-price-label' style='font-weight:700;color:#0E2A63;font-size:14px;vertical-align:middle'>Preu</td>" +
+            "<td class='em-price-val' style='text-align:right;font-size:22px;font-weight:800;color:#1F5AE0;vertical-align:middle'>" + preu +" €</td>" +
           "</tr>" +
-          (descompte ? "<tr><td colspan='2' class='em-label' style='font-size:11px;color:#92a3c4;padding-top:5px'>Descomptes aplicats: " + esc(descompte) + "</td></tr>" : "") +
+          (descompte ? "<tr><td colspan='2' class='em-label' style='font-size:11px;color:#6B7C99;padding-top:5px'>Descomptes aplicats: " + esc(descompte) + "</td></tr>" : "") +
           "</table>" +
         "</div>";
     }
 
     // Fitxers
     var filesNote = (r.savedFiles && r.savedFiles.length)
-      ? "<p class='em-muted' style='margin:12px 0 0;font-size:13px;color:#aab9d6'>📎 " + r.savedFiles.length + " document(s) rebut(s)</p>"
+      ? "<p class='em-muted' style='margin:12px 0 0;font-size:13px;color:#6B7C99'>📎 " + r.savedFiles.length + " document(s) rebut(s)</p>"
       : "";
 
     var blockTitle = multi
       ? ("Jugador/a " + (idx + 1) + (childName ? " · " + childName : ""))
       : (childName || "Jugador/a");
 
-    return "<div class='em-cardborder' style='border:1.5px solid #27344f;border-radius:11px;overflow:hidden;margin-bottom:14px'>" +
-             // Capçalera del jugador/a amb fons fosc + text blanc: així es llegeix igual
-             // en mode clar i fosc, sense dependre de la media query (que Gmail ignora).
-             "<div class='em-chip' style='background:#0E2A63;background:linear-gradient(135deg,#16357C 0%,#1F5AE0 100%);padding:13px 16px;border-bottom:1px solid #27344f'>" +
-               "<span class='em-chip-text' style='font-size:15px;font-weight:800;color:#ffffff'>🏑 " + esc(blockTitle) + "</span>" +
+    return "<div class='em-cardborder' style='border:1.5px solid #D6DEEC;border-radius:11px;overflow:hidden;margin-bottom:14px'>" +
+             "<div class='em-chip' style='background:#EEF3FB;background:linear-gradient(135deg,#EEF3FB 0%,#E2ECFB 100%);padding:13px 16px;border-bottom:1px solid #D6DEEC'>" +
+               "<span class='em-chip-text' style='font-size:15px;font-weight:800;color:#0E2A63'>🏑 " + esc(blockTitle) + "</span>" +
              "</div>" +
              "<div style='padding:16px 16px 18px'>" +
                (childRows ? "<table style='border-collapse:collapse;width:100%;table-layout:fixed;font-size:14px'>" + childRows + "</table>" : "") +
@@ -540,26 +538,40 @@ function sendConfirmation(settings, payload, rows) {
 
   var badge = "✓ Rebuda correctament" + (multi ? " &nbsp;·&nbsp; " + rows.length + " jugadors/es" : "");
 
-  // Correu FOSC per defecte per a tothom. Gmail (sobretot a iPhone/Android) ignora
-  // la media query prefers-color-scheme i enfosqueix pel seu compte els correus
-  // clars, deixant el text fosc → invisible. La manera fiable d'evitar-ho és no
-  // tenir res clar a enfosquir: tots els fons són foscos i el text és clar, i marquem
-  // el correu com color-scheme:dark perquè els clients no l'intentin reconvertir.
+  // Estils de mode fosc: els clients mòbils (Gmail app, Apple Mail) enfosqueixen
+  // els fons clars però sovint deixen el text fosc → text invisible. Declarem
+  // color-scheme i sobreescrivim els colors inline amb classes + !important.
   var darkStyles =
     "<style>" +
-      ":root{color-scheme:dark;supported-color-schemes:dark;}" +
+      ":root{color-scheme:light dark;supported-color-schemes:light dark;}" +
+      "@media (prefers-color-scheme:dark){" +
+        ".em-body{background:#0b1220!important;color:#dfe7f5!important;}" +
+        ".em-card{background:#111b30!important;border-color:#27344f!important;}" +
+        ".em-cardborder{border-color:#27344f!important;}" +
+        ".em-muted{color:#aab9d6!important;}" +
+        ".em-label{color:#92a3c4!important;}" +
+        ".em-val{color:#e8eefb!important;}" +
+        ".em-chip{background:#1a2742!important;border-color:#27344f!important;}" +
+        ".em-chip-text{color:#cfe0ff!important;}" +
+        ".em-soft{background:#16223c!important;}" +
+        ".em-price-label{color:#cfe0ff!important;}" +
+        ".em-price-val{color:#7aa4ff!important;}" +
+        ".em-divider{border-color:#27344f!important;}" +
+        ".em-section{color:#7aa4ff!important;border-color:#27344f!important;}" +
+        ".em-eyebrow{color:#9dc0ff!important;}" +
+      "}" +
     "</style>";
 
   var html =
     "<!DOCTYPE html><html lang='ca'><head>" +
       "<meta charset='utf-8'>" +
       "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-      "<meta name='color-scheme' content='dark'>" +
-      "<meta name='supported-color-schemes' content='dark'>" +
+      "<meta name='color-scheme' content='light dark'>" +
+      "<meta name='supported-color-schemes' content='light dark'>" +
       darkStyles +
     "</head><body style='margin:0;padding:0'>" +
 
-    "<div class='em-body' style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#0b1220;padding:20px 10px;color:#dfe7f5'>" +
+    "<div class='em-body' style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#f0f4fb;padding:20px 10px;color:#16233D'>" +
 
       // Capçalera
       "<div style='background:#0E2A63;background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:14px 14px 0 0;padding:30px 28px;border-top:4px solid #1F5AE0'>" +
@@ -569,8 +581,8 @@ function sendConfirmation(settings, payload, rows) {
       "</div>" +
 
       // Cos
-      "<div class='em-card' style='background:#111b30;border:1px solid #27344f;border-top:none;border-radius:0 0 14px 14px;padding:28px 28px 24px'>" +
-        "<p class='em-muted' style='margin:0 0 24px;color:#aab9d6;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
+      "<div class='em-card' style='background:#fff;border:1px solid #D6DEEC;border-top:none;border-radius:0 0 14px 14px;padding:28px 28px 24px'>" +
+        "<p class='em-muted' style='margin:0 0 24px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
         sharedBlock +
         childrenBlocks +
       "</div>" +
@@ -594,8 +606,8 @@ function childGroupForForm(form) {
 }
 function emailRow(k, v) {
   return "<tr>" +
-    "<td class='em-label' style='width:40%;padding:7px 16px 7px 0;color:#92a3c4;vertical-align:top;font-size:14px;word-break:break-word'>" + esc(k) + "</td>" +
-    "<td class='em-val' style='width:60%;padding:7px 0;font-weight:600;color:#e8eefb;font-size:14px;word-break:break-word'>" + esc(fmtDate(v)) + "</td>" +
+    "<td class='em-label' style='width:40%;padding:7px 16px 7px 0;color:#6B7C99;vertical-align:top;font-size:14px;word-break:break-word'>" + esc(k) + "</td>" +
+    "<td class='em-val' style='width:60%;padding:7px 0;font-weight:600;color:#16233D;font-size:14px;word-break:break-word'>" + esc(fmtDate(v)) + "</td>" +
   "</tr>";
 }
 // Converteix dates en format ISO (YYYY-MM-DD) a DD/MM/YYYY. Deixa la resta de valors intactes.
@@ -1121,30 +1133,26 @@ function sendReminder(settings, form, row, registered, paid) {
     ("Et recordem que la inscripció de " + name + " encara té un pagament pendent. Si ja l'has fet, pots ignorar aquest missatge.");
   var contacte = settings.email_contacto || "";
 
-  // Mateix criteri que el correu de confirmació: fosc per defecte perquè Gmail
-  // (iPhone/Android) no enfosqueixi un correu clar i deixi el text il·legible.
   var html =
     "<!DOCTYPE html><html lang='ca'><head><meta charset='utf-8'>" +
-    "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-    "<meta name='color-scheme' content='dark'><meta name='supported-color-schemes' content='dark'>" +
-    "<style>:root{color-scheme:dark;supported-color-schemes:dark;}</style></head>" +
+    "<meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
     "<body style='margin:0;padding:0'>" +
-    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#0b1220;padding:20px 10px;color:#dfe7f5'>" +
+    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#f0f4fb;padding:20px 10px;color:#16233D'>" +
       "<div style='background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:14px 14px 0 0;padding:28px;border-top:4px solid #D97706'>" +
         "<div style='font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#FCD9A6;font-weight:700;margin-bottom:10px'>🏑 " + esc(camp) + "</div>" +
         "<div style='font-size:23px;font-weight:800;color:#fff;line-height:1.2'>Recordatori de pagament</div>" +
       "</div>" +
-      "<div style='background:#111b30;border:1px solid #27344f;border-top:none;border-radius:0 0 14px 14px;padding:26px 28px'>" +
-        "<p style='margin:0 0 20px;color:#aab9d6;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
+      "<div style='background:#fff;border:1px solid #D6DEEC;border-top:none;border-radius:0 0 14px 14px;padding:26px 28px'>" +
+        "<p style='margin:0 0 20px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
         (pendentImport > 0
-          ? "<div style='background:#2a1e08;border-left:4px solid #D97706;border-radius:9px;padding:14px 16px;margin-bottom:18px'>" +
+          ? "<div style='background:#FEF3C7;border-left:4px solid #D97706;border-radius:9px;padding:14px 16px;margin-bottom:18px'>" +
               "<table style='border-collapse:collapse;width:100%'><tr>" +
-                "<td style='font-weight:700;color:#FCD9A6;font-size:14px'>Pendent de pagar</td>" +
-                "<td style='text-align:right;font-size:22px;font-weight:800;color:#FBBF24'>" + pendentImport + " €</td>" +
+                "<td style='font-weight:700;color:#0E2A63;font-size:14px'>Pendent de pagar</td>" +
+                "<td style='text-align:right;font-size:22px;font-weight:800;color:#B45309'>" + pendentImport + " €</td>" +
               "</tr></table></div>"
           : "") +
         (pills ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes pendents</div><div style='margin-bottom:18px'>" + pills + "</div>" : "") +
-        (contacte ? "<p style='margin:0;color:#aab9d6;font-size:13px'>Per a qualsevol dubte, escriu-nos a <a href='mailto:" + esc(contacte) + "' style='color:#7aa4ff'>" + esc(contacte) + "</a>.</p>" : "") +
+        (contacte ? "<p style='margin:0;color:#6B7C99;font-size:13px'>Per a qualsevol dubte, escriu-nos a <a href='mailto:" + esc(contacte) + "' style='color:#1F5AE0'>" + esc(contacte) + "</a>.</p>" : "") +
       "</div>" +
     "</div></body></html>";
 

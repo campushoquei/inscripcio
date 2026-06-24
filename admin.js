@@ -8,7 +8,7 @@
    SCRIPT_URL buit = MODE DEMO amb dades d'exemple generades.
    ============================================================ */
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw8S-uE1eDZBVinJqReL54c6V3n5GQlXmtOuCp9vJswrj2INAxWAnAS8K2y4Bs0XJ3ubg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxBmr_cLfJ1wgpYBSxaMLwhhJyr-UXTZPPGeXBJEHrml8834c9Z6T2GC7mm5mgHMBYl/exec";
 
 const PIN_KEY = "casal_admin_pin";
 const EXP_KEY = "casal_admin_exp";      // caducitat de sessió (timestamp)
@@ -47,7 +47,7 @@ const state = {
   groups: DEFAULT_GROUPS.slice(),
   groupWeek: "",
   selected: new Set(),
-  formScope: "all"   // "all" = tots els formularis · "active" = només habilitado=TRUE
+  formScope: "active"   // per defecte només habilitado=TRUE · "all" = tots els formularis
 };
 
 const $ = (id) => document.getElementById(id);
