@@ -690,6 +690,16 @@ body {
 .field:last-child { margin-bottom: 0; }
 .field__label { display: block; font-weight: 600; font-size: .92rem; margin-bottom: 7px; }
 .field__req { color: var(--blue); }
+/* ✓ verd quan el camp obligatori és correcte (microinteracció premium) */
+.field__check { display: none; margin-left: 4px; color: #16a34a; font-weight: 800; }
+.field--valid .field__check {
+  display: inline-block;
+  animation: check-pop .3s cubic-bezier(.2,.8,.3,1.45) both;
+}
+@keyframes check-pop {
+  0%   { opacity: 0; transform: scale(.4); }
+  100% { opacity: 1; transform: scale(1); }
+}
 .field__help { font-size: .82rem; color: var(--ink-soft); margin: 6px 0 0; }
 .field__help--above { margin: 0 0 10px; }
 
@@ -1440,6 +1450,24 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .filebox__hint--mobile {
   width: 100%; text-align: center;
   font-size: .78rem; color: var(--ink-soft); margin: 2px 0 0;
+}
+
+/* ---------- Transició entre passos del wizard ---------- */
+/* Conté l'animació lateral perquè no aparegui un scroll horizontal momentani.
+   (overflow-x: clip no converteix overflow-y en scroll, a diferència de hidden.) */
+#form-sections { overflow-x: clip; }
+@keyframes section-enter-next {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes section-enter-prev {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.section--enter-next { animation: section-enter-next .34s cubic-bezier(.22,.61,.36,1) both; }
+.section--enter-prev { animation: section-enter-prev .34s cubic-bezier(.22,.61,.36,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .section--enter-next, .section--enter-prev { animation: none; }
 }
 
 /* ---------- Wizard de passos ---------- */

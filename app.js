@@ -544,7 +544,7 @@ function initWizard() {
   renderWizardStep(true);
 }
 
-function renderWizardStep(scrollTop) {
+function renderWizardStep(scrollTop, dir) {
   const isLast = wizardStep === wizardSteps.length - 1;
 
   // Mostra només el pas actiu
@@ -553,6 +553,14 @@ function renderWizardStep(scrollTop) {
   // Targeta de preus i botó d'enviament: només a l'últim pas
   const priceCard = document.getElementById("price-total-card");
   if (priceCard) priceCard.hidden = !isLast;
+
+  // Animació d'entrada direccional del pas actiu (endavant → des de la dreta, enrere → des de l'esquerra)
+  const active = wizardSteps[wizardStep];
+  if (active && dir) {
+    active.classList.remove("section--enter-next", "section--enter-prev");
+    void active.offsetWidth; // força el reinici de l'animació
+    active.classList.add(dir < 0 ? "section--enter-prev" : "section--enter-next");
+  }
 
   renderWizardNav();
   if (scrollTop) window.scrollTo({ top: 0, behavior: "smooth" });
@@ -716,21 +724,23 @@ function validateWizardStep() {
 }
 
 function wizardNext() {
-  if (!validateWizardStep()) { flashNote("Revisa els camps marcats."); return; }
+  if (!validateWizardStep()) { haptic([10, 45, 10]); flashNote("Revisa els camps marcats."); return; }
   clearNote();
+  haptic(8);
   wizardStep = Math.min(wizardStep + 1, wizardSteps.length - 1);
   // A partir del pas 2, el banner "returning" ja no cal
   if (wizardStep > 0) hideReturning();
-  renderWizardStep(true);
+  renderWizardStep(true, 1);
   updateProgress();
 }
 
 function wizardBack() {
   clearNote();
+  haptic(6);
   wizardStep = Math.max(wizardStep - 1, 0);
   // Torna al pas 1 → re-avalua el banner (maybeShowReturning ja comprova dismissed i neteja inline styles)
   if (wizardStep === 0) maybeShowReturning();
-  renderWizardStep(true);
+  renderWizardStep(true, -1);
 }
 
 // El grup "per jugador/a" es repeteix per cada fill. Detectem-lo pel nom; si no,
@@ -937,7 +947,8 @@ function fieldEl(f, scope) {
   const req = f.obligatorio ? ` <span class="field__req">*</span>` : "";
   const label = document.createElement("label");
   label.className = "field__label"; label.setAttribute("for", labId);
-  label.innerHTML = escapeHtml(f.etiqueta) + req;
+  label.innerHTML = escapeHtml(f.etiqueta) + req
+    + (f.obligatorio ? ` <span class="field__check" aria-hidden="true">✓</span>` : "");
   wrap.appendChild(label);
 
   const choiceLike = ["radio", "checkbox", "file"].includes(f.tipo);
@@ -1220,6 +1231,7 @@ function validateSingleField(wrap) {
     }
   }
   wrap.classList.toggle("field--invalid", empty);
+  wrap.classList.toggle("field--valid", !empty);   // mostra el ✓ verd quan el camp és correcte
   return !empty;
 }
 function buildEmailConfirmField(scope, sfx) {
@@ -1231,7 +1243,7 @@ function buildEmailConfirmField(scope, sfx) {
   if (scoped) wrap.dataset.scope = String(scope);
   const label = document.createElement("label");
   label.className = "field__label"; label.setAttribute("for", labId);
-  label.innerHTML = `Confirma el correu electrònic <span class="field__req">*</span>`;
+  label.innerHTML = `Confirma el correu electrònic <span class="field__req">*</span> <span class="field__check" aria-hidden="true">✓</span>`;
   wrap.appendChild(label);
   const input = document.createElement("input");
   input.type = "email"; input.id = labId; input.className = "input";
@@ -1315,9 +1327,10 @@ function validate() {
 async function onSubmit(e) {
   e.preventDefault();
   clearNote();
-  if (!document.getElementById("consent").checked) return flashNote("Cal acceptar la política de protecció de dades.");
+  if (!document.getElementById("consent").checked) { haptic([10, 45, 10]); return flashNote("Cal acceptar la política de protecció de dades."); }
   const { ok: formOk, firstBad } = validate();
   if (!formOk) {
+    haptic([10, 45, 10]);
     // En mode wizard, salta al pas que conté el primer error
     if (wizardSteps.length && firstBad) {
       const parentSection = firstBad.closest(".section");
@@ -1398,11 +1411,16 @@ function flashNote(msg) {
   const target = document.getElementById("wizard-note") || els.submitNote;
   target.textContent = msg; target.classList.add("is-error");
 }
+// Vibració tàctil (només mòbils que ho suporten). Patró: ms o [vibra, pausa, vibra…].
+function haptic(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
+}
 
 // ---- Èxit ----
 function showDone(shared, children, campusName, result) {
   els.form.hidden = true; els.returning.hidden = true; els.done.hidden = false;
   document.body.classList.add("page--done");
+  haptic([14, 60, 14, 60, 26]); // petita celebració tàctil
   launchConfetti();
   const s = CONFIG.settings || {};
   els.doneText.textContent = (s.mensaje_exito || "Inscripció rebuda correctament.") + (result && result.demo ? "  (mode demo: encara no s'ha guardat enlloc)" : "");
