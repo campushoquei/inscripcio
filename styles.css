@@ -1050,7 +1050,42 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .chip:not(.chip--delete):hover { transform: scale(1.04); }
 
 @media (max-width: 520px) {
-  .hero__inner { padding-block: 40px 46px; }
+  /* ----- Hero minimalista amb les tonalitats del formulari (només mòbil) ----- */
+  /* .hero.hero iguala l'especificitat de .hero.season-* per guanyar la cascada sense !important.
+     Tot amb variables del tema → s'adapta sol al mode fosc. */
+  /* El degradat acaba en --paper (fons del formulari) perquè les dues seccions
+     es fonguin sense cap línia ni transició visible. */
+  .hero.hero {
+    background: linear-gradient(168deg, var(--blue-soft) 0%, var(--paper) 100%);
+    color: var(--ink);
+  }
+  .hero.hero::before, .hero.hero::after { display: none; } /* fora glows */
+  .rink { display: none; }                                 /* fora la pista decorativa */
+
+  .hero__inner { padding-block: 38px 36px; }
+  .hero.has-slider .hero__inner { padding-bottom: 72px; }
+
+  /* Eyebrow net en blau, sense temporada (hero tot en tons del formulari) */
+  .eyebrow {
+    font-size: .92rem; letter-spacing: .16em; margin: 0 0 14px; color: var(--blue);
+  }
+  .hero__title {
+    font-size: clamp(2rem, 9.2vw, 2.8rem);
+    line-height: 1.04; letter-spacing: .01em; max-width: 15ch; margin: 0 0 13px;
+    color: var(--navy);
+  }
+  .hero__lead {
+    font-size: 1rem; line-height: 1.5; max-width: 40ch; color: var(--ink-soft);
+  }
+
+  /* Pills del selector amb l'estil del formulari (clares, actiu blau) */
+  .hero-pill {
+    background: var(--card); border-color: var(--line-ink); color: var(--ink-soft);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .hero-pill.is-active {
+    background: var(--blue); border-color: var(--blue); color: #fff;
+  }
 
   .btn--primary { width: 100%; justify-content: center; }
   /* Col·lapsa el botó de contacte a icona sola per alliberar espai al títol */
@@ -1069,9 +1104,6 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   .hero-nav::-webkit-scrollbar { display: none; }
   /* Espai al final perquè l'últim pill no quedi retallat */
   .hero-nav::after { content: ""; display: block; min-width: 16px; flex-shrink: 0; }
-
-  /* Pista: petita i a la dreta, com a PC */
-  .rink { transform-origin: right center; transform: scale(0.5); }
 
   /* Taula de preus: compactar per a pantalles petites */
   .price-info { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1333,6 +1365,7 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 
   /* Fitxers */
   .filebox { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
+  .filebox--mobile { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
 
   /* Notes i etiquetes */
   .note { background: var(--blue-soft); }
