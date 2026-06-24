@@ -690,16 +690,6 @@ body {
 .field:last-child { margin-bottom: 0; }
 .field__label { display: block; font-weight: 600; font-size: .92rem; margin-bottom: 7px; }
 .field__req { color: var(--blue); }
-/* ✓ verd quan el camp obligatori és correcte (microinteracció premium) */
-.field__check { display: none; margin-left: 4px; color: #16a34a; font-weight: 800; }
-.field--valid .field__check {
-  display: inline-block;
-  animation: check-pop .3s cubic-bezier(.2,.8,.3,1.45) both;
-}
-@keyframes check-pop {
-  0%   { opacity: 0; transform: scale(.4); }
-  100% { opacity: 1; transform: scale(1); }
-}
 .field__help { font-size: .82rem; color: var(--ink-soft); margin: 6px 0 0; }
 .field__help--above { margin: 0 0 10px; }
 
@@ -1473,15 +1463,21 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 /* ---------- Wizard de passos ---------- */
 .wizard-nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
-  background: rgba(255,255,255,.82);
-  -webkit-backdrop-filter: saturate(180%) blur(16px);
-  backdrop-filter: saturate(180%) blur(16px);
   border-top: 1px solid rgba(214,222,236,.6);
   box-shadow: 0 -10px 34px rgba(14,42,99,.09);
 }
+/* El vidre esmerilat va en un pseudo-element SENSE interacció. Posar backdrop-filter
+   directament a una barra fixa fa que molts navegadors mòbils "perdin" el primer toc
+   (cal clicar dos cops); aïllar-lo aquí ho soluciona i manté l'aspecte. */
+.wizard-nav::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: rgba(255,255,255,.82);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+}
 /* Sense suport de backdrop-filter, fons sòlid per no quedar translúcid */
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .wizard-nav { background: var(--card); }
+  .wizard-nav::before { background: var(--card); }
 }
 /* Quan el wizard és actiu, empeny el contingut per sobre de la barra fixa */
 body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
@@ -1667,12 +1663,12 @@ html { scroll-padding-bottom: 84px; }
    especificitat, guanyarien. */
 @media (prefers-color-scheme: dark) {
   .wizard-nav {
-    background: rgba(16,24,40,.82);
     border-top-color: rgba(91,142,255,.14);
     box-shadow: 0 -8px 30px rgba(0,0,0,.45);
   }
+  .wizard-nav::before { background: rgba(16,24,40,.82); }
   @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    .wizard-nav { background: var(--card); }
+    .wizard-nav::before { background: var(--card); }
   }
   .wizard-nav__children:active { background: rgba(91,142,255,.18); }
   /* blue-deep és més CLAR que blue en fosc → el text blanc hi perdria contrast.

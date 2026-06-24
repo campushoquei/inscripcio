@@ -541,7 +541,7 @@ function initWizard() {
     });
   }
 
-  renderWizardStep(true);
+  renderWizardStep(false);   // càrrega inicial: no fem scroll (deixem veure el hero)
 }
 
 function renderWizardStep(scrollTop, dir) {
@@ -563,7 +563,18 @@ function renderWizardStep(scrollTop, dir) {
   }
 
   renderWizardNav();
-  if (scrollTop) window.scrollTo({ top: 0, behavior: "smooth" });
+  if (scrollTop) scrollToFormTop();
+}
+
+// Posiciona la vista al començament del formulari (just sota el topbar), deixant el
+// hero fora de pantalla perquè en canviar de pas la transició sigui més natural.
+function scrollToFormTop() {
+  const anchor = els.form || els.sections;
+  if (!anchor) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  const topbar = document.querySelector(".topbar");
+  const tbH = topbar ? topbar.offsetHeight : 66;
+  const y = anchor.getBoundingClientRect().top + window.scrollY - tbH - 8;
+  window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
 }
 
 function renderWizardNav() {
@@ -947,8 +958,7 @@ function fieldEl(f, scope) {
   const req = f.obligatorio ? ` <span class="field__req">*</span>` : "";
   const label = document.createElement("label");
   label.className = "field__label"; label.setAttribute("for", labId);
-  label.innerHTML = escapeHtml(f.etiqueta) + req
-    + (f.obligatorio ? ` <span class="field__check" aria-hidden="true">✓</span>` : "");
+  label.innerHTML = escapeHtml(f.etiqueta) + req;
   wrap.appendChild(label);
 
   const choiceLike = ["radio", "checkbox", "file"].includes(f.tipo);
@@ -1231,7 +1241,6 @@ function validateSingleField(wrap) {
     }
   }
   wrap.classList.toggle("field--invalid", empty);
-  wrap.classList.toggle("field--valid", !empty);   // mostra el ✓ verd quan el camp és correcte
   return !empty;
 }
 function buildEmailConfirmField(scope, sfx) {
@@ -1243,7 +1252,7 @@ function buildEmailConfirmField(scope, sfx) {
   if (scoped) wrap.dataset.scope = String(scope);
   const label = document.createElement("label");
   label.className = "field__label"; label.setAttribute("for", labId);
-  label.innerHTML = `Confirma el correu electrònic <span class="field__req">*</span> <span class="field__check" aria-hidden="true">✓</span>`;
+  label.innerHTML = `Confirma el correu electrònic <span class="field__req">*</span>`;
   wrap.appendChild(label);
   const input = document.createElement("input");
   input.type = "email"; input.id = labId; input.className = "input";
@@ -2140,7 +2149,34 @@ function updateTotalPriceCard() {
     ${childrenHtml}${grandHtml}
   </div>`;
   // Evita reparsejar el DOM si el resultat és idèntic (p. ex. en escriure camps que no afecten el preu)
-  if (card._lastHtml !== html) { card.innerHTML = html; card._lastHtml = html; }
+  if (card._lastHtml !== html) {
+    // Captura els imports actuals per animar-los cap als nous (comptador premium)
+    const prevAmounts = [...card.querySelectorAll(".price-total__amount")]
+      .map((el) => parseInt(el.textContent, 10) || 0);
+    card.innerHTML = html; card._lastHtml = html;
+    const newEls = [...card.querySelectorAll(".price-total__amount")];
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Només animem si l'estructura no ha canviat (mateix nombre de files): així evitem salts en afegir/treure fills
+    if (!reduce && prevAmounts.length === newEls.length) {
+      newEls.forEach((el, i) => {
+        const to = parseInt(el.textContent, 10) || 0;
+        if (prevAmounts[i] !== to) animateCount(el, prevAmounts[i], to);
+      });
+    }
+  }
+}
+
+// Compta suaument un import (€) d'un valor a un altre.
+function animateCount(el, from, to) {
+  const dur = 440, t0 = performance.now();
+  const step = (t) => {
+    if (!el.isConnected) return;            // s'ha re-renderitzat: aturem
+    const p = Math.min(1, (t - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);   // ease-out
+    el.textContent = `${Math.round(from + (to - from) * eased)} €`;
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function updateAllPrices() {
