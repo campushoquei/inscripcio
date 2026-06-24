@@ -513,6 +513,7 @@ function initWizard() {
         `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
           PEOPLE_SVG +
           `<span id="wizard-children-label"></span>` +
+          `<span class="wc__price" id="wizard-children-price" hidden></span>` +
           CHEVRON_UP +
         `</button>` +
       `</div>` +
@@ -593,7 +594,14 @@ function renderWizardNav() {
   // Zona esquerra: resum de fills (pas 1) o botó enrere (resta de passos)
   const isChildrenStep  = wizardSteps[wizardStep] && wizardSteps[wizardStep].id === "children-section";
   const nChildren       = document.querySelectorAll(".child-block").length;
-  const showChildrenInfo = isChildrenStep && nChildren > 1;
+  // Comptador: només fills amb el nom omplert
+  const nFilled         = [...document.querySelectorAll(".child-block")].filter(getChildName).length;
+  // Preu total viu (mòbil: el mostrem aquí en comptes de la targeta del final)
+  const priceSummary    = computePriceSummary();
+  const grandTotal      = priceSummary ? priceSummary.grandTotal : 0;
+  // El resum de fills apareix tan aviat com el primer nen té nom (indicador "1"),
+  // o si ja hi ha un preu calculat. A dins hi mostrem el total quan n'hi ha.
+  const showChildrenInfo = isChildrenStep && (nFilled >= 1 || grandTotal > 0);
   const childrenInfo    = document.getElementById("wizard-children-info");
   const childrenLabel   = document.getElementById("wizard-children-label");
   const recoverBtn      = document.getElementById("wizard-recover");
@@ -605,8 +613,10 @@ function renderWizardNav() {
   if (recoverBtn) recoverBtn.hidden = !showRecover;
 
   if (backBtn) {
-    if (showChildrenInfo || showRecover) {
-      backBtn.hidden = true;            // el lloc l'ocupa el resum de fills o la recuperació
+    // Al pas 1 el botó "Enrere" no cal: deixem el lloc al resum de fills o a la
+    // recuperació. A partir del pas 2 sí que cal, i pot conviure amb el resum de fills.
+    if ((showChildrenInfo || showRecover) && wizardStep === 0) {
+      backBtn.hidden = true;
     } else {
       backBtn.hidden = false;
       backBtn.style.visibility = wizardStep === 0 ? "hidden" : "visible";
@@ -614,10 +624,24 @@ function renderWizardNav() {
   }
   if (childrenInfo) {
     childrenInfo.hidden = !showChildrenInfo;
-    if (showChildrenInfo && childrenLabel) {
-      // Comptador: només fills amb el nom omplert
-      const nFilled = [...document.querySelectorAll(".child-block")].filter(getChildName).length;
-      childrenLabel.textContent = String(nFilled);
+    childrenInfo.classList.toggle("has-price", showChildrenInfo && grandTotal > 0);
+    if (showChildrenInfo) {
+      if (childrenLabel) childrenLabel.textContent = String(nFilled || nChildren);
+      const priceEl = document.getElementById("wizard-children-price");
+      if (priceEl) {
+        if (grandTotal > 0) {
+          const prev = parseInt(priceEl.dataset.value || "", 10);
+          priceEl.hidden = false;
+          priceEl.dataset.value = String(grandTotal);
+          const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          if (!reduce && Number.isFinite(prev) && prev !== grandTotal) animateCount(priceEl, prev, grandTotal);
+          else priceEl.textContent = `${grandTotal} €`;
+        } else {
+          priceEl.hidden = true;
+          priceEl.textContent = "";
+          delete priceEl.dataset.value;
+        }
+      }
     }
   }
 
@@ -648,13 +672,28 @@ function renderChildrenPopup() {
   const list = document.getElementById("wcp-list");
   if (!list) return;
   list.innerHTML = "";
-  [...document.querySelectorAll(".child-block")].forEach((block, idx) => {
+
+  // Dades de preu per fill (subtotal + desglossament de setmanes)
+  const summary   = computePriceSummary();
+  const dataByIdx = {};
+  if (summary) summary.children.forEach((c) => { dataByIdx[c.childIdx] = c; });
+
+  const blocks   = [...document.querySelectorAll(".child-block")];
+  const multiple = blocks.length > 1;
+
+  blocks.forEach((block, idx) => {
     const name   = getChildName(block);
     const label  = name || `Fill ${idx + 1}`;
     const filled = !!name;
+    const data   = dataByIdx[idx] || { total: 0, weekBreakdown: [] };
+    const amount = data.total || 0;
 
     const item = document.createElement("div");
     item.className = "wcp__item";
+
+    // Fila principal: avatar + nom (+ subtotal) i botó d'eliminar
+    const row = document.createElement("div");
+    row.className = "wcp__row";
 
     const scrollBtn = document.createElement("button");
     scrollBtn.type = "button";
@@ -662,30 +701,61 @@ function renderChildrenPopup() {
     scrollBtn.innerHTML =
       `<span class="wcp__avatar">${escapeHtml(label.charAt(0).toUpperCase())}</span>` +
       `<span class="wcp__name">${escapeHtml(label)}</span>` +
-      (!filled ? `<span class="wcp__incomplete">incomplert</span>` : "");
+      (!filled ? `<span class="wcp__incomplete">incomplert</span>` : "") +
+      (amount > 0 ? `<span class="wcp__amount">${amount} €</span>` : "");
     scrollBtn.addEventListener("click", () => {
       closeChildrenPopup();
       expandChild(block);
       block.scrollIntoView({ behavior: "smooth", block: "start" });
     });
+    row.appendChild(scrollBtn);
 
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.className = "wcp__del";
-    delBtn.setAttribute("aria-label", `Eliminar ${label}`);
-    delBtn.innerHTML =
-      `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      removeChildBlock(block);
-      if (document.querySelectorAll(".child-block").length <= 1) { closeChildrenPopup(); return; }
-      renderChildrenPopup();
-      renderWizardNav();
-    });
+    // El botó d'eliminar només té sentit quan hi ha més d'un fill
+    if (multiple) {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "wcp__del";
+      delBtn.setAttribute("aria-label", `Eliminar ${label}`);
+      delBtn.innerHTML =
+        `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeChildBlock(block);
+        renderChildrenPopup();
+        renderWizardNav();
+      });
+      row.appendChild(delBtn);
+    }
+    item.appendChild(row);
 
-    item.append(scrollBtn, delBtn);
+    // Desglossament: cada setmana triada amb el seu preu (la "suma" del subtotal)
+    if (data.weekBreakdown.length) {
+      const weeks = document.createElement("div");
+      weeks.className = "wcp__weeks";
+      weeks.innerHTML = data.weekBreakdown.map((w) =>
+        `<div class="wcp__week">` +
+          `<span class="wcp__week-label">${escapeHtml(w.label)}</span>` +
+          `<span class="wcp__week-price">${w.price} €</span>` +
+        `</div>`
+      ).join("");
+      item.appendChild(weeks);
+    }
+
     list.appendChild(item);
   });
+
+  // Peu amb el total general (només quan hi ha més d'un fill amb preu)
+  const popup = document.getElementById("wizard-children-popup");
+  const oldFoot = popup && popup.querySelector(".wcp__total");
+  if (oldFoot) oldFoot.remove();
+  if (popup && summary && summary.hasMulti) {
+    const foot = document.createElement("div");
+    foot.className = "wcp__total";
+    foot.innerHTML =
+      `<span class="wcp__total-label">Total</span>` +
+      `<span class="wcp__total-amount">${summary.grandTotal} €</span>`;
+    popup.appendChild(foot);
+  }
 }
 
 function openChildrenPopup() {
@@ -1875,6 +1945,9 @@ function prefillFamilySelection(entry, selectedIdxs) {
   });
   updateAllPrices();
   updateProgress();
+  // La nav del wizard s'havia pintat buida dins de renderForm(), abans d'omplir les
+  // dades: la refresquem perquè mostri el preu i l'indicador de fills restaurats.
+  if (wizardSteps.length) renderWizardNav();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -2085,11 +2158,12 @@ function updateChildPriceDisplay(childIdx) {
     breakdown.length > 1 ? `(${breakdown.map((p) => p + " €").join(" + ")})` : "";
 }
 
-// Actualitza la targeta de resum total de preus
-function updateTotalPriceCard() {
-  const card = document.getElementById("price-total-card");
-  if (!card) return;
-  if (!hasPriceConfig()) { if (card._lastHtml !== "") { card.innerHTML = ""; card._lastHtml = ""; } return; }
+// Calcula el resum de preus de tots els fills una sola vegada (reutilitzat per la
+// targeta del final, el resum de la barra del wizard i el popup de fills).
+// Retorna null si no hi ha configuració de preus. `children` inclou tots els blocs
+// (amb el seu total individual), `priced` només els que tenen setmanes triades.
+function computePriceSummary() {
+  if (!hasPriceConfig()) return null;
 
   const weekConfig = {};
   (CONFIG.weeks || []).forEach((w) => { weekConfig[w.id] = w; });
@@ -2111,12 +2185,23 @@ function updateTotalPriceCard() {
     const childName = firstTextInput ? firstTextInput.value.trim() : "";
     const name = childName ? `${blockTitle} · ${childName}` : blockTitle;
     return { name, isRDB, isFN, weekBreakdown, total, childIdx };
-  }).filter((c) => c.weekBreakdown.length > 0);
+  });
 
-  if (!children.length) { if (card._lastHtml !== "") { card.innerHTML = ""; card._lastHtml = ""; } return; }
+  const priced = children.filter((c) => c.weekBreakdown.length > 0);
+  const grandTotal = priced.reduce((s, c) => s + c.total, 0);
+  return { children, priced, grandTotal, hasMulti: priced.length > 1 };
+}
 
-  const grandTotal = children.reduce((s, c) => s + c.total, 0);
-  const hasMulti = children.length > 1;
+// Actualitza la targeta de resum total de preus
+function updateTotalPriceCard() {
+  const card = document.getElementById("price-total-card");
+  if (!card) return;
+  const summary = computePriceSummary();
+  if (!summary || !summary.priced.length) { if (card._lastHtml !== "") { card.innerHTML = ""; card._lastHtml = ""; } return; }
+
+  const children = summary.priced;
+  const grandTotal = summary.grandTotal;
+  const hasMulti = summary.hasMulti;
 
   const childrenHtml = children.map((c) => {
     const weeksHtml = c.weekBreakdown.map((w) => `
