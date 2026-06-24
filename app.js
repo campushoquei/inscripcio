@@ -118,6 +118,7 @@ let currentFormIdx = 0;         // índex actiu al slider del hero
 let heroTouchStartX = 0;        // per al swipe tàctil
 let childCount = 1;            // quants jugadors/es s'estan inscrivint alhora
 let returningDismissed = false; // l'usuari ha tancat la barra "ja t'havíem vist"
+let recoverAvailable = false;   // hi ha dades desades per recuperar (controla la icona de la nav)
 let wizardSteps = [];          // llista de .section del wizard (buit = sense wizard)
 let wizardStep  = 0;           // índex del pas actual
 let draftSaveTimer = null;
@@ -490,15 +491,25 @@ function initWizard() {
     `<svg class="wz-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>`;
   const CHEV_RIGHT =
     `<svg class="wz-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>`;
+  const HIST_SVG =
+    `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>`;
   nav.innerHTML =
     // Popup de fills (s'obre cap amunt)
     `<div class="wizard-children-popup" id="wizard-children-popup" hidden>` +
       `<div class="wcp__list" id="wcp-list"></div>` +
     `</div>` +
+    // Popup de recuperació de dades (s'obre cap amunt)
+    `<div class="wizard-children-popup wizard-recover-popup" id="wizard-recover-popup" hidden>` +
+      `<p class="wcp__title">Recupera dades d'una inscripció anterior</p>` +
+      `<div id="wizard-recover-list"></div>` +
+    `</div>` +
     `<p class="wizard-nav__note" id="wizard-note" aria-live="polite" role="alert"></p>` +
     `<div class="wizard-nav__row">` +
       `<div class="wizard-nav__left">` +
         `<button type="button" class="btn btn--ghost wizard-nav__back" id="wizard-back">` + CHEV_LEFT + `<span>Enrere</span></button>` +
+        `<button type="button" class="wizard-nav__recover" id="wizard-recover" hidden aria-label="Recupera dades d'una inscripció anterior">` +
+          HIST_SVG +
+        `</button>` +
         `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
           PEOPLE_SVG +
           `<span id="wizard-children-label"></span>` +
@@ -520,6 +531,7 @@ function initWizard() {
   document.getElementById("wizard-back").addEventListener("click", wizardBack);
   document.getElementById("wizard-next").addEventListener("click", wizardNext);
   document.getElementById("wizard-children-info").addEventListener("click", toggleChildrenPopup);
+  document.getElementById("wizard-recover").addEventListener("click", toggleRecoverPopup);
 
   // Actualitza el comptador de fills en temps real quan l'usuari escriu el nom
   if (!els.sections.dataset.childInputWatch) {
@@ -558,10 +570,21 @@ function renderWizardNav() {
   const showChildrenInfo = isChildrenStep && nChildren > 1;
   const childrenInfo    = document.getElementById("wizard-children-info");
   const childrenLabel   = document.getElementById("wizard-children-label");
+  const recoverBtn      = document.getElementById("wizard-recover");
+
+  // Botó de recuperació de dades: només al pas 1, si hi ha dades desades i no s'ha descartat,
+  // i sense xocar amb el resum de fills. Ocupa el lloc del botó "Enrere" (invisible al pas 1).
+  const showRecover = !!recoverBtn && recoverAvailable && wizardStep === 0
+    && !returningDismissed && !showChildrenInfo;
+  if (recoverBtn) recoverBtn.hidden = !showRecover;
 
   if (backBtn) {
-    backBtn.hidden = showChildrenInfo;
-    if (!showChildrenInfo) backBtn.style.visibility = wizardStep === 0 ? "hidden" : "visible";
+    if (showChildrenInfo || showRecover) {
+      backBtn.hidden = true;            // el lloc l'ocupa el resum de fills o la recuperació
+    } else {
+      backBtn.hidden = false;
+      backBtn.style.visibility = wizardStep === 0 ? "hidden" : "visible";
+    }
   }
   if (childrenInfo) {
     childrenInfo.hidden = !showChildrenInfo;
@@ -643,6 +666,7 @@ function openChildrenPopup() {
   const popup   = document.getElementById("wizard-children-popup");
   const trigger = document.getElementById("wizard-children-info");
   if (!popup) return;
+  closeRecoverPopup();   // mai dos popups oberts alhora
   renderChildrenPopup();
   popup.hidden = false;
   trigger && trigger.classList.add("is-open");
@@ -1560,9 +1584,30 @@ function maybeShowReturning() {
   const store = loadLocal();
   // Només mostrem inscripcions anteriors amb dades útils (nom o correu).
   const fams = mergeFamiliesByKey((store.families || []).filter((f) => familyLabel(f)));
-  if (!fams.length) { hideReturning(); return; }
-  els.returningActions.innerHTML = "";
+  if (!fams.length) { recoverAvailable = false; hideReturning(); return; }
+  recoverAvailable = true;
+
+  // Mòbil amb wizard actiu: la recuperació viu a la barra de navegació, no al banner.
+  // (Si no hi ha barra —p. ex. formulari d'un sol pas— caiem al banner.)
+  const list = document.getElementById("wizard-recover-list");
+  if (window.matchMedia("(pointer: coarse)").matches && list) {
+    if (els.returning) { els.returning.hidden = true; els.returning.style.display = "none"; }
+    renderRecoverChips(list, fams);
+    renderWizardNav();   // decideix si es mostra la icona (pas 1, no descartat…)
+    return;
+  }
+
+  // Escriptori: banner superior desplegable.
   els.returningText.textContent = "Recupera dades d'una inscripció anterior:";
+  renderRecoverChips(els.returningActions, fams);
+  setReturningOpen(false);
+  els.returning.hidden = false;
+  els.returning.style.display = "";
+}
+
+// Construeix els grups de família + chips de fill dins d'un contenidor donat.
+function renderRecoverChips(container, fams) {
+  container.innerHTML = "";
   fams.forEach((f) => {
     const group = document.createElement("div"); group.className = "returning-family";
 
@@ -1581,8 +1626,9 @@ function maybeShowReturning() {
       allBtn.textContent = `Tots dos fills`;
       if (f.children.length !== 2) allBtn.textContent = `Tots ${f.children.length} fills`;
       allBtn.addEventListener("click", () => {
+        returningDismissed = true;
         prefillFamilySelection(f, f.children.map((_, idx) => idx));
-        returningDismissed = true; hideReturning();
+        hideReturning();
       });
       actions.appendChild(allBtn);
     }
@@ -1605,18 +1651,16 @@ function maybeShowReturning() {
       });
       b.append(avatar, nameSpan, delSpan);
       b.addEventListener("click", () => {
+        returningDismissed = true;
         prefillFamilySelection(f, [idx]);
-        returningDismissed = true; hideReturning();
+        hideReturning();
       });
       actions.appendChild(b);
     });
 
     group.appendChild(actions);
-    els.returningActions.appendChild(group);
+    container.appendChild(group);
   });
-  setReturningOpen(false);
-  els.returning.hidden = false;
-  els.returning.style.display = "";
 }
 function mergeFamiliesByKey(families) {
   const grouped = new Map();
@@ -1683,10 +1727,46 @@ function findChildBirthdate(data) {
   return "";
 }
 function hideReturning() {
-  if (!els.returning) return;
-  els.returning.hidden = true;
-  els.returning.setAttribute("hidden", "");
-  els.returning.style.display = "none";
+  if (els.returning) {
+    els.returning.hidden = true;
+    els.returning.setAttribute("hidden", "");
+    els.returning.style.display = "none";
+  }
+  // També amaga la icona de recuperació de la barra (mòbil) i tanca el seu popup.
+  const recoverBtn = document.getElementById("wizard-recover");
+  if (recoverBtn) recoverBtn.hidden = true;
+  closeRecoverPopup();
+}
+
+// ---- Popup de recuperació (barra del wizard, mòbil) ----
+function openRecoverPopup() {
+  const popup   = document.getElementById("wizard-recover-popup");
+  const trigger = document.getElementById("wizard-recover");
+  if (!popup) return;
+  closeChildrenPopup();   // mai dos popups oberts alhora
+  popup.hidden = false;
+  trigger && trigger.classList.add("is-open");
+  document.addEventListener("click", onOutsideRecoverClick);
+}
+function closeRecoverPopup() {
+  document.removeEventListener("click", onOutsideRecoverClick);  // sempre, encara que el popup ja no existeixi
+  const popup   = document.getElementById("wizard-recover-popup");
+  const trigger = document.getElementById("wizard-recover");
+  if (!popup || popup.hidden) return;
+  popup.hidden = true;
+  trigger && trigger.classList.remove("is-open");
+}
+function onOutsideRecoverClick(e) {
+  const popup   = document.getElementById("wizard-recover-popup");
+  const trigger = document.getElementById("wizard-recover");
+  if (popup && trigger && !popup.contains(e.target) && !trigger.contains(e.target)) {
+    closeRecoverPopup();
+  }
+}
+function toggleRecoverPopup() {
+  const popup = document.getElementById("wizard-recover-popup");
+  if (!popup || popup.hidden) openRecoverPopup();
+  else closeRecoverPopup();
 }
 function removeCachedChild(entry, childIdx) {
   const key = familyKey(entry);

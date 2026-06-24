@@ -1508,6 +1508,37 @@ body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 .wizard-nav__children.is-open .wc__chevron { transform: rotate(180deg); }
 #wizard-children-label { min-width: 8px; }
 
+/* Icona de recuperació de dades (mòbil): cercle suau que batega per cridar l'atenció */
+.wizard-nav__recover {
+  position: relative; flex: 0 0 auto;
+  width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+  display: grid; place-items: center;
+  background: var(--blue-soft); color: var(--blue);
+  transition: background .15s, transform .12s;
+}
+.wizard-nav__recover[hidden] { display: none !important; }
+.wizard-nav__recover svg { stroke: var(--blue); }
+.wizard-nav__recover:active { transform: scale(.94); }
+.wizard-nav__recover.is-open { background: var(--blue); color: #fff; }
+.wizard-nav__recover.is-open svg { stroke: #fff; }
+/* Anell de batec (com el "live" del hero). S'atura en obrir el popup. */
+.wizard-nav__recover::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  pointer-events: none; animation: recover-pulse 2s ease-out infinite;
+}
+.wizard-nav__recover.is-open::after { animation: none; }
+@keyframes recover-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(31,90,224,.45); }
+  100% { box-shadow: 0 0 0 11px rgba(31,90,224,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wizard-nav__recover::after { animation: none; }
+}
+/* Títol del popup de recuperació */
+.wcp__title {
+  margin: 2px 4px 10px; font-size: .82rem; font-weight: 700; color: var(--navy);
+}
+
 /* Popup de fills (s'obre cap amunt sobre la barra) */
 .wizard-children-popup {
   position: absolute; bottom: 100%; left: 0; right: 0;
