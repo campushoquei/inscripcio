@@ -74,64 +74,6 @@ function revokeAdminToken(tok) {
   if (tok) CacheService.getScriptCache().remove("tok_" + String(tok));
 }
 
-// Valida els camps de la inscripció al servidor. Retorna { ok } o { ok: false, error }.
-function validatePayload(payload, entries) {
-  var ALLOWED_MIME = {
-    "image/jpeg": 1, "image/jpg": 1, "image/png": 1,
-    "image/heic": 1, "image/webp": 1, "application/pdf": 1
-  };
-  var MAX_FILE_B  = 5  * 1024 * 1024; // 5 MB per fitxer
-  var MAX_TOTAL_B = 12 * 1024 * 1024; // 12 MB en total
-
-  var shared = payload.shared || {};
-
-  // Email: obligatori i amb format bàsic vàlid.
-  var email = findEmail(shared);
-  if (!email) {
-    for (var i = 0; i < (entries || []).length && !email; i++) email = findEmail((entries[i].data) || {});
-  }
-  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return { ok: false, error: "Adreça de correu electrònic no vàlida o absent." };
-  }
-
-  // NIF/NIE: si és present, validar format.
-  var nif = pickFirstValue(shared, [/^nif$/i, /document/i, /dni/i]);
-  if (nif && !/^\d{8}[A-Za-z]$|^[XYZxyz]\d{7}[A-Za-z]$/.test(str(nif).replace(/\s/g, ""))) {
-    return { ok: false, error: "Format de NIF/NIE no vàlid." };
-  }
-
-  // Telèfon: si és present, validar format (7–15 caràcters numèrics/+/-/espai).
-  var tel = pickFirstValue(shared, [/^telefon$|^telefono$|^mobil$|^movil$|^phone$/i]);
-  if (tel && !/^[0-9\s+\-.]{7,15}$/.test(str(tel))) {
-    return { ok: false, error: "Format de telèfon no vàlid." };
-  }
-
-  // Codi postal: si és present, ha de ser exactament 5 dígits.
-  var cp = pickFirstValue(shared, [/codi_postal|codigo_postal|codipostal|postal_code/i]);
-  if (cp && !/^\d{5}$/.test(str(cp).trim())) {
-    return { ok: false, error: "El codi postal ha de tenir 5 dígits." };
-  }
-
-  // Fitxers: tipus MIME permès i mida màxima.
-  var totalBytes = 0;
-  for (var j = 0; j < (entries || []).length; j++) {
-    var files = (entries[j] && entries[j].files) || [];
-    for (var k = 0; k < files.length; k++) {
-      var f = files[k];
-      var mime = str(f.mimeType).toLowerCase();
-      if (mime && !ALLOWED_MIME[mime]) {
-        return { ok: false, error: "Tipus de fitxer no permès: " + mime };
-      }
-      var sz = f.dataBase64 ? Math.round(f.dataBase64.length * 0.75) : 0;
-      if (sz > MAX_FILE_B) return { ok: false, error: "El fitxer \"" + str(f.name) + "\" supera els 5 MB." };
-      totalBytes += sz;
-    }
-  }
-  if (totalBytes > MAX_TOTAL_B) return { ok: false, error: "El total de fitxers adjunts supera els 12 MB." };
-
-  return { ok: true };
-}
-
 function doGet(e) {
   resetCache();
   try {
@@ -168,9 +110,6 @@ function doPost(e) {
     var entries = (payload.children && payload.children.length)
       ? payload.children
       : [{ data: payload.data || {}, weeks: payload.weeks || [], weekLabels: payload.weekLabels || [], files: payload.files || [] }];
-
-    var v = validatePayload(payload, entries);
-    if (!v.ok) return json({ ok: false, error: v.error });
 
     removeExistingSubmissionRows(form, shared);
 
