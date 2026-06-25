@@ -89,6 +89,10 @@ function doPost(e) {
   // Les processem abans d'agafar el lock perquè són lectures/edicions puntuals.
   var pre = null;
   try { pre = JSON.parse(e.postData.contents); } catch (_) { pre = null; }
+  // Staging de fitxers: el formulari puja les fotos en segon pla mentre s'omple,
+  // i les esborra si no s'acaba enviant. Es processen abans del lock d'inscripció.
+  if (pre && pre.action === "upload") return json(handleStagedUpload(pre));
+  if (pre && pre.action === "delete") return json(handleStagedDelete(pre));
   if (pre && pre.action) return json(handleAdmin(pre));
 
   if (!checkSubmissionRateLimit()) return json({ ok: false, error: "Massa sol·licituds. Espera un moment i torna-ho a provar." });
@@ -258,15 +262,67 @@ function saveFiles(files, settings, payload, id) {
   // Nom del nen/a per al nom del fitxer (si no n'hi ha, fem servir l'ID).
   var childName = (pickChild(payload) || id).replace(/[^\w\-]+/g, "_").replace(/^_+|_+$/g, "") || id;
   return files.map(function (f) {
-    var bytes = Utilities.base64Decode(f.dataBase64);
     var ext = extensionFor(f.name, f.mimeType);
     var label = String(f.field || "document").replace(/[^\w\-]+/g, "_");
     // Ex.: "Marc_Puig - tarjeta_sanitaria.pdf"
     var fileName = childName + " - " + label + (ext ? "." + ext : "");
-    var blob = Utilities.newBlob(bytes, f.mimeType || "application/octet-stream", fileName);
-    var file = folder.createFile(blob);
+    var file = null;
+    if (f.ref) {
+      // Ja pujat en segon pla (staging): el reanomenem i el movem a la carpeta definitiva.
+      try { file = DriveApp.getFileById(f.ref); file.setName(fileName); file.moveTo(folder); }
+      catch (e) { file = null; }
+    }
+    if (!file && f.dataBase64) {
+      // Fallback: arribava inline en base64.
+      var blob = Utilities.newBlob(Utilities.base64Decode(f.dataBase64), f.mimeType || "application/octet-stream", fileName);
+      file = folder.createFile(blob);
+    }
+    if (!file) return null;
     return { field: f.field, name: file.getName(), url: file.getUrl() };
-  });
+  }).filter(function (x) { return x; });
+}
+
+/* ---------- Staging: pujada en segon pla des del formulari ----------
+   El formulari puja cada foto a una carpeta temporal mentre l'usuari acaba; en
+   enviar, només passa la referència (id) i saveFiles la mou a la carpeta final.
+   Si no s'envia (treta o pàgina abandonada) s'esborra; cleanupStagedFiles() neteja
+   els orfes amb un activador horari. */
+function getStagingFolder(settings) {
+  var root = getOrCreateFolder(DriveApp.getRootFolder(), (settings && settings.carpeta_fitxers) || "Inscripcions - fitxers");
+  return getOrCreateFolder(root, "_temporals");
+}
+function handleStagedUpload(p) {
+  try {
+    if (!p.dataBase64) return { ok: false, error: "no data" };
+    var settings = readSettings(String(p.form || "").trim());
+    var folder = getStagingFolder(settings);
+    var blob = Utilities.newBlob(Utilities.base64Decode(p.dataBase64), p.mimeType || "application/octet-stream", p.name || "foto");
+    var file = folder.createFile(blob);
+    return { ok: true, fileId: file.getId() };
+  } catch (err) { return { ok: false, error: String(err) }; }
+}
+function handleStagedDelete(p) {
+  try {
+    if (!p.fileId) return { ok: true };
+    var staging = getStagingFolder(readSettings(String(p.form || "").trim()));
+    var file = DriveApp.getFileById(p.fileId);
+    // Seguretat: només esborrem si el fitxer és dins la carpeta temporal.
+    var parents = file.getParents(), inStaging = false;
+    while (parents.hasNext()) { if (parents.next().getId() === staging.getId()) { inStaging = true; break; } }
+    if (inStaging) file.setTrashed(true);
+  } catch (err) {}
+  return { ok: true };
+}
+// Activador horari (Activadors → cleanupStagedFiles → cada hora): esborra els
+// fitxers temporals orfes de més de 24h que no s'han arribat a enviar mai.
+function cleanupStagedFiles() {
+  var staging = getStagingFolder(readSettings(""));
+  var cutoff = Date.now() - 24 * 3600 * 1000;
+  var files = staging.getFiles();
+  while (files.hasNext()) {
+    var f = files.next();
+    if (f.getDateCreated().getTime() < cutoff) f.setTrashed(true);
+  }
 }
 // Carpeta destí: arrel/<carpeta_fitxers>/<hoja del formulari>.
 // El nom de la subcarpeta és el mateix valor de la columna "hoja" de la pestanya
