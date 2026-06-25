@@ -1647,6 +1647,12 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
    els botons clarament per sobre d'aquesta zona. El fons de la nostra barra es manté fins a
    baix, així no es perd l'aspecte. Limitat a iOS amb -webkit-touch-callout. */
 @supports (-webkit-touch-callout: none) {
+  /* Safari PRESENT: la seva barra inferior ja cobreix l'indicador d'inici, així que no cal
+     reservar el safe-area → la nostra barra queda ben arran de baix (abans hi havia un buit
+     de ~34px que no servia per a res). */
+  .wizard-nav__row { padding-bottom: 8px; }
+  body.has-wizard { padding-bottom: 64px; }
+  /* Safari AMAGAT: pugem els botons fora de la zona de toc i respectem l'indicador d'inici */
   body.ios-toolbar-hidden .wizard-nav__row { padding-bottom: calc(env(safe-area-inset-bottom) + 52px); }
   body.ios-toolbar-hidden.has-wizard { padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
 }
