@@ -146,10 +146,10 @@ async function init() {
 
 // iOS Safari minimitza la seva barra inferior en fer scroll i reserva la franja del fons
 // de la pantalla per fer-la reaparèixer: el primer toc als nostres botons hi "desperta" la
-// barra del Safari en comptes de clicar. Detectem aquest estat (l'àrea visible creix ~fins
-// al layout viewport quan la barra del Safari desapareix) i, via la classe a <body>, pugem
-// els botons per sobre d'aquesta zona. Quan la barra del Safari torna, ja aixeca la nostra
-// i reduïm el padding. Només té efecte visual a iOS (el CSS està darrere d'un @supports).
+// barra del Safari en comptes de clicar. Detectem aquest estat (l'àrea visible creix quan
+// la barra del Safari desapareix) i, via la classe a <body>, pugem els botons per sobre
+// d'aquesta zona. Quan la barra del Safari torna, ja aixeca la nostra i reduïm el padding.
+// Només té efecte visual a iOS (el CSS està darrere d'un @supports).
 function setupIOSBarFix() {
   const vv = window.visualViewport;
   // Alçada visible inicial = estat amb la barra del Safari PRESENT (a la càrrega sempre hi és).
@@ -1518,7 +1518,9 @@ async function send(payload) {
   if (!out.ok) throw new Error(out.error || "error servidor");
   return out;
 }
+let noteTimer = null;
 function clearNote() {
+  if (noteTimer) { clearTimeout(noteTimer); noteTimer = null; }
   [els.submitNote, document.getElementById("wizard-note")].forEach((n) => {
     if (!n) return; n.textContent = ""; n.classList.remove("is-error");
   });
@@ -1532,6 +1534,9 @@ function setLoading(on) {
 function flashNote(msg) {
   const target = document.getElementById("wizard-note") || els.submitNote;
   target.textContent = msg; target.classList.add("is-error");
+  // El missatge (toast) marxa sol als 3 segons; un nou flashNote reinicia el compte.
+  if (noteTimer) clearTimeout(noteTimer);
+  noteTimer = setTimeout(clearNote, 3000);
 }
 // Vibració tàctil (només mòbils que ho suporten). Patró: ms o [vibra, pausa, vibra…].
 function haptic(pattern) {
