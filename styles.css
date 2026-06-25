@@ -1593,20 +1593,18 @@ body.has-wizard .child-price { display: none !important; }
   .wizard-nav::before { background: var(--card); }
 }
 /* Quan el wizard és actiu, empeny el contingut per sobre de la barra fixa */
-body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
-/* Fila d'error (sempre reserva espai per no fer saltar la nav) */
+body.has-wizard { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+/* Text d'error: ABSOLUT al fons de la barra (dins de la franja inferior que ja reservem).
+   Així no creix per dalt tapant el formulari ni desplaça els botons; apareix amb un fos. */
 .wizard-nav__note {
-  display: block;
-  margin: 0;
-  min-height: 0; max-height: 0; overflow: hidden;
-  text-align: center; font-size: .82rem; color: var(--danger);
-  padding-inline: 20px;
-  transition: max-height .2s ease, padding .2s ease;
+  position: absolute; left: 0; right: 0;
+  bottom: max(5px, env(safe-area-inset-bottom));
+  margin: 0; padding: 0 20px;
+  text-align: center; font-size: .8rem; line-height: 1.25; color: var(--danger);
+  opacity: 0; transform: translateY(3px); pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
 }
-.wizard-nav__note.is-error {
-  max-height: 48px;
-  padding-block: 6px;
-}
+.wizard-nav__note.is-error { opacity: 1; transform: none; }
 /* Fila de botons: exactament 3 fills → Enrere | Indicador | Acció */
 .wizard-nav__row {
   display: grid;
@@ -1616,17 +1614,19 @@ body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
   max-width: var(--maxw);
   margin-inline: auto;
   padding: 12px 16px;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  /* Reserva inferior: hosteja el text d'error i deixa marge sota els botons */
+  padding-bottom: calc(env(safe-area-inset-bottom) + 22px);
+  /* Els botons pugen/baixen suaument quan apareix/desapareix la barra del Safari */
+  transition: padding-bottom .22s ease;
 }
-/* iOS Safari: quan la barra del navegador es minimitza, el fons de la pantalla queda
-   reservat com a zona per fer-la reaparèixer, i el primer toc als nostres botons hi
-   "desperta" la barra del Safari en comptes de clicar. Pugem els botons per sobre
-   d'aquesta zona afegint marge inferior (el fons de la nostra barra es manté fins a
-   baix, així no es perd l'aspecte). Es limita a iOS amb el truc de -webkit-touch-callout
-   (Android/PC no el suporten i no reben aquest espai extra). */
+/* iOS Safari: quan la seva barra inferior es minimitza, el fons de la pantalla queda
+   reservat com a zona per fer-la reaparèixer i el primer toc als botons hi "desperta" la
+   barra del Safari. En aquest estat (classe afegida des del JS via visualViewport) pugem
+   els botons clarament per sobre d'aquesta zona. El fons de la nostra barra es manté fins a
+   baix, així no es perd l'aspecte. Limitat a iOS amb -webkit-touch-callout. */
 @supports (-webkit-touch-callout: none) {
-  .wizard-nav__row { padding-bottom: calc(max(12px, env(safe-area-inset-bottom)) + 20px); }
-  body.has-wizard { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  body.ios-toolbar-hidden .wizard-nav__row { padding-bottom: calc(env(safe-area-inset-bottom) + 52px); }
+  body.ios-toolbar-hidden.has-wizard { padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
 }
 /* Zona esquerra: contenidor de botó enrere + resum de fills */
 .wizard-nav__left { justify-self: start; display: flex; align-items: center; gap: 6px; min-width: 0; }

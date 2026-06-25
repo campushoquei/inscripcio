@@ -140,7 +140,35 @@ async function init() {
   els.returningClose.addEventListener("click", dismissReturning);
   if (els.returningToggle) els.returningToggle.addEventListener("click", toggleReturning);
   if (els.printBtn) els.printBtn.addEventListener("click", () => window.print());
+  setupIOSBarFix();
   await load();
+}
+
+// iOS Safari minimitza la seva barra inferior en fer scroll i reserva la franja del fons
+// de la pantalla per fer-la reaparèixer: el primer toc als nostres botons hi "desperta" la
+// barra del Safari en comptes de clicar. Detectem aquest estat (l'àrea visible creix ~fins
+// al layout viewport quan la barra del Safari desapareix) i, via la classe a <body>, pugem
+// els botons per sobre d'aquesta zona. Quan la barra del Safari torna, ja aixeca la nostra
+// i reduïm el padding. Només té efecte visual a iOS (el CSS està darrere d'un @supports).
+function setupIOSBarFix() {
+  const vv = window.visualViewport;
+  let maxH = 0;  // alçada visible més gran observada = barra del Safari del tot amagada
+  const update = () => {
+    const visible = vv ? vv.height : window.innerHeight;
+    if (visible > maxH) maxH = visible;
+    // Referència = el màxim entre el layout viewport i l'alçada més gran observada (segons
+    // la versió d'iOS, window.innerHeight pot ser estable o seguir el viewport visual).
+    const ref = Math.max(maxH, window.innerHeight);
+    // Quan l'àrea visible s'acosta a la referència, la barra del Safari està amagada.
+    const toolbarHidden = ref - visible < 16;
+    document.body.classList.toggle("ios-toolbar-hidden", toolbarHidden);
+  };
+  if (vv) {
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+  }
+  window.addEventListener("orientationchange", update);
+  update();
 }
 
 function cache() {
@@ -503,7 +531,6 @@ function initWizard() {
       `<p class="wcp__title">Recupera dades d'una inscripció anterior</p>` +
       `<div id="wizard-recover-list"></div>` +
     `</div>` +
-    `<p class="wizard-nav__note" id="wizard-note" aria-live="polite" role="alert"></p>` +
     `<div class="wizard-nav__row">` +
       `<div class="wizard-nav__left">` +
         `<button type="button" class="btn btn--ghost wizard-nav__back" id="wizard-back">` + CHEV_LEFT + `<span>Enrere</span></button>` +
@@ -525,7 +552,10 @@ function initWizard() {
           `<span class="btn__spinner" aria-hidden="true"></span>` +
         `</button>` +
       `</div>` +
-    `</div>`;
+    `</div>` +
+    // El text d'error es reserva al fons de la barra (sobre la franja inferior): així no
+    // creix per dalt tapant el formulari, i aprofita l'espai que ja deixem lliure a baix.
+    `<p class="wizard-nav__note" id="wizard-note" aria-live="polite" role="alert"></p>`;
   document.body.appendChild(nav);
   document.body.classList.add("has-wizard");
 
