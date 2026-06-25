@@ -779,12 +779,19 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 /* Col·lapsat: chevron apunta a la dreta = "tap per expandir" */
 .child-block--multiple.child-block--collapsed .child-block__chevron { display: block; transform: rotate(0deg); }
 .child-block--collapsed > *:not(.child-block__head) { display: none !important; }
+/* Botó "Treure" un nen: pastilla en to vermell suau, seguint l'estil del formulari */
 .child-block__remove {
   margin-left: auto; flex-shrink: 0;
-  background: none; border: 1px solid var(--line-ink); border-radius: 999px; cursor: pointer;
-  color: var(--ink-soft); font-size: .8rem; font-weight: 600; padding: 5px 11px; line-height: 1; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(192,57,43,.08);
+  border: 1px solid rgba(192,57,43,.22); border-radius: 999px; cursor: pointer;
+  color: var(--danger); font-size: .78rem; font-weight: 600;
+  padding: 5px 11px 5px 9px; line-height: 1; font-family: inherit;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .1s ease;
 }
-.child-block__remove:hover { border-color: var(--danger); color: var(--danger); }
+.child-block__remove-ic { flex-shrink: 0; }
+.child-block__remove:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.child-block__remove:active { transform: scale(.96); }
 .child-weeks { margin-top: 4px; }
 .add-child { margin-top: 16px; padding: 11px 18px; font-size: .92rem; }
 
@@ -1119,8 +1126,13 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   }
 
   .btn--primary { width: 100%; justify-content: center; }
+  /* Header comprimit al mòbil: menys alçada per guanyar espai útil de pantalla */
+  .topbar__inner { padding-block: 7px; gap: 10px; }
+  .emblem { width: 34px; height: 34px; border-radius: 9px; }
+  .topbar__camp { font-size: .9rem; }
+  .topbar__club { font-size: .72rem; }
   /* Col·lapsa el botó de contacte a icona sola per alliberar espai al títol */
-  .topbar__contact { font-size: 0; padding: 9px; gap: 0; }
+  .topbar__contact { font-size: 0; padding: 8px; gap: 0; }
   .topbar__contact svg { width: 17px; height: 17px; }
 
   /* Pills del slider: fila única amb scroll horitzontal */
@@ -1435,6 +1447,13 @@ body.has-wizard .child-price { display: none !important; }
   /* Fitxers (la versió mòbil se sobreescriu més avall, després de la seva base) */
   .filebox { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
 
+  /* Botó "Treure": to vermell del tema fosc */
+  .child-block__remove {
+    background: rgba(255,112,112,.12);
+    border-color: rgba(255,112,112,.28);
+  }
+  .child-block__remove:hover { background: var(--danger); border-color: var(--danger); color: #0A1020; }
+
   /* Notes i etiquetes */
   .note { background: var(--blue-soft); }
 
@@ -1593,18 +1612,21 @@ body.has-wizard .child-price { display: none !important; }
   .wizard-nav::before { background: var(--card); }
 }
 /* Quan el wizard és actiu, empeny el contingut per sobre de la barra fixa */
-body.has-wizard { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
-/* Text d'error: ABSOLUT al fons de la barra (dins de la franja inferior que ja reservem).
-   Així no creix per dalt tapant el formulari ni desplaça els botons; apareix amb un fos. */
+body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+/* Text d'error: píndola flotant (toast) just sobre la barra. Així no cal reservar-li espai
+   a sota i la barra pot ser ben compacta; apareix amb un fos i no desplaça res. */
 .wizard-nav__note {
-  position: absolute; left: 0; right: 0;
-  bottom: max(5px, env(safe-area-inset-bottom));
-  margin: 0; padding: 0 20px;
-  text-align: center; font-size: .8rem; line-height: 1.25; color: var(--danger);
-  opacity: 0; transform: translateY(3px); pointer-events: none;
+  position: absolute; left: 50%; bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(5px);
+  width: max-content; max-width: calc(100vw - 28px);
+  margin: 0; padding: 7px 15px; border-radius: 999px;
+  background: var(--danger); color: #fff;
+  text-align: center; font-size: .8rem; font-weight: 600; line-height: 1.25;
+  box-shadow: 0 6px 20px rgba(192,57,43,.32);
+  opacity: 0; pointer-events: none;
   transition: opacity .2s ease, transform .2s ease;
 }
-.wizard-nav__note.is-error { opacity: 1; transform: none; }
+.wizard-nav__note.is-error { opacity: 1; transform: translateX(-50%) translateY(0); }
 /* Fila de botons: exactament 3 fills → Enrere | Indicador | Acció */
 .wizard-nav__row {
   display: grid;
@@ -1613,9 +1635,9 @@ body.has-wizard { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
   gap: 6px;
   max-width: var(--maxw);
   margin-inline: auto;
-  padding: 12px 16px;
-  /* Reserva inferior: hosteja el text d'error i deixa marge sota els botons */
-  padding-bottom: calc(env(safe-area-inset-bottom) + 22px);
+  /* Compacta: amb la barra del Safari present (env≈0) queda ben arran de baix */
+  padding: 9px 16px;
+  padding-bottom: max(9px, env(safe-area-inset-bottom));
   /* Els botons pugen/baixen suaument quan apareix/desapareix la barra del Safari */
   transition: padding-bottom .22s ease;
 }
@@ -1754,15 +1776,6 @@ body.has-wizard { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
 }
 .wcp__week-label { min-width: 0; }
 .wcp__week-price { flex-shrink: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
-/* Petit cercle vermell: dona un toc clar de "treure" sense ser agressiu */
-.wcp__del {
-  flex-shrink: 0; width: 24px; height: 24px; padding: 0;
-  border-radius: 50%; border: none; cursor: pointer;
-  background: rgba(192,57,43,.1); color: var(--danger);
-  display: grid; place-items: center;
-  transition: background .12s, transform .12s, color .12s;
-}
-.wcp__del:active { background: var(--danger); color: #fff; transform: scale(.9); }
 /* Peu del popup amb el total general (quan hi ha més d'un fill) */
 .wcp__total {
   display: flex; align-items: center; justify-content: space-between;
@@ -1817,9 +1830,10 @@ html { scroll-padding-bottom: 84px; }
   .wizard-nav .btn { padding: 10px 13px; font-size: .84rem; }
   .wizard-nav__row { padding-inline: 12px; gap: 4px; }
 }
-/* Amaga l'etiqueta de text del progrés al mòbil (el wizard-nav ja informa) */
 @media (max-width: 520px) {
-  .form-progress__label { display: none; }
+  /* Al mòbil traiem del tot la barra de progrés superior: el wizard-nav inferior
+     ja informa del pas i guanyem espai útil de pantalla. */
+  .form-progress { display: none !important; }
   /* Footer no aporta res al mòbil amb wizard actiu */
   body.has-wizard .foot { display: none; }
 }
@@ -1846,8 +1860,9 @@ html { scroll-padding-bottom: 84px; }
   .wizard-nav__next:active:not(:disabled) { background: var(--blue); }
   /* Popup de fills: el rosa clar fix dels estats no funciona en fosc */
   .wcp__incomplete { background: rgba(255,112,112,.16); }
-  .wcp__del { background: rgba(255,112,112,.16); }
-  .wcp__del:active { background: var(--danger); color: #fff; }
+  /* Toast d'error: en fosc, --danger és clar i el text blanc hi perdria contrast →
+     fem servir un vermell saturat de fons i mantenim el text blanc. */
+  .wizard-nav__note { background: #C0392B; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
 }
 
 /* ---- Print ---- */

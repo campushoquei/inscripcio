@@ -152,22 +152,23 @@ async function init() {
 // i reduïm el padding. Només té efecte visual a iOS (el CSS està darrere d'un @supports).
 function setupIOSBarFix() {
   const vv = window.visualViewport;
-  let maxH = 0;  // alçada visible més gran observada = barra del Safari del tot amagada
+  // Alçada visible inicial = estat amb la barra del Safari PRESENT (a la càrrega sempre hi és).
+  // La fem servir de referència en comptes d'assumir res: així mai marquem "amagada" de més.
+  let baseH = null;
   const update = () => {
     const visible = vv ? vv.height : window.innerHeight;
-    if (visible > maxH) maxH = visible;
-    // Referència = el màxim entre el layout viewport i l'alçada més gran observada (segons
-    // la versió d'iOS, window.innerHeight pot ser estable o seguir el viewport visual).
-    const ref = Math.max(maxH, window.innerHeight);
-    // Quan l'àrea visible s'acosta a la referència, la barra del Safari està amagada.
-    const toolbarHidden = ref - visible < 16;
+    if (baseH === null) baseH = visible;
+    // La barra del Safari es considera amagada quan l'àrea visible CREIX prou respecte de
+    // l'inicial (la barra deixa lliure el seu espai). El teclat la fa més petita → mai amagada.
+    const toolbarHidden = visible - baseH > 30;
     document.body.classList.toggle("ios-toolbar-hidden", toolbarHidden);
   };
   if (vv) {
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
   }
-  window.addEventListener("orientationchange", update);
+  // En girar el dispositiu, les alçades canvien: re-establim la referència.
+  window.addEventListener("orientationchange", () => { baseH = null; update(); });
   update();
 }
 
@@ -708,8 +709,7 @@ function renderChildrenPopup() {
   const dataByIdx = {};
   if (summary) summary.children.forEach((c) => { dataByIdx[c.childIdx] = c; });
 
-  const blocks   = [...document.querySelectorAll(".child-block")];
-  const multiple = blocks.length > 1;
+  const blocks = [...document.querySelectorAll(".child-block")];
 
   blocks.forEach((block, idx) => {
     const name   = getChildName(block);
@@ -739,23 +739,8 @@ function renderChildrenPopup() {
       block.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     row.appendChild(scrollBtn);
-
-    // El botó d'eliminar només té sentit quan hi ha més d'un fill
-    if (multiple) {
-      const delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "wcp__del";
-      delBtn.setAttribute("aria-label", `Eliminar ${label}`);
-      delBtn.innerHTML =
-        `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-      delBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        removeChildBlock(block);
-        renderChildrenPopup();
-        renderWizardNav();
-      });
-      row.appendChild(delBtn);
-    }
+    // El popup és només informatiu: eliminar fills es fa des del botó "Treure" de
+    // cada bloc. Tocar una fila porta al nen corresponent.
     item.appendChild(row);
 
     // Desglossament: cada setmana triada amb el seu preu (la "suma" del subtotal)
@@ -796,7 +781,9 @@ function openChildrenPopup() {
   renderChildrenPopup();
   popup.hidden = false;
   trigger && trigger.classList.add("is-open");
-  document.addEventListener("click", onOutsidePopupClick);
+  // pointerdown (no click): a iOS Safari un toc en una zona no interactiva no dispara
+  // "click" cap al document, i el popup no es tancava. pointerdown sí que es dispara.
+  document.addEventListener("pointerdown", onOutsidePopupClick);
 }
 
 function closeChildrenPopup() {
@@ -805,7 +792,7 @@ function closeChildrenPopup() {
   if (!popup || popup.hidden) return;
   popup.hidden = true;
   trigger && trigger.classList.remove("is-open");
-  document.removeEventListener("click", onOutsidePopupClick);
+  document.removeEventListener("pointerdown", onOutsidePopupClick);
 }
 
 function onOutsidePopupClick(e) {
@@ -892,7 +879,11 @@ function childBlockEl(group, i, fileFields) {
     `<svg class="child-block__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>`;
   const rm = document.createElement("button");
   rm.type = "button"; rm.className = "child-block__remove"; rm.setAttribute("aria-label", "Treure aquest jugador/a");
-  rm.innerHTML = `✕ Treure`;
+  rm.innerHTML =
+    `<svg class="child-block__remove-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+      `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>` +
+    `</svg>` +
+    `<span>Treure</span>`;
   rm.addEventListener("click", () => removeChildBlock(block));
   head.appendChild(rm);
   // Toggle col·laps en clicar el cap (quan hi ha >1 fills)
@@ -1895,10 +1886,10 @@ function openRecoverPopup() {
   closeChildrenPopup();   // mai dos popups oberts alhora
   popup.hidden = false;
   trigger && trigger.classList.add("is-open");
-  document.addEventListener("click", onOutsideRecoverClick);
+  document.addEventListener("pointerdown", onOutsideRecoverClick);  // pointerdown: fiable amb el toc a iOS
 }
 function closeRecoverPopup() {
-  document.removeEventListener("click", onOutsideRecoverClick);  // sempre, encara que el popup ja no existeixi
+  document.removeEventListener("pointerdown", onOutsideRecoverClick);  // sempre, encara que el popup ja no existeixi
   const popup   = document.getElementById("wizard-recover-popup");
   const trigger = document.getElementById("wizard-recover");
   if (!popup || popup.hidden) return;
