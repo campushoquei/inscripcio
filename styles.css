@@ -1618,6 +1618,16 @@ body.has-wizard { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
   padding: 12px 16px;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
+/* iOS Safari: quan la barra del navegador es minimitza, el fons de la pantalla queda
+   reservat com a zona per fer-la reaparèixer, i el primer toc als nostres botons hi
+   "desperta" la barra del Safari en comptes de clicar. Pugem els botons per sobre
+   d'aquesta zona afegint marge inferior (el fons de la nostra barra es manté fins a
+   baix, així no es perd l'aspecte). Es limita a iOS amb el truc de -webkit-touch-callout
+   (Android/PC no el suporten i no reben aquest espai extra). */
+@supports (-webkit-touch-callout: none) {
+  .wizard-nav__row { padding-bottom: calc(max(12px, env(safe-area-inset-bottom)) + 20px); }
+  body.has-wizard { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+}
 /* Zona esquerra: contenidor de botó enrere + resum de fills */
 .wizard-nav__left { justify-self: start; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .wizard-nav__back[hidden] { display: none !important; }
