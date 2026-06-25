@@ -793,7 +793,35 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .child-block__remove:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 .child-block__remove:active { transform: scale(.96); }
 .child-weeks { margin-top: 4px; }
-.add-child { margin-top: 16px; padding: 11px 18px; font-size: .92rem; }
+/* Base (PC): la capçalera es comporta com l'antic .field__label — només el títol.
+   La icona i l'eyebrow només apareixen al mòbil (vegeu @media max-width:520px). */
+.child-weeks__head { display: block; margin-bottom: 7px; }
+.child-weeks__icon, .child-weeks__eyebrow { display: none; }
+.child-weeks__title { display: block; font-weight: 600; font-size: .92rem; }
+/* ---------- Botó "Afegir un altre nen/a" ----------
+   Minimalista: pla i sense ombres, text blau amb un "+" en cercle fi.
+   Amb .btn.add-child guanyem a .btn--ghost. */
+.btn.add-child {
+  margin-top: 14px; width: 100%; justify-content: center;
+  gap: 9px; padding: 12px 18px; font-size: .92rem; font-weight: 600;
+  color: var(--blue);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  transition: background .15s, transform .12s;
+}
+.add-child__icon {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid currentColor; color: var(--blue);
+  transition: transform .25s ease;
+}
+.add-child__icon svg { width: 13px; height: 13px; }
+@media (hover: hover) {
+  .btn.add-child:hover { background: var(--blue-soft); }
+  .btn.add-child:hover .add-child__icon { transform: rotate(90deg); }
+}
+.btn.add-child:active { transform: scale(.99); }
 
 /* ---------- Targeta de preus ---------- */
 .price-info {
@@ -906,6 +934,7 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .week__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .week__label { font-weight: 700; }
 .week__meta { font-size: .85rem; color: var(--ink-soft); }
+.week__places { font-size: .82rem; color: var(--ink-soft); }
 .week__price { display: none; }
 .week__check {
   width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%;
@@ -1199,12 +1228,146 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
     margin: 4px 0 0 26px; font-size: .64rem; padding: 2px 7px;
   }
   .rdb-toggle:has(input:checked) .rdb-toggle__badge { display: inline-block; }
+
+  /* ----- Setmanes com a panell propi (només mòbil) -----
+     Les dades del nen (nom, edat, sap nedar…) són camps blancs del formulari.
+     Triar setmanes és una acció diferent —una tria—, així que l'embolcallem en
+     un panell tintat amb capçalera pròpia perquè no es mimetitzi amb els camps
+     i es llegeixi com un bloc a part. */
+  .child-weeks {
+    margin-top: 22px;
+    padding: 15px 14px 16px;
+    background: linear-gradient(180deg, var(--blue-soft) 0%, rgba(31,90,224,.05) 100%);
+    border: 1px solid rgba(31,90,224,.18);
+    border-radius: var(--radius);
+    box-shadow: 0 9px 24px -15px rgba(31,90,224,.55);
+  }
+  .child-weeks__head {
+    display: flex; align-items: center; gap: 11px; margin-bottom: 14px;
+  }
+  .child-weeks__icon {
+    display: grid; place-items: center; flex: 0 0 auto;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--blue); color: #fff;
+    box-shadow: 0 5px 12px -4px rgba(31,90,224,.6);
+  }
+  .child-weeks__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .child-weeks__eyebrow {
+    display: block;
+    font-size: .67rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--blue);
+  }
+  .child-weeks__title {
+    font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .04em;
+    font-size: 1.04rem; line-height: 1.1; font-weight: 400; color: var(--navy);
+  }
+  /* El desplegable de preus dins el panell NO és una caixa pròpia, sinó una
+     fila integrada: capçalera tocable + filet de separació amb les setmanes.
+     Així s'evita la caixa blanca dins del panell tintat (quedava estranya) i,
+     en obrir-se, les targetes de preu (blanques) ressalten sobre el tint. */
+  .child-weeks .price-info {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0 0 9px;             /* mateix ritme que el gap entre setmanes */
+  }
+  .child-weeks .price-info__header { gap: 9px; }
+  .child-weeks .price-info__icon { width: 24px; height: 24px; font-size: .82rem; }
+  .child-weeks .price-info__title { font-size: .8rem; }
+  /* Quan s'obre, separem les targetes de preu del seu encapçalament */
+  .child-weeks .price-info__body-inner { padding-top: 11px; }
+
+  /* ----- Targetes de setmana amb caràcter (mòbil) -----
+     Dins el panell blau clar, la targeta sense triar és blanca i neta; en
+     triar-la s'omple de blau i el text passa a blanc, així destaca amb força
+     sobre el panell (l'estat antic feia fons blue-soft = el mateix del panell,
+     i la selecció es perdia). */
+  /* Targetes "calendari": la DATA és la protagonista (és pel que es tria),
+     l'etiqueta fa d'eyebrow a sobre, el número és un token rodó i les places
+     una pastilla. En triar-la s'omple de blau i el text passa a blanc. */
+  .child-weeks .weeks { gap: 9px; }
+  .child-weeks .week {
+    align-items: center; gap: 14px; padding: 13px 14px; border-radius: 14px;
+    background: var(--card); border-color: var(--line-ink);
+    box-shadow: 0 2px 7px -4px rgba(14,42,99,.16);
+    transition: border-color .18s, background .18s, transform .12s, box-shadow .22s;
+  }
+  /* Token rodó amb el número de setmana */
+  .child-weeks .week__num {
+    width: 44px; height: 44px; border-radius: 50%; font-size: 1.16rem;
+    background: linear-gradient(140deg, var(--navy) 0%, #1A3D85 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+    transition: background .18s, color .18s, box-shadow .18s;
+  }
+  .child-weeks .week__body { gap: 3px; }
+  /* Etiqueta = eyebrow petit a dalt */
+  .child-weeks .week__label {
+    font-size: .67rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--blue); transition: color .18s;
+  }
+  /* Dates = línia protagonista */
+  .child-weeks .week__meta {
+    font-size: 1.04rem; font-weight: 700; color: var(--navy); transition: color .18s;
+  }
+  /* Places = pastilla amb punt verd */
+  .child-weeks .week__places {
+    align-self: flex-start; margin-top: 5px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: .72rem; font-weight: 600; color: #157a4a;
+    background: rgba(34,160,90,.13); border-radius: 999px; padding: 2px 9px;
+    transition: background .18s, color .18s;
+  }
+  .child-weeks .week__places::before {
+    content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
+    background: #22a05a; transition: background .18s;
+  }
+  .child-weeks .week__check {
+    width: 24px; height: 24px; border-width: 2px;
+    transition: background .18s, border-color .18s, color .18s, transform .18s;
+  }
+  /* Estat triat: ompliment blau + text blanc + halo */
+  .child-weeks .week.is-selected {
+    border-color: var(--blue);
+    background: linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 100%);
+    box-shadow: 0 9px 22px -9px rgba(31,90,224,.6);
+  }
+  .child-weeks .week.is-selected .week__label  { color: rgba(255,255,255,.85); }
+  .child-weeks .week.is-selected .week__meta   { color: #fff; }
+  .child-weeks .week.is-selected .week__places {
+    color: #fff; background: rgba(255,255,255,.2);
+  }
+  .child-weeks .week.is-selected .week__places::before { background: #fff; }
+  .child-weeks .week.is-selected .week__num {
+    background: rgba(255,255,255,.18); color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.4);
+  }
+  .child-weeks .week.is-selected .week__check {
+    background: #fff; border-color: #fff; color: var(--blue);
+    transform: scale(1.04);
+  }
 }
 /* Targetes de preu apilades en fosc: la targeta (var--card) ja contrasta amb el fons
    del bloc; només ajustem els filets blaus al to clar del tema fosc */
 @media (prefers-color-scheme: dark) and (max-width: 520px) {
   .price-table tbody tr { border-color: rgba(91,142,255,.2); }
   .price-table tbody td.price-table__label { border-bottom-color: rgba(91,142,255,.18); }
+  /* Panell de setmanes: vora i ombra al to clar del tema fosc */
+  .child-weeks {
+    border-color: rgba(91,142,255,.22);
+    box-shadow: 0 9px 24px -16px rgba(0,0,0,.7);
+  }
+  /* En fosc, --navy/--blue s'aclareixen: forcem blaus prou foscos perquè
+     el text blanc dels badges i de la targeta triada mantingui contrast. */
+  .child-weeks .week__num { background: linear-gradient(140deg, #2E4FA0 0%, #16357a 100%); }
+  .child-weeks .week.is-selected {
+    background: linear-gradient(135deg, #2E63D6 0%, #3F78E6 100%);
+    border-color: #4178E6;
+    box-shadow: 0 9px 22px -10px rgba(0,0,0,.75);
+  }
+  .child-weeks .week.is-selected .week__check { color: #2E63D6; }
+  .child-weeks .week__places { color: #5fd99a; background: rgba(34,160,90,.16); }
+  .child-weeks .week__places::before { background: #4fce8a; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -1538,34 +1701,26 @@ body.has-wizard .child-price { display: none !important; }
 }
 
 /* ---------- Filebox versió mòbil (2 botons) ---------- */
+/* Compacta: sense caixa exterior (vora/fons/padding), només els dos botons en horitzontal.
+   Ocupa molta menys alçada que la versió en columna anterior. */
 .filebox--mobile {
-  display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
-  padding: 14px 12px 10px;
-  border: 1.5px dashed var(--rink-line);
-  border-radius: calc(var(--radius-sm) + 2px);
-  background: linear-gradient(180deg, #fff 0%, #f7faff 100%);
+  display: flex; gap: 8px; flex-wrap: wrap;
 }
 .filebox__mobile-btn {
-  flex: 1; min-width: 120px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  padding: 14px 10px;
+  flex: 1 1 120px;
+  display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 7px;
+  min-height: 46px; padding: 9px 12px;
   background: var(--blue-soft); border: 1.5px solid rgba(31,90,224,.2);
   border-radius: var(--radius-sm); cursor: pointer;
-  font-family: inherit; font-size: .9rem; font-weight: 600; color: var(--navy);
+  font-family: inherit; font-size: .88rem; font-weight: 600; color: var(--navy);
   text-align: center; transition: background .15s, border-color .15s;
 }
 .filebox__mobile-btn:active { background: rgba(31,90,224,.18); border-color: var(--blue); }
 .filebox__mobile-btn input { display: none; }
-.filebox__mobile-icon { font-size: 1.6rem; line-height: 1; }
+.filebox__mobile-icon { font-size: 1.15rem; line-height: 1; }
 .filebox__hint--mobile {
   width: 100%; text-align: center;
-  font-size: .78rem; color: var(--ink-soft); margin: 2px 0 0;
-}
-/* El degradat blanc de dalt és fix; en fosc cal sobreescriure'l AQUÍ (després de la
-   base), perquè el bloc fosc principal és anterior i, amb la mateixa especificitat,
-   perdria per ordre de cascada. */
-@media (prefers-color-scheme: dark) {
-  .filebox--mobile { background: linear-gradient(180deg, var(--card) 0%, #0B1220 100%); }
+  font-size: .73rem; color: var(--ink-soft); margin: 1px 0 0;
 }
 
 /* ---------- Transició entre passos del wizard ---------- */

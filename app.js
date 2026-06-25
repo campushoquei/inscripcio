@@ -722,7 +722,7 @@ function renderChildrenPopup() {
 
   blocks.forEach((block, idx) => {
     const name   = getChildName(block);
-    const label  = name || `Fill ${idx + 1}`;
+    const label  = name || `Jugador/a ${idx + 1}`;
     const filled = !!name;
     const data   = dataByIdx[idx] || { total: 0, weekBreakdown: [] };
     const amount = data.total || 0;
@@ -872,7 +872,11 @@ function childrenSectionEl(num, group, fileFields) {
   sec.appendChild(wrap);
   const add = document.createElement("button");
   add.type = "button"; add.className = "btn btn--ghost add-child";
-  add.innerHTML = `<span aria-hidden="true">+</span> Afegir un altre nen/a`;
+  add.innerHTML =
+    `<span class="add-child__icon" aria-hidden="true">` +
+      `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>` +
+    `</span>` +
+    `<span class="add-child__text">Afegir un germà o germana</span>`;
   add.addEventListener("click", () => addChildBlock(wrap, group, fileFields));
   sec.appendChild(add);
   for (let i = 0; i < childCount; i++) wrap.appendChild(childBlockEl(group, i, fileFields));
@@ -1282,7 +1286,18 @@ function buildPriceTableFromConfig() {
 
 function childWeeksEl(i) {
   const wrap = document.createElement("div"); wrap.className = "field child-weeks"; wrap.dataset.weeks = "1"; wrap.dataset.child = String(i);
-  const lab = document.createElement("p"); lab.className = "field__label"; lab.textContent = weeksTitle(); wrap.appendChild(lab);
+  const head = document.createElement("div"); head.className = "child-weeks__head";
+  head.innerHTML =
+    `<span class="child-weeks__icon" aria-hidden="true">` +
+      `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+        `<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>` +
+      `</svg>` +
+    `</span>` +
+    `<span class="child-weeks__titles">` +
+      `<span class="child-weeks__eyebrow">Tria</span>` +
+      `<span class="child-weeks__title">${escapeHtml(weeksTitle())}</span>` +
+    `</span>`;
+  wrap.appendChild(head);
   const list = document.createElement("div"); list.className = "weeks";
   const weeks = weeksForCampus();
   if (!weeks.length) { const p = document.createElement("p"); p.className = "field__help"; p.textContent = "Aquest casal encara no té setmanes definides."; wrap.appendChild(p); return wrap; }
@@ -1298,13 +1313,17 @@ function childWeeksEl(i) {
     const input = document.createElement("input");
     input.type = "checkbox"; input.value = w.id; input.name = `c${i}__weeks`; input.disabled = full;
     input.addEventListener("change", () => { lab.classList.toggle("is-selected", input.checked); if (navigator.vibrate) navigator.vibrate(10); });
-    const placesMeta = (!full && w.plazas_restantes != null && showPlacesLeft(w)) ? ` · ${w.plazas_restantes} places disponibles` : "";
+    const placesPill = (!full && w.plazas_restantes != null && showPlacesLeft(w))
+      ? `<span class="week__places">${w.plazas_restantes} places</span>` : "";
     const fullTag = full ? `<span class="week__tag">Complet</span>` : "";
-    lab.innerHTML = `<span class="week__num">${idx + 1}</span>
-      <span class="week__body"><span class="week__label">${escapeHtml(w.etiqueta)}</span>
-      <span class="week__meta">${escapeHtml(w.fechas || "")}${placesMeta}</span></span>
-      ${fullTag}
-      <span class="week__check">✓</span>`;
+    lab.innerHTML = `<span class="week__num">${idx + 1}</span>` +
+      `<span class="week__body">` +
+        `<span class="week__label">${escapeHtml(w.etiqueta)}</span>` +
+        `<span class="week__meta">${escapeHtml(w.fechas || "")}</span>` +
+        placesPill +
+      `</span>` +
+      fullTag +
+      `<span class="week__check">✓</span>`;
     lab.prepend(input); list.appendChild(lab);
   });
   wrap.appendChild(list);

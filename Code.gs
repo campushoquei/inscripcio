@@ -122,7 +122,13 @@ function doPost(e) {
       // Passa les dades del fill concret perquè el nom del fitxer reflecteixi el seu nom,
       // no sempre el del primer fill. També passem el formulari perquè els fitxers
       // es desin en una carpeta amb el nom del formulari (no a "General").
-      var saved = saveFiles(childFiles, settings, { data: cd, formName: payload.formName, form: form }, id);
+      var filePayload = { data: cd, formName: payload.formName, form: form };
+      var saved = saveFiles(childFiles, settings, filePayload, id);
+      // Premium: si falta algun fitxer (p. ex. la targeta sanitària) però aquest mateix nen
+      // ja el va adjuntar en un altre campus, en reutilitzem la imatge (còpia a la carpeta
+      // d'aquest formulari + URL a la fila), com si l'hagués tornat a adjuntar.
+      var reused = reuseChildFilesFromOtherForms(child, settings, filePayload, saved);
+      if (reused.length) saved = saved.concat(reused);
       var byField = {};
       saved.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
 
@@ -285,6 +291,121 @@ function extensionFor(name, mime) {
 function getOrCreateFolder(parent, name) {
   var it = parent.getFoldersByName(name);
   return it.hasNext() ? it.next() : parent.createFolder(name);
+}
+
+/* ---------- Premium: reutilitzar fitxers d'altres campus ----------
+   Si un nen no adjunta un fitxer (típicament la targeta sanitària) però ja el va adjuntar en
+   un altre formulari/campus, en copiem la imatge a la carpeta d'aquest formulari i en posem
+   l'URL a la fila, com si l'hagués tornat a adjuntar.
+   - Es pot desactivar amb l'ajust "reutilitzar_fitxers" = no/false.
+   - Es pot limitar a camps concrets amb "reutilitzar_camps" = id1,id2 (per defecte, tots els
+     camps de tipus fitxer).
+   - L'emparellament del nen és per nom + cognoms + data de naixement (dades del full), exigint
+     com a mínim el nom i un segon identificador, per evitar copiar el document d'un altre nen. */
+function reuseChildFilesFromOtherForms(child, settings, payload, savedSoFar) {
+  if (settings && /^(no|false|0)$/i.test(String(settings.reutilitzar_fitxers || ""))) return [];
+
+  var currentForm = String(payload.form || "").trim();
+  var fileFields = readFields(currentForm).filter(function (f) { return f.tipo === "file"; });
+  if (!fileFields.length) return [];
+
+  // Limitació opcional a camps concrets
+  var only = String((settings && settings.reutilitzar_camps) || "").split(/[,\s]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+  if (only.length) fileFields = fileFields.filter(function (f) { return only.indexOf(f.id) !== -1; });
+
+  // Camps de fitxer que han quedat buits en aquesta inscripció
+  var have = {};
+  (savedSoFar || []).forEach(function (s) { have[s.field] = true; });
+  (child.files || []).forEach(function (f) { have[f.field] = true; });
+  var missing = fileFields.filter(function (f) { return !have[f.id]; });
+  if (!missing.length) return [];
+
+  var key = buildChildKey(child.data || {});
+  if (!key) return [];   // sense identitat fiable → no arrisquem cap còpia
+
+  var formIds = readForms().map(function (f) { return f.id; });
+  if (formIds.indexOf("") === -1) formIds.unshift("");   // inclou el formulari per defecte
+
+  var folder = null;     // crea/obre la carpeta només si realment trobem alguna cosa
+  var out = [];
+  missing.forEach(function (f) {
+    var urls = findPreviousFileUrls(key, f.id, currentForm, formIds);
+    if (!urls.length) return;
+    if (!folder) folder = getUploadFolder(settings, payload);
+    urls.forEach(function (url) {
+      var copied = copyDriveFileToFolder(url, folder, payload, f.id);
+      if (copied) out.push({ field: f.id, name: copied.name, url: copied.url });
+    });
+  });
+  return out;
+}
+
+// Clau d'identitat d'un nen: nom + cognoms + data de naixement (normalitzats). Funciona igual
+// amb les dades entrants (claus = id de camp) i amb una fila del full (claus = capçalera = id).
+function buildChildKey(data) {
+  var nom = "";
+  for (var k in data) {
+    // Exclou "cognom/apellido" (que contenen la subcadena "nom") i contactes (tutor/pare/mare).
+    if (/nom|nombre/i.test(k) && !/cognom|apellido|tutor|pare|mare|padre|madre/i.test(k) && str(data[k])) { nom = data[k]; break; }
+  }
+  var cognoms = pickFirstValue(data, [/cognom/i, /apellido/i]);
+  var nkey = normalizeKeyPart(nom);
+  var ckey = normalizeKeyPart(cognoms);
+  var bkey = birthKey(findBirthdate(data));
+  if (!nkey) return "";
+  if (!ckey && !bkey) return "";   // cal un segon identificador a banda del nom
+  return nkey + "|" + ckey + "@" + bkey;
+}
+// Normalitza una data (Date del full o text del formulari) a "yyyy-MM-dd" sense dependre del fus.
+function birthKey(v) {
+  if (!v) return "";
+  if (v instanceof Date) return isNaN(v.getTime()) ? "" : v.getFullYear() + "-" + pad2(v.getMonth() + 1) + "-" + pad2(v.getDate());
+  var s = str(v).trim();
+  var m = s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) return m[1] + "-" + pad2(m[2]) + "-" + pad2(m[3]);
+  m = s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+  if (m) return m[3] + "-" + pad2(m[2]) + "-" + pad2(m[1]);
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? "" : d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+}
+function pad2(n) { n = String(n); return n.length < 2 ? "0" + n : n; }
+
+// Busca als altres formularis una fila del MATEIX nen amb fitxer al camp donat. Retorna els URLs.
+function findPreviousFileUrls(key, fieldId, currentForm, formIds) {
+  var currentSheet = subsSheetName(currentForm);
+  var seen = {};
+  for (var i = 0; i < formIds.length; i++) {
+    var sheetName = subsSheetName(formIds[i]);
+    if (sheetName === currentSheet || seen[sheetName]) continue;   // mai el full actual, ni repetits
+    seen[sheetName] = true;
+    var data = readSubmissionRows(formIds[i]);
+    if (!data.rows.length || data.header.indexOf(fieldId) === -1) continue;
+    for (var r = data.rows.length - 1; r >= 0; r--) {   // de la més recent a la més antiga
+      var cell = str(data.rows[r][fieldId]);
+      if (!cell || !/https?:\/\//.test(cell)) continue;
+      if (buildChildKey(data.rows[r]) === key) {
+        return cell.split("\n").map(function (s) { return s.trim(); }).filter(function (s) { return /https?:\/\//.test(s); });
+      }
+    }
+  }
+  return [];
+}
+
+// Copia un fitxer de Drive (identificat per la seva URL) a la carpeta destí, amb el nom estàndard.
+function copyDriveFileToFolder(url, folder, payload, fieldId) {
+  var m = String(url).match(/[-\w]{25,}/);
+  if (!m) return null;
+  try {
+    var src = DriveApp.getFileById(m[0]);
+    var childName = (pickChild(payload) || "document").replace(/[^\w\-]+/g, "_").replace(/^_+|_+$/g, "") || "document";
+    var label = String(fieldId).replace(/[^\w\-]+/g, "_");
+    var copy = src.makeCopy(childName + " - " + label + reuseExt(src.getName()), folder);
+    return { name: copy.getName(), url: copy.getUrl() };
+  } catch (e) { return null; }
+}
+function reuseExt(name) {
+  var m = String(name || "").match(/\.([A-Za-z0-9]{1,8})$/);
+  return m ? "." + m[1].toLowerCase() : "";
 }
 
 /* ---------- Guardar fila ----------
