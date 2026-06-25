@@ -546,6 +546,7 @@ function initWizard() {
         `<button type="button" class="btn btn--ghost wizard-nav__back" id="wizard-back">` + CHEV_LEFT + `<span>Enrere</span></button>` +
         `<button type="button" class="wizard-nav__recover" id="wizard-recover" hidden aria-label="Recupera dades d'una inscripció anterior">` +
           HIST_SVG +
+          `<span class="wizard-nav__recover-text">Recupera dades</span>` +
         `</button>` +
         `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
           PEOPLE_SVG +
@@ -740,7 +741,7 @@ function renderChildrenPopup() {
     scrollBtn.innerHTML =
       `<span class="wcp__avatar">${escapeHtml(label.charAt(0).toUpperCase())}</span>` +
       `<span class="wcp__name">${escapeHtml(label)}</span>` +
-      (!filled ? `<span class="wcp__incomplete">incomplert</span>` : "") +
+      (!filled ? `<span class="wcp__incomplete">Incomplet</span>` : "") +
       (amount > 0 ? `<span class="wcp__amount">${amount} €</span>` : "");
     scrollBtn.addEventListener("click", () => {
       closeChildrenPopup();
@@ -1189,18 +1190,30 @@ function fileControl(f, labId, scope) {
     fileStore[storeKey].forEach((fl, idx) => {
       const chip = document.createElement("div"); chip.className = "file-chip";
       const isImg = (fl.mimeType || "").startsWith("image/");
+      const statusHtml =
+        fl.status === "uploading" ? `<span class="file-chip__status is-uploading" aria-label="Preparant…" title="Preparant…"></span>` :
+        fl.status === "done"      ? `<span class="file-chip__status is-done" aria-label="A punt" title="A punt">✓</span>` : "";
       chip.innerHTML = `${isImg ? `<img class="file-chip__thumb" alt="" src="data:${fl.mimeType};base64,${fl.dataBase64}" />` : `<span class="file-chip__thumb">PDF</span>`}
         <span class="file-chip__name"></span><span class="file-chip__size">${fmtSize(fl.size)}</span>
+        ${statusHtml}
         <button type="button" class="file-chip__remove" aria-label="Treure">✕</button>`;
       chip.querySelector(".file-chip__name").textContent = fl.name;
-      chip.querySelector(".file-chip__remove").addEventListener("click", () => { fileStore[storeKey].splice(idx, 1); renderChips(); });
+      chip.querySelector(".file-chip__remove").addEventListener("click", () => {
+        removeStagedFile(fileStore[storeKey][idx]);   // aborta pujada en curs / esborra del servidor si ja s'havia pujat
+        fileStore[storeKey].splice(idx, 1); renderChips();
+      });
       chips.appendChild(chip);
     });
   };
   const addFiles = async (list, srcInput) => {
     for (const file of list) {
       if (file.size > MAX_FILE_MB * 1024 * 1024) { flashNote(`"${file.name}" supera els ${MAX_FILE_MB} MB.`); continue; }
-      try { const dataBase64 = await readFileBase64(file); fileStore[storeKey].push({ name: file.name, mimeType: file.type, dataBase64, size: file.size }); renderChips(); }
+      try {
+        const stored = await processFileForUpload(file);
+        fileStore[storeKey].push(stored); renderChips();
+        // Pujada en segon pla: aprofitem el temps mentre l'usuari acaba el formulari.
+        uploadStagedFile(stored, renderChips);
+      }
       catch { flashNote(`No s'ha pogut llegir "${file.name}".`); }
     }
     // Reseta l'input que ha disparat l'event (per poder repetir la mateixa foto/arxiu)
@@ -1450,7 +1463,12 @@ function collect() {
     Object.keys(fileStore).forEach((key) => {
       if (!key.startsWith(`c${blockIdx}__`)) return;
       const fieldId = key.slice(`c${blockIdx}__`.length);
-      fileStore[key].forEach((fl) => files.push({ field: fieldId, name: fl.name, mimeType: fl.mimeType, dataBase64: fl.dataBase64 }));
+      fileStore[key].forEach((fl) => {
+        // Si la foto ja s'ha pujat en segon pla, enviem només la referència (ràpid);
+        // si no (sense servidor, error o encara local), s'envia inline en base64.
+        if (fl.status === "done" && fl.ref) files.push({ field: fieldId, name: fl.name, mimeType: fl.mimeType, ref: fl.ref });
+        else files.push({ field: fieldId, name: fl.name, mimeType: fl.mimeType, dataBase64: fl.dataBase64 });
+      });
     });
     children.push({ data, weeks, files });
   });
@@ -1496,44 +1514,53 @@ async function onSubmit(e) {
     if (firstBad) firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
     return flashNote("Revisa els camps marcats.");
   }
-  const { shared, children } = collect();
-  // Comprova la mida total de tots els fitxers de tots els fills.
-  const totalBytes = children.reduce((sum, ch) =>
-    sum + (ch.files || []).reduce((s, f) => s + f.dataBase64.length * 0.75, 0), 0);
-  if (totalBytes > MAX_TOTAL_MB * 1024 * 1024) return flashNote(`Els fitxers sumen massa (màx ${MAX_TOTAL_MB} MB).`);
-  const campus = (CONFIG.campuses || []).find((c) => c.id === currentCampus);
-  const all = weeksForCampus();
-  const childrenPayload = children.map((ch, chIdx) => {
-    const isRDB = ch.data.is_rdb === "Sí";
-    const isFN = ch.data.familia_nombrosa === "Sí";
-    let preu = null, descompte = "";
-    if (hasPriceConfig() && ch.weeks.length > 0) {
-      preu = ch.weeks.reduce((sum, weekId, weekIdx) => sum + calcWeekPrice(chIdx, weekIdx, isRDB, isFN, getWeekPrices(weekId)), 0);
-      const d = [];
-      if (isRDB) d.push("C.P. Riudebitlles");
-      if (isFN) d.push("Família nombrosa");
-      if (chIdx > 0) d.push("Germà/na");
-      descompte = d.join(", ") || "-";
-    }
-    return {
-      data: ch.data,
-      weeks: ch.weeks,
-      files: ch.files || [],
-      weekLabels: all.filter((w) => ch.weeks.includes(w.id)).map((w) => `${w.id} (${w.fechas || w.etiqueta})`),
-      preu,
-      descompte
-    };
-  });
-  const campusName = campus ? campus.nombre : "";
-  const payload = {
-    form: activeFormId, formName: (CONFIG.form && CONFIG.form.nombre) || (CONFIG.settings && CONFIG.settings.hero_titulo) || activeFormId,
-    campusId: currentCampus || "", campusName,
-    shared, children: childrenPayload, ts: new Date().toISOString()
-  };
-
   setLoading(true);
   try {
+    // Espera les pujades en segon pla que encara estiguin en curs (normalment ja fetes,
+    // perquè s'han anat pujant mentre l'usuari omplia el formulari).
+    const pendingUploads = [];
+    Object.keys(fileStore).forEach((k) => (fileStore[k] || []).forEach((fl) => {
+      if (fl && fl.status === "uploading" && fl._promise) pendingUploads.push(fl._promise);
+    }));
+    if (pendingUploads.length) await Promise.allSettled(pendingUploads);
+
+    const { shared, children } = collect();
+    // Mida total només dels fitxers que s'envien inline (els ja pujats no compten).
+    const totalBytes = children.reduce((sum, ch) =>
+      sum + (ch.files || []).reduce((s, f) => s + (f.dataBase64 ? f.dataBase64.length * 0.75 : 0), 0), 0);
+    if (totalBytes > MAX_TOTAL_MB * 1024 * 1024) { flashNote(`Els fitxers sumen massa (màx ${MAX_TOTAL_MB} MB).`); return; }
+    const campus = (CONFIG.campuses || []).find((c) => c.id === currentCampus);
+    const all = weeksForCampus();
+    const childrenPayload = children.map((ch, chIdx) => {
+      const isRDB = ch.data.is_rdb === "Sí";
+      const isFN = ch.data.familia_nombrosa === "Sí";
+      let preu = null, descompte = "";
+      if (hasPriceConfig() && ch.weeks.length > 0) {
+        preu = ch.weeks.reduce((sum, weekId, weekIdx) => sum + calcWeekPrice(chIdx, weekIdx, isRDB, isFN, getWeekPrices(weekId)), 0);
+        const d = [];
+        if (isRDB) d.push("C.P. Riudebitlles");
+        if (isFN) d.push("Família nombrosa");
+        if (chIdx > 0) d.push("Germà/na");
+        descompte = d.join(", ") || "-";
+      }
+      return {
+        data: ch.data,
+        weeks: ch.weeks,
+        files: ch.files || [],
+        weekLabels: all.filter((w) => ch.weeks.includes(w.id)).map((w) => `${w.id} (${w.fechas || w.etiqueta})`),
+        preu,
+        descompte
+      };
+    });
+    const campusName = campus ? campus.nombre : "";
+    const payload = {
+      form: activeFormId, formName: (CONFIG.form && CONFIG.form.nombre) || (CONFIG.settings && CONFIG.settings.hero_titulo) || activeFormId,
+      campusId: currentCampus || "", campusName,
+      shared, children: childrenPayload, ts: new Date().toISOString()
+    };
+
     const result = await send(payload);
+    submissionDone = true;   // ja no esborrarem les fotos pujades en abandonar
     saveLocal(shared, childrenPayload, campusName);
     showDone(shared, childrenPayload, campusName, result);
   } catch (err) { console.error(err); flashNote("No s'ha pogut enviar. Torna-ho a provar en uns segons."); }
@@ -1607,6 +1634,7 @@ function showDone(shared, children, campusName, result) {
 function resetForNew() {
   els.done.hidden = true; els.form.hidden = false; els.form.reset();
   document.body.classList.remove("page--done");
+  submissionDone = false;   // nova inscripció: torna a netejar fotos si s'abandona
   Object.keys(fileStore).forEach((k) => (fileStore[k] = []));
   childCount = 1;
   returningDismissed = false;
@@ -1770,12 +1798,14 @@ function maybeShowReturning() {
     return;
   }
 
-  // Escriptori: banner superior desplegable.
+  // Escriptori: banner desplegable. Amb el rail actiu (PC ample) viu a la columna
+  // dreta, sobre el resum; si no, fa de banner superior com sempre.
   els.returningText.textContent = "Recupera dades d'una inscripció anterior:";
   renderRecoverChips(els.returningActions, fams);
   setReturningOpen(false);
   els.returning.hidden = false;
   els.returning.style.display = "";
+  renderPcSummary();   // recalcula l'alineació de la columna dreta
 }
 
 // Construeix els grups de família + chips de fill dins d'un contenidor donat.
@@ -1909,6 +1939,8 @@ function hideReturning() {
   const recoverBtn = document.getElementById("wizard-recover");
   if (recoverBtn) recoverBtn.hidden = true;
   closeRecoverPopup();
+  // Al PC, en amagar-se el "ja t'havíem vist" cal recalcular l'alineació del rail.
+  renderPcSummary();
 }
 
 // ---- Popup de recuperació (barra del wizard, mòbil) ----
@@ -2024,6 +2056,102 @@ function prefillFamilySelection(entry, selectedIdxs) {
 function readFileBase64(file) {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(new Error("read")); r.readAsDataURL(file); });
 }
+// Objecte de fitxer tal qual (sense comprimir): per a PDFs i imatges petites.
+function readFileObj(file) {
+  return readFileBase64(file).then((dataBase64) => ({ name: file.name, mimeType: file.type, dataBase64, size: file.size }));
+}
+// Reescala/comprimeix imatges abans d'enviar: una foto de mòbil (uns quants MB)
+// passa a centenars de KB mantenint-se ben llegible. Així el payload és molt més
+// petit i l'enviament (i el processat al servidor) és molt més ràpid.
+const IMAGE_MAX_DIM = 1600;   // px del costat llarg
+const IMAGE_QUALITY = 0.82;   // qualitat JPEG
+function processFileForUpload(file) {
+  const t = file.type || "";
+  // Només imatges rasteritzables; GIF (pot ser animat) i no-imatges es deixen igual.
+  if (!t.startsWith("image/") || t === "image/gif") return readFileObj(file);
+  return compressImage(file).catch(() => readFileObj(file)); // si el navegador no la pot descodificar (p.ex. HEIC), s'envia original
+}
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, IMAGE_MAX_DIM / Math.max(img.width, img.height));
+      // Ja és petita i lleugera: no cal recomprimir.
+      if (scale === 1 && file.size <= 600 * 1024) return readFileObj(file).then(resolve, reject);
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      const dataBase64 = canvas.toDataURL("image/jpeg", IMAGE_QUALITY).split(",")[1];
+      const size = Math.round(dataBase64.length * 0.75);
+      // Si comprimir no ha reduït (imatge ja òptima), conserva l'original.
+      if (size >= file.size) return readFileObj(file).then(resolve, reject);
+      resolve({
+        name: file.name.replace(/\.(png|webp|heic|heif|bmp|tiff?)$/i, ".jpg"),
+        mimeType: "image/jpeg", dataBase64, size
+      });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("img")); };
+    img.src = url;
+  });
+}
+
+// ---- Pujada en segon pla (staging) ----
+// En adjuntar una foto, la pugem ja al servidor (carpeta temporal) mentre l'usuari
+// acaba el formulari. En enviar, només passem la referència → enviament instantani.
+// Si no s'acaba enviant (treure foto / abandonar) s'esborra; i el servidor té TTL.
+let submissionDone = false;
+function uploadStagedFile(stored, onChange) {
+  if (!SCRIPT_URL || !stored || !stored.dataBase64) return; // sense servidor → es queda local (s'enviarà inline)
+  stored.status = "uploading";
+  if (onChange) onChange();
+  const xhr = new XMLHttpRequest();
+  stored._xhr = xhr;
+  stored._promise = new Promise((resolve) => {
+    xhr.open("POST", SCRIPT_URL, true);
+    xhr.setRequestHeader("Content-Type", "text/plain;charset=utf-8");
+    xhr.onload = () => {
+      stored._xhr = null;
+      let out = null; try { out = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status >= 200 && xhr.status < 300 && out && out.ok && out.fileId) {
+        stored.ref = out.fileId; stored.status = "done";
+      } else {
+        stored.status = "error"; // fallback: s'enviarà inline (base64)
+      }
+      if (onChange) onChange();
+      resolve();
+    };
+    xhr.onerror = () => { stored._xhr = null; stored.status = "error"; if (onChange) onChange(); resolve(); };
+    xhr.onabort = () => { stored._xhr = null; resolve(); };
+    xhr.send(JSON.stringify({ action: "upload", form: activeFormId, name: stored.name, mimeType: stored.mimeType, dataBase64: stored.dataBase64 }));
+  });
+}
+function removeStagedFile(stored) {
+  if (!stored) return;
+  if (stored._xhr) { try { stored._xhr.abort(); } catch (e) {} stored._xhr = null; }
+  if (stored.status === "done" && stored.ref) deleteStagedRef(stored.ref);
+}
+function deleteStagedRef(ref, beacon) {
+  if (!SCRIPT_URL || !ref) return;
+  const body = JSON.stringify({ action: "delete", form: activeFormId, fileId: ref });
+  if (beacon && navigator.sendBeacon) {
+    try { navigator.sendBeacon(SCRIPT_URL, new Blob([body], { type: "text/plain;charset=utf-8" })); return; } catch (e) {}
+  }
+  try { fetch(SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body, keepalive: true }); } catch (e) {}
+}
+// Si s'abandona la pàgina sense enviar, esborra les fotos ja pujades (best-effort).
+function cleanupStagedOnUnload() {
+  if (submissionDone) return;
+  Object.keys(fileStore).forEach((k) => (fileStore[k] || []).forEach((fl) => {
+    if (fl && fl.status === "done" && fl.ref) deleteStagedRef(fl.ref, true);
+  }));
+}
+// e.persisted = la pàgina va a bfcache (es pot restaurar) → no esborrem; només
+// en tancar o navegar de debò (quan ja no es podrà recuperar el formulari).
+window.addEventListener("pagehide", (e) => { if (!e.persisted) cleanupStagedOnUnload(); });
 function fmtSize(b) { return b < 1024 * 1024 ? Math.round(b / 1024) + " KB" : (b / 1024 / 1024).toFixed(1) + " MB"; }
 function el(tag, cls) { const e = document.createElement(tag); if (cls) e.className = cls; return e; }
 function opt(v, t) { const o = document.createElement("option"); o.value = v; o.textContent = t; return o; }
@@ -2344,6 +2472,140 @@ function updateAllPrices() {
   const blocks = [...document.querySelectorAll(".child-block")];
   blocks.forEach((_, idx) => updateChildPriceDisplay(idx));
   updateTotalPriceCard();
+  renderPcSummary();
+}
+
+// ---- Resum lateral d'inscripció (només PC ample, sense wizard) ----
+// Equivalent al popup de fills del wizard mòbil: nens apuntats + import detallat,
+// però com a panell enganxat (sticky) al costat del formulari.
+let _pcSummaryMqlBound = false;
+function isPcSummaryLayout() {
+  return window.matchMedia("(pointer: fine) and (min-width: 1080px)").matches
+    && els.form && !els.form.hidden;
+}
+// Contenidor de la columna dreta al PC: hi van el "ja t'havíem vist" (a dalt) i el
+// rail de resum (sota), com un sol element de la graella → evita repartir l'alçada
+// del formulari entre files (que abans empenyia el rail molt avall).
+function ensurePcAside() {
+  let aside = document.getElementById("pc-aside");
+  if (aside) return aside;
+  aside = document.createElement("div");
+  aside.id = "pc-aside"; aside.className = "pc-aside";
+  // El col·loquem on és el "ja t'havíem vist" i l'hi fiquem a dins, perquè al mòbil
+  // (sense graella) el banner segueixi sortint a dalt, com sempre.
+  if (els.returning && els.returning.parentElement) {
+    els.returning.parentElement.insertBefore(aside, els.returning);
+    aside.appendChild(els.returning);
+  } else if (els.form && els.form.parentElement) {
+    els.form.parentElement.insertBefore(aside, els.form);
+  }
+  return aside;
+}
+function ensurePcSummaryEl() {
+  let el = document.getElementById("pc-summary");
+  if (el) return el;
+  const aside = ensurePcAside();
+  if (!aside) return null;
+  el = document.createElement("aside");
+  el.id = "pc-summary";
+  el.className = "pc-summary";
+  el.setAttribute("aria-label", "Resum de la inscripció");
+  // Clicar una fila porta al nen corresponent (com al popup del mòbil).
+  el.addEventListener("click", (e) => {
+    const item = e.target.closest(".pcsum__item");
+    if (!item) return;
+    const idx = [...el.querySelectorAll(".pcsum__item")].indexOf(item);
+    const block = document.querySelectorAll(".child-block")[idx];
+    if (block) { expandChild(block); block.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  });
+  aside.appendChild(el);
+  return el;
+}
+function renderPcSummary() {
+  if (!_pcSummaryMqlBound) {
+    _pcSummaryMqlBound = true;
+    try { window.matchMedia("(pointer: fine) and (min-width: 1080px)").addEventListener("change", renderPcSummary); } catch (e) {}
+  }
+  const show = isPcSummaryLayout();
+  document.body.classList.toggle("pc-summary-on", show);
+  const aside = document.getElementById("pc-aside");
+  if (!show) {
+    // Fora del mode PC: neteja el marge superior que haguéssim aplicat (p.ex. en
+    // reduir la finestra), perquè no afecti el layout mòbil.
+    if (aside) aside.style.marginTop = "";
+    return;
+  }
+  const el = ensurePcSummaryEl();
+  if (!el) return;
+
+  // Alinea el top de la columna dreta amb la primera targeta de secció (no amb la
+  // barra de progrés, que viu al capdamunt del formulari i té alçada variable).
+  // Mesurem respecte del #form (no sticky) → independent de l'scroll.
+  const firstSection = els.form.querySelector(".section");
+  const asideEl = document.getElementById("pc-aside");
+  if (firstSection && asideEl) {
+    const delta = Math.max(0, Math.round(firstSection.getBoundingClientRect().top - els.form.getBoundingClientRect().top));
+    asideEl.style.marginTop = delta + "px";
+  }
+
+  const summary   = computePriceSummary();
+  const dataByIdx = {};
+  if (summary) summary.children.forEach((c) => { dataByIdx[c.childIdx] = c; });
+  const blocks     = [...document.querySelectorAll(".child-block")];
+  const nFilled    = blocks.filter(getChildName).length;
+  const grandTotal = summary ? summary.grandTotal : 0;
+
+  const PEOPLE =
+    `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">` +
+    `<path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`;
+
+  const itemsHtml = blocks.map((block, idx) => {
+    const name    = getChildName(block);
+    const label   = name || `Jugador/a ${idx + 1}`;
+    const filled  = !!name;
+    const data    = dataByIdx[idx] || { total: 0, weekBreakdown: [] };
+    const amount  = data.total || 0;
+    const weeksHtml = data.weekBreakdown.map((w) =>
+      `<div class="pcsum__week"><span class="pcsum__week-label">${escapeHtml(w.label)}</span>` +
+      `<span class="pcsum__week-price">${w.price} €</span></div>`
+    ).join("");
+    return `<div class="pcsum__item${filled ? "" : " is-incomplete"}">` +
+        `<div class="pcsum__row">` +
+          `<span class="pcsum__avatar">${escapeHtml(label.charAt(0).toUpperCase())}</span>` +
+          `<span class="pcsum__name">${escapeHtml(label)}</span>` +
+          (!filled ? `<span class="pcsum__badge">Incomplet</span>` : "") +
+          (amount > 0 ? `<span class="pcsum__amount">${amount} €</span>` : "") +
+        `</div>` +
+        (weeksHtml ? `<div class="pcsum__weeks">${weeksHtml}</div>` : "") +
+      `</div>`;
+  }).join("");
+
+  const footHtml = grandTotal > 0
+    ? `<div class="pcsum__total"><span class="pcsum__total-label">Total</span>` +
+      `<span class="pcsum__amount pcsum__total-amount">${grandTotal} €</span></div>`
+    : `<p class="pcsum__hint">Tria les setmanes per veure l'import.</p>`;
+
+  const html =
+    `<div class="pcsum__head">` +
+      `<span class="pcsum__head-icon" aria-hidden="true">${PEOPLE}</span>` +
+      `<span class="pcsum__head-title">La teva inscripció</span>` +
+      `<span class="pcsum__count">${PEOPLE}<span>${nFilled || blocks.length}</span></span>` +
+    `</div>` +
+    `<div class="pcsum__body">${itemsHtml}</div>` +
+    footHtml;
+
+  if (el._lastHtml === html) return;
+  // Anima els imports cap als nous valors (comptador premium), com a la targeta de preus.
+  const prev = [...el.querySelectorAll(".pcsum__amount")].map((e) => parseInt(e.textContent, 10) || 0);
+  el.innerHTML = html; el._lastHtml = html;
+  const next = [...el.querySelectorAll(".pcsum__amount")];
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce && prev.length === next.length) {
+    next.forEach((e, i) => {
+      const to = parseInt(e.textContent, 10) || 0;
+      if (prev[i] !== to) animateCount(e, prev[i], to);
+    });
+  }
 }
 
 // ---- 3. Confetti (punt 3) ----

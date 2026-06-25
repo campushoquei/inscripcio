@@ -78,6 +78,7 @@ body {
   background: #0a0f1a;
   background-image: linear-gradient(135deg, #080c14 0%, #0f1623 55%, #0d1930 100%);
   transition: background-color .5s ease, background-image .5s ease, opacity .4s ease;
+  --season-accent: var(--blue);   /* color d'accent de l'estació (pill seleccionada) */
 }
 /* Ocult fins que el JS aplica el tema: evita el flash de color */
 .hero--init { opacity: 0; }
@@ -97,6 +98,7 @@ body {
   background: #0A0900;
   background-image: linear-gradient(135deg, #080700 0%, #151000 55%, #0D0A00 100%);
   --rink-line: rgba(255,230,0,.6);
+  --season-accent: #C28A00;
 }
 .hero.season-estiu::before {
   background: radial-gradient(ellipse 55% 90% at 10% 50%, rgba(255,230,0,.22) 0%, transparent 70%);
@@ -108,6 +110,7 @@ body {
   background: #041008;
   background-image: linear-gradient(135deg, #030D06 0%, #071A0C 55%, #051209 100%);
   --rink-line: rgba(34,197,94,.5);
+  --season-accent: #15A349;
 }
 .hero.season-primavera::before {
   background: radial-gradient(ellipse 55% 90% at 10% 50%, rgba(34,197,94,.15) 0%, transparent 70%);
@@ -119,6 +122,7 @@ body {
   background: #100700;
   background-image: linear-gradient(135deg, #0D0500 0%, #1C0D00 55%, #150900 100%);
   --rink-line: rgba(217,119,6,.5);
+  --season-accent: #D97706;
 }
 .hero.season-tardor::before {
   background: radial-gradient(ellipse 55% 90% at 10% 50%, rgba(217,119,6,.18) 0%, transparent 70%);
@@ -127,7 +131,7 @@ body {
   background: radial-gradient(ellipse 50% 65% at 88% 65%, rgba(217,119,6,.04) 0%, transparent 65%);
 }
 .hero.season-hivern {
-  /* manté el default, cap override necessari */
+  --season-accent: var(--blue);   /* hivern: blau del tema */
 }
 /* Hero content transition (fade en canviar de formulari) */
 .hero__inner {
@@ -156,8 +160,8 @@ body {
 }
 .hero-pill__icon { font-size: .95em; }
 .hero-pill.is-active {
-  background: rgba(255,255,255,.95); color: var(--navy);
-  border-color: rgba(255,255,255,.95);
+  background: var(--season-accent); color: #fff;
+  border-color: var(--season-accent);
 }
 @media (hover: hover) {
   .hero-pill:hover:not(.is-active) {
@@ -792,12 +796,8 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .child-block__remove-ic { flex-shrink: 0; }
 .child-block__remove:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 .child-block__remove:active { transform: scale(.96); }
-.child-weeks { margin-top: 4px; }
-/* Base (PC): la capçalera es comporta com l'antic .field__label — només el títol.
-   La icona i l'eyebrow només apareixen al mòbil (vegeu @media max-width:520px). */
-.child-weeks__head { display: block; margin-bottom: 7px; }
-.child-weeks__icon, .child-weeks__eyebrow { display: none; }
-.child-weeks__title { display: block; font-weight: 600; font-size: .92rem; }
+/* La secció de setmanes (.child-weeks) es defineix com a panell més avall,
+   després de la taula de preus, i ara s'aplica a totes les mides (PC + mòbil). */
 /* ---------- Botó "Afegir un altre nen/a" ----------
    Minimalista: pla i sense ombres, text blau amb un "+" en cercle fi.
    Amb .btn.add-child guanyem a .btn--ghost. */
@@ -913,6 +913,141 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 }
 .price-table__price--rdb { color: var(--blue); }
 
+/* Taula de tarifes apilada (PC + mòbil): cada fila és una targeta amb el títol
+   a dalt i cada preu en una línia "Columna ——— Preu". Ha d'anar DESPRÉS de les
+   regles de taula de dalt perquè en guanyi l'ordre (mateixa especificitat). */
+.price-table { display: block; min-width: 0; font-size: .84rem; }
+.price-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* capçalera només per a lectors */
+.price-table tbody { display: block; }
+.price-table tbody tr {
+  display: block;
+  background: var(--card);
+  border: 1px solid rgba(31,90,224,.14);
+  border-radius: 12px;
+  padding: 11px 13px;
+  margin-bottom: 9px;
+  box-shadow: 0 1px 3px rgba(14,42,99,.05);
+}
+.price-table tbody tr:last-child { margin-bottom: 0; }
+.price-table tbody td { display: block; padding: 0; border: none; text-align: left; }
+.price-table tbody td.price-table__label {
+  font-size: .92rem; font-weight: 700; color: var(--navy); line-height: 1.35;
+  padding-bottom: 9px; margin-bottom: 7px;
+  border-bottom: 1px solid rgba(31,90,224,.12);
+}
+.price-table tbody td[data-label] {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 4px 0;
+}
+.price-table tbody td[data-label]::before {
+  content: attr(data-label);
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: .84rem; font-weight: 600; color: var(--ink-soft);
+  text-transform: none; letter-spacing: 0;
+}
+.price-table__price { font-size: 1.12rem; }
+
+/* ============================================================
+   Secció de setmanes com a panell (PC + mòbil, idèntic)
+   ============================================================ */
+/* Les dades del nen són camps blancs del formulari; triar setmanes és una acció
+   diferent —una tria—, així que l'embolcallem en un panell tintat amb capçalera
+   pròpia perquè no es mimetitzi amb els camps i es llegeixi com un bloc a part. */
+.child-weeks {
+  margin-top: 22px;
+  padding: 15px 14px 16px;
+  background: linear-gradient(180deg, var(--blue-soft) 0%, rgba(31,90,224,.05) 100%);
+  border: 1px solid rgba(31,90,224,.18);
+  border-radius: var(--radius);
+  box-shadow: 0 9px 24px -15px rgba(31,90,224,.55);
+}
+.child-weeks__head { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
+.child-weeks__icon {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--blue); color: #fff;
+  box-shadow: 0 5px 12px -4px rgba(31,90,224,.6);
+}
+.child-weeks__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.child-weeks__eyebrow {
+  display: block;
+  font-size: .67rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--blue);
+}
+.child-weeks__title {
+  font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .04em;
+  font-size: 1.04rem; line-height: 1.1; font-weight: 400; color: var(--navy);
+}
+/* El desplegable de preus dins el panell no és una caixa pròpia sinó una fila
+   integrada. Al PC (pointer:fine) la taula es manté sempre desplegada i sense
+   botó de plegar (vegeu el bloc @media (pointer: fine)). */
+.child-weeks .price-info {
+  background: transparent; border: none; border-radius: 0;
+  padding: 0; margin: 0 0 9px;   /* mateix ritme que el gap entre setmanes */
+}
+.child-weeks .price-info__header { gap: 9px; }
+.child-weeks .price-info__icon { width: 24px; height: 24px; font-size: .82rem; }
+.child-weeks .price-info__title { font-size: .8rem; }
+.child-weeks .price-info__body-inner { padding-top: 11px; }
+
+/* Targetes "calendari": la DATA és la protagonista (és pel que es tria),
+   l'etiqueta fa d'eyebrow a sobre, el número és un token rodó i les places una
+   pastilla. En triar-la s'omple de blau i el text passa a blanc. */
+.child-weeks .weeks { gap: 9px; }
+.child-weeks .week {
+  align-items: center; gap: 14px; padding: 13px 14px; border-radius: 14px;
+  background: var(--card); border-color: var(--line-ink);
+  box-shadow: 0 2px 7px -4px rgba(14,42,99,.16);
+  transition: border-color .18s, background .18s, transform .12s, box-shadow .22s;
+}
+.child-weeks .week__num {
+  width: 44px; height: 44px; border-radius: 50%; font-size: 1.16rem;
+  background: linear-gradient(140deg, var(--navy) 0%, #1A3D85 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+  transition: background .18s, color .18s, box-shadow .18s;
+}
+.child-weeks .week__body { gap: 3px; }
+.child-weeks .week__label {
+  font-size: .67rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--blue); transition: color .18s;
+}
+.child-weeks .week__meta {
+  font-size: 1.04rem; font-weight: 700; color: var(--navy); transition: color .18s;
+}
+.child-weeks .week__places {
+  align-self: flex-start; margin-top: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .72rem; font-weight: 600; color: #157a4a;
+  background: rgba(34,160,90,.13); border-radius: 999px; padding: 2px 9px;
+  transition: background .18s, color .18s;
+}
+.child-weeks .week__places::before {
+  content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
+  background: #22a05a; transition: background .18s;
+}
+.child-weeks .week__check {
+  width: 24px; height: 24px; border-width: 2px;
+  transition: background .18s, border-color .18s, color .18s, transform .18s;
+}
+/* Estat triat: ompliment blau + text blanc + halo */
+.child-weeks .week.is-selected {
+  border-color: var(--blue);
+  background: linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 100%);
+  box-shadow: 0 9px 22px -9px rgba(31,90,224,.6);
+}
+.child-weeks .week.is-selected .week__label  { color: rgba(255,255,255,.85); }
+.child-weeks .week.is-selected .week__meta   { color: #fff; }
+.child-weeks .week.is-selected .week__places { color: #fff; background: rgba(255,255,255,.2); }
+.child-weeks .week.is-selected .week__places::before { background: #fff; }
+.child-weeks .week.is-selected .week__num {
+  background: rgba(255,255,255,.18); color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.4);
+}
+.child-weeks .week.is-selected .week__check {
+  background: #fff; border-color: #fff; color: var(--blue);
+  transform: scale(1.04);
+}
+
 /* ---------- Setmanes ---------- */
 .weeks { display: grid; gap: 10px; }
 .week {
@@ -993,6 +1128,16 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .file-chip__size { color: var(--ink-soft); font-size: .8rem; white-space: nowrap; }
 .file-chip__remove { background: none; border: none; cursor: pointer; color: var(--ink-soft); font-size: 1rem; padding: 2px 4px; line-height: 1; }
 .file-chip__remove:hover { color: var(--danger); }
+/* Estat de la pujada en segon pla de cada foto */
+.file-chip__status { flex: 0 0 auto; width: 18px; height: 18px; display: grid; place-items: center; }
+.file-chip__status.is-uploading {
+  border: 2px solid var(--blue-soft); border-top-color: var(--blue);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+.file-chip__status.is-done {
+  border-radius: 50%; background: #22a05a; color: #fff;
+  font-size: .7rem; font-weight: 700;
+}
 
 /* ---------- Enviar ---------- */
 .submit-row { text-align: center; padding-top: 6px; }
@@ -1126,11 +1271,21 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
     background: linear-gradient(168deg, var(--blue-soft) 0%, var(--paper) 100%);
     color: var(--ink);
   }
-  .hero.hero::before, .hero.hero::after { display: none; } /* fora glows */
-  .rink { display: none; }                                 /* fora la pista decorativa */
+  .rink { display: none; }                                 /* fora la pista decorativa del PC */
+  /* Reutilitzem els glows del PC (mateixa posició i animacions: hero-glow + hero-drift)
+     però recolorejats a NAVY, com ombres suaus que respiren i es desplacen sobre el
+     fons clar. pointer-events:none perquè mai interceptin els tocs de les pills. */
+  .hero.hero::before, .hero.hero::after { display: block; pointer-events: none; }
+  .hero.hero::before {
+    background: radial-gradient(ellipse 55% 90% at 10% 50%, rgba(14,42,99,.16) 0%, transparent 70%);
+  }
+  .hero.hero::after {
+    background: radial-gradient(ellipse 50% 65% at 88% 65%, rgba(14,42,99,.10) 0%, transparent 65%);
+  }
 
-  .hero__inner { padding-block: 20px 18px; }
-  .hero.has-slider .hero__inner { padding-bottom: 54px; }
+  .hero__inner { padding-block: 20px 16px; }
+  /* El selector ja no és absolut al mòbil (vegeu .hero-nav avall): no cal reservar espai. */
+  .hero.has-slider .hero__inner { padding-bottom: 16px; }
 
   /* Eyebrow net en blau, sense temporada (hero tot en tons del formulari) */
   .eyebrow {
@@ -1151,7 +1306,7 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
     -webkit-backdrop-filter: none; backdrop-filter: none;
   }
   .hero-pill.is-active {
-    background: var(--blue); border-color: var(--blue); color: #fff;
+    background: var(--season-accent); border-color: var(--season-accent); color: #fff;
   }
 
   .btn--primary { width: 100%; justify-content: center; }
@@ -1164,55 +1319,22 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   .topbar__contact { font-size: 0; padding: 8px; gap: 0; }
   .topbar__contact svg { width: 17px; height: 17px; }
 
-  /* Pills del slider: fila única amb scroll horitzontal */
+  /* Pills del slider: en FLUX (no absolutes) sota el text del hero, en una fila
+     amb scroll horitzontal. Així no se solapen amb el contingut ni queden cramades
+     ara que el hero té menys alçada. */
   .hero-nav {
+    position: relative; z-index: 2;   /* en flux però per damunt dels núvols → tocables */
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     justify-content: flex-start;
-    padding-left: 16px;
+    gap: 8px;
+    padding: 2px 16px 18px;
   }
   .hero-nav::-webkit-scrollbar { display: none; }
   /* Espai al final perquè l'últim pill no quedi retallat */
   .hero-nav::after { content: ""; display: block; min-width: 16px; flex-shrink: 0; }
-
-  /* Taula de preus al mòbil: la fila de 3 columnes queda apretada i amb espais
-     buits quan l'etiqueta ocupa diverses línies. La convertim en una targeta per
-     fila: títol a dalt i cada preu en una línia "Columna ——— Preu", ben alineat. */
-  .price-info { overflow: visible; }
-  .price-table { display: block; min-width: 0; font-size: .84rem; }
-  .price-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* capçalera només per a lectors */
-  .price-table tbody { display: block; }
-  .price-table tbody tr {
-    display: block;
-    background: var(--card);
-    border: 1px solid rgba(31,90,224,.14);
-    border-radius: 12px;
-    padding: 11px 13px;
-    margin-bottom: 9px;
-    box-shadow: 0 1px 3px rgba(14,42,99,.05);
-  }
-  .price-table tbody tr:last-child { margin-bottom: 0; }
-  .price-table tbody td { display: block; padding: 0; border: none; text-align: left; }
-  /* Títol de la fila (1a setmana, 2a setmana · …) */
-  .price-table tbody td.price-table__label {
-    font-size: .92rem; font-weight: 700; color: var(--navy); line-height: 1.35;
-    padding-bottom: 9px; margin-bottom: 7px;
-    border-bottom: 1px solid rgba(31,90,224,.12);
-  }
-  /* Cada preu: nom de columna a l'esquerra, import a la dreta */
-  .price-table tbody td[data-label] {
-    display: flex; align-items: center; justify-content: space-between; gap: 14px;
-    padding: 4px 0;
-  }
-  .price-table tbody td[data-label]::before {
-    content: attr(data-label);
-    font-family: "Hanken Grotesk", sans-serif;
-    font-size: .84rem; font-weight: 600; color: var(--ink-soft);
-    text-transform: none; letter-spacing: 0;
-  }
-  .price-table__price { font-size: 1.12rem; }
 
   /* Toggles "C.P. Riudebitlles" i "família nombrosa": més fins al mòbil */
   .rdb-field { margin-bottom: 10px; }
@@ -1228,128 +1350,10 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
     margin: 4px 0 0 26px; font-size: .64rem; padding: 2px 7px;
   }
   .rdb-toggle:has(input:checked) .rdb-toggle__badge { display: inline-block; }
-
-  /* ----- Setmanes com a panell propi (només mòbil) -----
-     Les dades del nen (nom, edat, sap nedar…) són camps blancs del formulari.
-     Triar setmanes és una acció diferent —una tria—, així que l'embolcallem en
-     un panell tintat amb capçalera pròpia perquè no es mimetitzi amb els camps
-     i es llegeixi com un bloc a part. */
-  .child-weeks {
-    margin-top: 22px;
-    padding: 15px 14px 16px;
-    background: linear-gradient(180deg, var(--blue-soft) 0%, rgba(31,90,224,.05) 100%);
-    border: 1px solid rgba(31,90,224,.18);
-    border-radius: var(--radius);
-    box-shadow: 0 9px 24px -15px rgba(31,90,224,.55);
-  }
-  .child-weeks__head {
-    display: flex; align-items: center; gap: 11px; margin-bottom: 14px;
-  }
-  .child-weeks__icon {
-    display: grid; place-items: center; flex: 0 0 auto;
-    width: 34px; height: 34px; border-radius: 10px;
-    background: var(--blue); color: #fff;
-    box-shadow: 0 5px 12px -4px rgba(31,90,224,.6);
-  }
-  .child-weeks__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .child-weeks__eyebrow {
-    display: block;
-    font-size: .67rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--blue);
-  }
-  .child-weeks__title {
-    font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .04em;
-    font-size: 1.04rem; line-height: 1.1; font-weight: 400; color: var(--navy);
-  }
-  /* El desplegable de preus dins el panell NO és una caixa pròpia, sinó una
-     fila integrada: capçalera tocable + filet de separació amb les setmanes.
-     Així s'evita la caixa blanca dins del panell tintat (quedava estranya) i,
-     en obrir-se, les targetes de preu (blanques) ressalten sobre el tint. */
-  .child-weeks .price-info {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    padding: 0;
-    margin: 0 0 9px;             /* mateix ritme que el gap entre setmanes */
-  }
-  .child-weeks .price-info__header { gap: 9px; }
-  .child-weeks .price-info__icon { width: 24px; height: 24px; font-size: .82rem; }
-  .child-weeks .price-info__title { font-size: .8rem; }
-  /* Quan s'obre, separem les targetes de preu del seu encapçalament */
-  .child-weeks .price-info__body-inner { padding-top: 11px; }
-
-  /* ----- Targetes de setmana amb caràcter (mòbil) -----
-     Dins el panell blau clar, la targeta sense triar és blanca i neta; en
-     triar-la s'omple de blau i el text passa a blanc, així destaca amb força
-     sobre el panell (l'estat antic feia fons blue-soft = el mateix del panell,
-     i la selecció es perdia). */
-  /* Targetes "calendari": la DATA és la protagonista (és pel que es tria),
-     l'etiqueta fa d'eyebrow a sobre, el número és un token rodó i les places
-     una pastilla. En triar-la s'omple de blau i el text passa a blanc. */
-  .child-weeks .weeks { gap: 9px; }
-  .child-weeks .week {
-    align-items: center; gap: 14px; padding: 13px 14px; border-radius: 14px;
-    background: var(--card); border-color: var(--line-ink);
-    box-shadow: 0 2px 7px -4px rgba(14,42,99,.16);
-    transition: border-color .18s, background .18s, transform .12s, box-shadow .22s;
-  }
-  /* Token rodó amb el número de setmana */
-  .child-weeks .week__num {
-    width: 44px; height: 44px; border-radius: 50%; font-size: 1.16rem;
-    background: linear-gradient(140deg, var(--navy) 0%, #1A3D85 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
-    transition: background .18s, color .18s, box-shadow .18s;
-  }
-  .child-weeks .week__body { gap: 3px; }
-  /* Etiqueta = eyebrow petit a dalt */
-  .child-weeks .week__label {
-    font-size: .67rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-    color: var(--blue); transition: color .18s;
-  }
-  /* Dates = línia protagonista */
-  .child-weeks .week__meta {
-    font-size: 1.04rem; font-weight: 700; color: var(--navy); transition: color .18s;
-  }
-  /* Places = pastilla amb punt verd */
-  .child-weeks .week__places {
-    align-self: flex-start; margin-top: 5px;
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: .72rem; font-weight: 600; color: #157a4a;
-    background: rgba(34,160,90,.13); border-radius: 999px; padding: 2px 9px;
-    transition: background .18s, color .18s;
-  }
-  .child-weeks .week__places::before {
-    content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
-    background: #22a05a; transition: background .18s;
-  }
-  .child-weeks .week__check {
-    width: 24px; height: 24px; border-width: 2px;
-    transition: background .18s, border-color .18s, color .18s, transform .18s;
-  }
-  /* Estat triat: ompliment blau + text blanc + halo */
-  .child-weeks .week.is-selected {
-    border-color: var(--blue);
-    background: linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 100%);
-    box-shadow: 0 9px 22px -9px rgba(31,90,224,.6);
-  }
-  .child-weeks .week.is-selected .week__label  { color: rgba(255,255,255,.85); }
-  .child-weeks .week.is-selected .week__meta   { color: #fff; }
-  .child-weeks .week.is-selected .week__places {
-    color: #fff; background: rgba(255,255,255,.2);
-  }
-  .child-weeks .week.is-selected .week__places::before { background: #fff; }
-  .child-weeks .week.is-selected .week__num {
-    background: rgba(255,255,255,.18); color: #fff;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.4);
-  }
-  .child-weeks .week.is-selected .week__check {
-    background: #fff; border-color: #fff; color: var(--blue);
-    transform: scale(1.04);
-  }
 }
 /* Targetes de preu apilades en fosc: la targeta (var--card) ja contrasta amb el fons
    del bloc; només ajustem els filets blaus al to clar del tema fosc */
-@media (prefers-color-scheme: dark) and (max-width: 520px) {
+@media (prefers-color-scheme: dark) {
   .price-table tbody tr { border-color: rgba(91,142,255,.2); }
   .price-table tbody td.price-table__label { border-bottom-color: rgba(91,142,255,.18); }
   /* Panell de setmanes: vora i ombra al to clar del tema fosc */
@@ -1449,8 +1453,11 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 /* L'atribut [hidden] ha de guanyar al display:flex de dalt (mateixa especificitat) */
 .child-price[hidden] { display: none; }
 /* Al mòbil (wizard actiu) el subtotal per jugador no es mostra: el total viu a la
-   barra inferior i el detall complet a la targeta del final del formulari. */
-body.has-wizard .child-price { display: none !important; }
+   barra inferior i el detall complet a la targeta del final del formulari.
+   Al PC, quan el rail lateral és actiu, també s'amaga (el rail ja mostra el
+   subtotal i el desglossament de cada jugador) → formulari més net. */
+body.has-wizard .child-price,
+body.pc-summary-on .child-price { display: none !important; }
 .child-price__icon {
   flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
   background: var(--blue); color: #fff;
@@ -1551,6 +1558,131 @@ body.has-wizard .child-price { display: none !important; }
   background: var(--card); border: 1.5px solid var(--line-ink);
   color: var(--ink-soft); font-weight: 600;
 }
+
+/* ============================================================
+   Resum lateral d'inscripció (PC ample, sense wizard)
+   ============================================================
+   Mirall del popup de fills del wizard mòbil: nens apuntats + import
+   detallat, però com a panell enganxat al costat del formulari. Només
+   s'activa quan el JS afegeix .pc-summary-on al body (PC ≥1080px, formulari
+   visible); altrament .main es manté com la columna centrada de sempre. */
+#pc-summary { display: none; }
+@media (pointer: fine) {
+  body.pc-summary-on .main {
+    max-width: 1100px;
+    display: grid;
+    grid-template-columns: minmax(0, 720px) 308px;
+    gap: 0 32px;
+    justify-content: center;
+    align-items: start;
+  }
+  /* Columna esquerra: formulari. Columna dreta: un sol contenidor (#pc-aside) que
+     apila el "ja t'havíem vist" + el resum. En ser un únic element de graella,
+     evitem que l'alçada del formulari es reparteixi entre files i empenyi el rail. */
+  /* Tots dos a la fila 1 explícitament: si no, com que #pc-aside va abans al DOM i
+     ocupa la col·2, l'auto-placement empenyia el formulari a la fila 2 (molt avall). */
+  body.pc-summary-on #form { grid-column: 1; grid-row: 1; min-width: 0; }
+  body.pc-summary-on #pc-aside {
+    grid-column: 2; grid-row: 1;
+    position: sticky;
+    top: 82px;
+    align-self: start;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+  body.pc-summary-on #pc-summary { display: block; }
+  /* "Ja t'havíem vist" dins la columna: separat del resum, radi coherent i compacte. */
+  body.pc-summary-on .returning { margin: 0 0 16px; border-radius: var(--radius); }
+  body.pc-summary-on .returning__icon { width: 36px; height: 36px; }
+  body.pc-summary-on .returning__title { font-size: .95rem; }
+  body.pc-summary-on .returning__hint { white-space: normal; }
+  body.pc-summary-on .returning__toggle { gap: 11px; padding: 8px 2px; }
+  /* Amb el rail actiu, la targeta de total del final sobra (info duplicada) */
+  body.pc-summary-on #price-total-card { display: none; }
+}
+.pc-summary {
+  background: var(--card);
+  border: 1px solid var(--line-ink);
+  border-radius: var(--radius);
+  padding: 15px 15px 17px;
+  box-shadow: 0 14px 34px -20px rgba(14,42,99,.5);
+  animation: rise .4s ease both;
+}
+.pcsum__head {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 12px; margin-bottom: 12px;
+  border-bottom: 1px solid var(--line-ink);
+}
+.pcsum__head-icon {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px;
+  display: grid; place-items: center; background: var(--blue); color: #fff;
+}
+.pcsum__head-title {
+  font-family: "Anton", sans-serif; text-transform: uppercase;
+  letter-spacing: .04em; font-size: .92rem; color: var(--navy);
+}
+.pcsum__count {
+  margin-left: auto; height: 24px; padding: 0 9px 0 8px;
+  display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
+  background: var(--blue-soft); color: var(--blue);
+  font-weight: 700; font-size: .82rem;
+}
+.pcsum__count svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.pcsum__body { display: flex; flex-direction: column; gap: 9px; }
+.pcsum__item {
+  padding: 10px 11px; border-radius: 11px;
+  background: rgba(14,42,99,.035); cursor: pointer;
+  transition: background .15s, transform .12s;
+}
+.pcsum__item:hover { background: rgba(31,90,224,.08); }
+.pcsum__item:active { transform: scale(.99); }
+.pcsum__item.is-incomplete { opacity: .82; }
+.pcsum__row { display: flex; align-items: center; gap: 9px; }
+.pcsum__avatar {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--blue); color: #fff;
+  font-weight: 700; font-size: .8rem;
+}
+.pcsum__name {
+  font-weight: 600; font-size: .9rem; color: var(--navy);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pcsum__badge {
+  flex: 0 0 auto;
+  font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ink-soft); background: rgba(14,42,99,.08);
+  border-radius: 999px; padding: 2px 7px;
+}
+.pcsum__amount {
+  margin-left: auto; flex: 0 0 auto;
+  font-family: "Anton", sans-serif; font-size: 1rem; letter-spacing: .01em; color: var(--navy);
+}
+.pcsum__weeks {
+  margin-top: 7px; padding-left: 35px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.pcsum__week {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: .78rem; color: var(--ink-soft);
+}
+.pcsum__week-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcsum__week-price { font-weight: 600; white-space: nowrap; }
+.pcsum__total {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin: 14px -15px -17px; padding: 16px 18px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 58%, var(--blue-deep) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14);
+}
+.pcsum__total-label {
+  font-family: "Anton", sans-serif; font-size: 1.05rem; font-weight: 400;
+  letter-spacing: .04em; text-transform: uppercase; color: #fff;
+}
+.pcsum__total-amount {
+  margin-left: 0; font-size: 1.25rem; color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,.22);
+}
+.pcsum__hint { margin: 12px 0 0; font-size: .82rem; color: var(--ink-soft); }
 
 /* ---- 3. Confetti ---- */
 .confetti-container {
@@ -1853,31 +1985,37 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
 /* Amb preu, el trigger guanya una mica d'aire al voltant del badge */
 .wizard-nav__children.has-price { padding-right: 9px; }
 
-/* Icona de recuperació de dades (mòbil): cercle suau que batega per cridar l'atenció */
+/* Pastilla de recuperació de dades (mòbil): icona + text. Només la icona batega. */
 .wizard-nav__recover {
-  position: relative; flex: 0 0 auto;
-  width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
-  display: grid; place-items: center;
+  position: relative; flex: 0 1 auto; min-width: 0;
+  height: 44px; padding: 0 15px 0 12px; border-radius: 999px; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
   background: var(--blue-soft); color: var(--blue);
+  font: inherit;   /* els <button> no hereten la font: la forcem com fa .btn (Següent/Enrere) */
   transition: background .15s, transform .12s;
 }
-.wizard-nav__recover[hidden] { display: none !important; }
-.wizard-nav__recover svg { stroke: var(--blue); }
-.wizard-nav__recover:active { transform: scale(.94); }
-.wizard-nav__recover.is-open { background: var(--blue); color: #fff; }
-.wizard-nav__recover.is-open svg { stroke: #fff; }
-/* Anell de batec (com el "live" del hero). S'atura en obrir el popup. */
-.wizard-nav__recover::after {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
-  pointer-events: none; animation: recover-pulse 2s ease-out infinite;
+.wizard-nav__recover-text {
+  min-width: 0;   /* permet l'el·lipsi i que la pastilla encongeixi sense trepitjar l'indicador */
+  font-size: .9rem; font-weight: 700; line-height: 1;   /* igual que els botons Enrere/Següent */
+  color: var(--blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.wizard-nav__recover.is-open::after { animation: none; }
+.wizard-nav__recover[hidden] { display: none !important; }
+.wizard-nav__recover:active { transform: scale(.96); }
+.wizard-nav__recover.is-open { background: var(--blue); color: #fff; }
+.wizard-nav__recover.is-open .wizard-nav__recover-text { color: #fff; }
+/* Anell de batec NOMÉS a la icona (no a tota la pastilla). S'atura en obrir el popup. */
+.wizard-nav__recover svg {
+  flex: 0 0 auto; stroke: var(--blue); border-radius: 50%;
+  animation: recover-pulse 1.9s ease-out infinite;
+}
+.wizard-nav__recover.is-open svg { stroke: #fff; animation: none; }
 @keyframes recover-pulse {
-  0%   { box-shadow: 0 0 0 0   rgba(31,90,224,.45); }
-  100% { box-shadow: 0 0 0 11px rgba(31,90,224,0); }
+  0%   { box-shadow: 0 0 0 0   rgba(31,90,224,.5); }
+  70%  { box-shadow: 0 0 0 7px rgba(31,90,224,0); }
+  100% { box-shadow: 0 0 0 7px rgba(31,90,224,0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .wizard-nav__recover::after { animation: none; }
+  .wizard-nav__recover svg { animation: none; }
 }
 /* Títol del popup de recuperació */
 .wcp__title {
@@ -1991,6 +2129,7 @@ html { scroll-padding-bottom: 84px; }
 /* Pantalles molt petites: botons més compactes */
 @media (max-width: 360px) {
   .wizard-nav .btn { padding: 10px 13px; font-size: .84rem; }
+  .wizard-nav__recover-text { font-size: .84rem; }   /* compacta igual que els botons */
   .wizard-nav__row { padding-inline: 12px; gap: 4px; }
 }
 @media (max-width: 520px) {
