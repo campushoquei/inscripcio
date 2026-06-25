@@ -152,15 +152,24 @@ async function init() {
 // Només té efecte visual a iOS (el CSS està darrere d'un @supports).
 function setupIOSBarFix() {
   const vv = window.visualViewport;
-  // Alçada visible inicial = estat amb la barra del Safari PRESENT (a la càrrega sempre hi és).
+  const root = document.documentElement;
+  // Alçada visible inicial = estat amb la barra del navegador PRESENT (a la càrrega sempre hi és).
   // La fem servir de referència en comptes d'assumir res: així mai marquem "amagada" de més.
   let baseH = null;
   const update = () => {
     const visible = vv ? vv.height : window.innerHeight;
     if (baseH === null) baseH = visible;
-    // La barra del Safari es considera amagada quan l'àrea visible CREIX prou respecte de
-    // l'inicial (la barra deixa lliure el seu espai). El teclat la fa més petita → mai amagada.
-    const toolbarHidden = visible - baseH > 30;
+    // El creixement de l'àrea visible respecte de l'inicial = alçada REAL de la barra del
+    // navegador que s'ha amagat. El teclat la fa més petita → creixement negatiu → mai amagada.
+    const grew = visible - baseH;
+    const toolbarHidden = grew > 30;
+    if (toolbarHidden) {
+      // Elevem els botons exactament l'alçada mesurada de la barra del navegador. Així s'adapta
+      // sol a cada navegador (Safari, Chrome…) en comptes d'un valor fix calibrat per a un de sol.
+      // Acotat a un rang raonable per si un navegador retorna una mesura estranya.
+      const lift = Math.min(72, Math.max(30, Math.round(grew)));
+      root.style.setProperty("--bar-lift", lift + "px");
+    }
     document.body.classList.toggle("ios-toolbar-hidden", toolbarHidden);
   };
   if (vv) {

@@ -1652,9 +1652,11 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
      de ~34px que no servia per a res). */
   .wizard-nav__row { padding-bottom: 8px; }
   body.has-wizard { padding-bottom: 64px; }
-  /* Safari AMAGAT: pugem els botons fora de la zona de toc i respectem l'indicador d'inici */
-  body.ios-toolbar-hidden .wizard-nav__row { padding-bottom: calc(env(safe-area-inset-bottom) + 52px); }
-  body.ios-toolbar-hidden.has-wizard { padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
+  /* Barra del navegador AMAGADA: pugem els botons exactament l'alçada MESURADA de la barra del
+     navegador (--bar-lift, calculada pel JS segons Safari/Chrome…). Aquesta mesura ja inclou la
+     zona de l'indicador d'inici, per això no hi sumem env. */
+  body.ios-toolbar-hidden .wizard-nav__row { padding-bottom: var(--bar-lift, 44px); }
+  body.ios-toolbar-hidden.has-wizard { padding-bottom: calc(60px + var(--bar-lift, 44px)); }
 }
 /* Zona esquerra: contenidor de botó enrere + resum de fills */
 .wizard-nav__left { justify-self: start; display: flex; align-items: center; gap: 6px; min-width: 0; }
