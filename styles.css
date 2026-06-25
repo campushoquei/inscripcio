@@ -1227,6 +1227,17 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   from { transform: translate(0, 0) scale(1); }
   to   { transform: translate(-30px, -18px) scale(1.12); }
 }
+/* Deriva suau dels glows navy del mòbil (amplitud petita, en %: mai toca la vora) */
+/* Glow superior dreta: deriva cap a dins (avall-esquerra), lluny de la cantonada. */
+@keyframes hero-mglow-a {
+  from { transform: translate3d(2%, -1%, 0) scale(1.05); }
+  to   { transform: translate3d(-5%, 5%, 0) scale(1); }
+}
+/* Glow inferior esquerra: deriva suau dins els límits. */
+@keyframes hero-mglow-b {
+  from { transform: translate3d(4%, 2%, 0) scale(1.06); }
+  to   { transform: translate3d(-3%, -3%, 0) scale(1); }
+}
 
 /* ---- Setmana: micro-resposta al clic + halo si seleccionada ---- */
 .week { transition: border-color .15s, background .15s, transform .12s; }
@@ -1272,15 +1283,25 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
     color: var(--ink);
   }
   .rink { display: none; }                                 /* fora la pista decorativa del PC */
-  /* Reutilitzem els glows del PC (mateixa posició i animacions: hero-glow + hero-drift)
-     però recolorejats a NAVY, com ombres suaus que respiren i es desplacen sobre el
-     fons clar. pointer-events:none perquè mai interceptin els tocs de les pills. */
-  .hero.hero::before, .hero.hero::after { display: block; pointer-events: none; }
-  .hero.hero::before {
-    background: radial-gradient(ellipse 55% 90% at 10% 50%, rgba(14,42,99,.16) 0%, transparent 70%);
+  /* Glows navy del mòbil: blobs cap al centre que s'esvaeixen BEN abans de la vora,
+     amb una deriva suau pròpia (en %, amplitud petita). Així, encara que el hero
+     tingui overflow:hidden, el color mai arriba al límit → no es veu cap tall/línia.
+     pointer-events:none perquè no interceptin els tocs de les pills. */
+  /* Glows navy difusos: filter:blur + caiguda gradual (multi-stop) perquè semblin
+     un resplendor, no boles. El blur també esvaeix qualsevol vora → cap línia. */
+  .hero.hero::before, .hero.hero::after {
+    display: block; pointer-events: none;
+    filter: blur(22px); will-change: transform;
   }
+  /* Glow protagonista a la cantonada superior dreta (zona sense text) */
+  .hero.hero::before {
+    background: radial-gradient(ellipse 42% 48% at 74% 26%, rgba(14,42,99,.22) 0%, rgba(14,42,99,.08) 42%, transparent 70%);
+    animation: hero-mglow-a 18s ease-in-out infinite alternate;
+  }
+  /* Glow secundari, suau, a la part inferior esquerra */
   .hero.hero::after {
-    background: radial-gradient(ellipse 50% 65% at 88% 65%, rgba(14,42,99,.10) 0%, transparent 65%);
+    background: radial-gradient(ellipse 44% 50% at 26% 70%, rgba(14,42,99,.15) 0%, rgba(14,42,99,.05) 42%, transparent 70%);
+    animation: hero-mglow-b 22s ease-in-out infinite alternate;
   }
 
   .hero__inner { padding-block: 20px 16px; }
@@ -1622,12 +1643,11 @@ body.pc-summary-on .child-price { display: none !important; }
   letter-spacing: .04em; font-size: .92rem; color: var(--navy);
 }
 .pcsum__count {
-  margin-left: auto; height: 24px; padding: 0 9px 0 8px;
-  display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
+  margin-left: auto; min-width: 24px; height: 24px; padding: 0 7px;
+  display: grid; place-items: center; border-radius: 999px;
   background: var(--blue-soft); color: var(--blue);
   font-weight: 700; font-size: .82rem;
 }
-.pcsum__count svg { width: 14px; height: 14px; flex: 0 0 auto; }
 .pcsum__body { display: flex; flex-direction: column; gap: 9px; }
 .pcsum__item {
   padding: 10px 11px; border-radius: 11px;
@@ -1988,8 +2008,8 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
 /* Pastilla de recuperació de dades (mòbil): icona + text. Només la icona batega. */
 .wizard-nav__recover {
   position: relative; flex: 0 1 auto; min-width: 0;
-  height: 44px; padding: 0 15px 0 12px; border-radius: 999px; border: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 13px 0 11px; border-radius: 999px; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
   background: var(--blue-soft); color: var(--blue);
   font: inherit;   /* els <button> no hereten la font: la forcem com fa .btn (Següent/Enrere) */
   transition: background .15s, transform .12s;
@@ -2136,6 +2156,8 @@ html { scroll-padding-bottom: 84px; }
   /* Al mòbil traiem del tot la barra de progrés superior: el wizard-nav inferior
      ja informa del pas i guanyem espai útil de pantalla. */
   .form-progress { display: none !important; }
+  /* Menys espai entre el hero i el formulari (el de dalt sobrava). */
+  .main { padding-top: 14px; }
   /* Footer no aporta res al mòbil amb wizard actiu */
   body.has-wizard .foot { display: none; }
 }

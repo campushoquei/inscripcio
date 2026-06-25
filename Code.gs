@@ -128,11 +128,9 @@ function doPost(e) {
       // es desin en una carpeta amb el nom del formulari (no a "General").
       var filePayload = { data: cd, formName: payload.formName, form: form };
       var saved = saveFiles(childFiles, settings, filePayload, id);
-      // Premium: si falta algun fitxer (p. ex. la targeta sanitària) però aquest mateix nen
-      // ja el va adjuntar en un altre campus, en reutilitzem la imatge (còpia a la carpeta
-      // d'aquest formulari + URL a la fila), com si l'hagués tornat a adjuntar.
-      var reused = reuseChildFilesFromOtherForms(child, settings, filePayload, saved);
-      if (reused.length) saved = saved.concat(reused);
+      // Premium (reutilitzar fitxers d'altres campus): es fa al trigger post-procés
+      // perquè escaneja altres fulls i alentiria la resposta. Aquí només desem els
+      // fitxers que arriben en aquesta inscripció.
       var byField = {};
       saved.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
 
@@ -152,7 +150,10 @@ function doPost(e) {
       rows.push({ id: id, data: data, weekLabels: child.weekLabels || [], savedFiles: saved });
     });
 
-    sendConfirmation(settings, payload, rows);
+    // El correu de confirmació s'encua i l'envia un trigger immediat: així no
+    // bloca la resposta (MailApp triga ~1-2s) i l'enviament del formulari és molt
+    // més ràpid. El correu arriba uns segons després.
+    queueConfirmationEmail(payload, rows);
     return json({ ok: true, id: baseId, count: entries.length });
   } catch (err) {
     return json({ ok: false, error: String(err) });
@@ -242,6 +243,14 @@ function readWeeks(form) {
     };
     if (plazas != null) { w.plazas = plazas; w.plazas_restantes = Math.max(0, plazas - used); }
     return w;
+  });
+}
+// Versió lleugera: només id + etiqueta de cada setmana, SENSE comptar places (no
+// llegeix el full d'inscripcions). Per a quan només cal planificar columnes (saveRow).
+function readWeekDefs(form) {
+  form = String(form || "").trim();
+  return readTable(SHEETS.weeks).filter(function (r) { return r.id && rowMatchesForm(r, form); }).map(function (r) {
+    return { id: String(r.id).trim(), etiqueta: str(r.etiqueta) };
   });
 }
 function readFields(form) {
@@ -464,6 +473,29 @@ function reuseExt(name) {
   return m ? "." + m[1].toLowerCase() : "";
 }
 
+// Afegeix URLs de fitxers a les columnes corresponents d'una fila ja desada
+// (identificada pel seu ID). L'usa el post-procés de reutilització al trigger.
+function setRowFileUrls(form, id, byField) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(subsSheetName(form));
+  if (!sheet || sheet.getLastRow() < 2) return;
+  var lastCol = sheet.getLastColumn(), lastRow = sheet.getLastRow();
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  var idCol = header.indexOf("ID");
+  if (idCol === -1) return;
+  var ids = sheet.getRange(2, idCol + 1, lastRow - 1, 1).getValues();
+  var rowIndex = -1;
+  for (var i = 0; i < ids.length; i++) { if (String(ids[i][0]) === String(id)) { rowIndex = i + 2; break; } }
+  if (rowIndex === -1) return;
+  Object.keys(byField).forEach(function (field) {
+    var col = header.indexOf(field);
+    if (col === -1) return;
+    var cell = sheet.getRange(rowIndex, col + 1);
+    var ex = String(cell.getValue() || "").trim();
+    cell.setValue(ex ? ex + "\n" + byField[field].join("\n") : byField[field].join("\n"));
+  });
+}
+
 /* ---------- Guardar fila ----------
    Columnes: Timestamp · ID · [camps no-nota, amb Edat després de la data
    de naixement] · una columna 1/0 per setmana · Setmanes (text) */
@@ -474,7 +506,7 @@ function saveRow(id, payload, data) {
   var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
 
   var fields = readFields(form).filter(function (f) { return f.tipo !== "nota"; });
-  var weeks = readWeeks(form);
+  var weeks = readWeekDefs(form);   // només cal id/etiqueta per planificar columnes (no comptar places)
   var labelById = {};
   fields.forEach(function (f) { labelById[f.id] = f.etiqueta || f.id; });
 
@@ -649,7 +681,80 @@ function countWeekRegistrations(form) {
   return counts;
 }
 
-/* ---------- Correu ---------- */
+/* ---------- Correu ----------
+   Enviament asíncron: encuem el correu a ScriptProperties i un trigger immediat
+   (one-shot) el processa fora de la petició. Així el doPost retorna sense esperar
+   MailApp (~1-2s) i l'enviament del formulari és molt més ràpid. */
+function queueConfirmationEmail(payload, rows) {
+  // Només el necessari per al post-procés (res de base64 de fitxers).
+  var job = {
+    form: payload.form, formName: payload.formName, campusName: payload.campusName,
+    shared: payload.shared || {},
+    children: (payload.children || []).map(function (c) { return { data: c.data, preu: c.preu, descompte: c.descompte }; }),
+    rows: (rows || []).map(function (r) {
+      return {
+        id: r.id, data: r.data, weekLabels: r.weekLabels || [],
+        savedFiles: (r.savedFiles || []).map(function (s) { return { field: s.field, name: s.name, url: s.url }; })
+      };
+    })
+  };
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var key = "emailq_" + new Date().getTime() + "_" + Math.floor(Math.random() * 100000);
+    props.setProperty(key, JSON.stringify(job));
+    // Un sol trigger pendent és suficient (processa tota la cua quan dispara).
+    var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "processEmailQueue"; });
+    if (!has) ScriptApp.newTrigger("processEmailQueue").timeBased().after(1000).create();
+  } catch (e) {
+    // Pla B (p. ex. sense permís de triggers): fem el post-procés de forma síncrona,
+    // així no perdem ni el correu ni la reutilització de fitxers.
+    try { finalizeJob(job); } catch (e2) {}
+  }
+}
+// Reutilitza fitxers d'altres campus (actualitza fila + correu) i envia la confirmació.
+// S'executa fora de la petició (trigger), o de forma síncrona com a pla B.
+function finalizeJob(job) {
+  var settings = readSettings(String(job.form || "").trim());
+  try {
+    (job.rows || []).forEach(function (r, idx) {
+      var child = (job.children && job.children[idx]) || {};
+      var cdata = child.data || r.data || {};
+      var filePayload = { data: cdata, formName: job.formName, form: job.form };
+      var savedSoFar = r.savedFiles || [];
+      var reused = reuseChildFilesFromOtherForms({ data: cdata, files: savedSoFar }, settings, filePayload, savedSoFar);
+      if (reused && reused.length) {
+        var byField = {};
+        reused.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
+        setRowFileUrls(job.form, r.id, byField);
+        Object.keys(byField).forEach(function (f) {
+          var ex = str(r.data[f]); r.data[f] = ex ? ex + "\n" + byField[f].join("\n") : byField[f].join("\n");
+        });
+        r.savedFiles = savedSoFar.concat(reused);
+      }
+    });
+  } catch (e) {}
+  sendConfirmation(settings, { form: job.form, formName: job.formName, campusName: job.campusName, shared: job.shared, children: job.children }, job.rows);
+}
+// Processa la cua de correus i s'autodesinstal·la (one-shot).
+function processEmailQueue() {
+  // Evita que dues execucions coincidents processin la mateixa cua (correus duplicats).
+  var qlock = LockService.getScriptLock();
+  if (!qlock.tryLock(5000)) return;
+  try {
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+      if (t.getHandlerFunction() === "processEmailQueue") ScriptApp.deleteTrigger(t);
+    });
+  } catch (e) {}
+  var props = PropertiesService.getScriptProperties();
+  var all = props.getProperties();
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf("emailq_") !== 0) return;
+    try { finalizeJob(JSON.parse(all[k])); } catch (e) {}
+    try { props.deleteProperty(k); } catch (e) {}
+  });
+  try { qlock.releaseLock(); } catch (e) {}
+}
+
 function sendConfirmation(settings, payload, rows) {
   rows = rows || [];
   var to = findEmail((payload && payload.shared) || {}) || findEmail((payload && payload.data) || {});

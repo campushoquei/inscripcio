@@ -546,7 +546,7 @@ function initWizard() {
         `<button type="button" class="btn btn--ghost wizard-nav__back" id="wizard-back">` + CHEV_LEFT + `<span>Enrere</span></button>` +
         `<button type="button" class="wizard-nav__recover" id="wizard-recover" hidden aria-label="Recupera dades d'una inscripció anterior">` +
           HIST_SVG +
-          `<span class="wizard-nav__recover-text">Recupera dades</span>` +
+          `<span class="wizard-nav__recover-text">Historial</span>` +
         `</button>` +
         `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
           PEOPLE_SVG +
@@ -2589,7 +2589,7 @@ function renderPcSummary() {
     `<div class="pcsum__head">` +
       `<span class="pcsum__head-icon" aria-hidden="true">${PEOPLE}</span>` +
       `<span class="pcsum__head-title">La teva inscripció</span>` +
-      `<span class="pcsum__count">${PEOPLE}<span>${nFilled || blocks.length}</span></span>` +
+      `<span class="pcsum__count">${nFilled || blocks.length}</span>` +
     `</div>` +
     `<div class="pcsum__body">${itemsHtml}</div>` +
     footHtml;
