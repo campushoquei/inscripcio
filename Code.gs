@@ -1771,22 +1771,26 @@ function adminReceipt(form, ids) {
     var family = data.rows.filter(function (r) { return normEmail(r) === email; });
     if (!family.length) return;
 
-    var totalPaid = 0, paidLabels = [], seen = {}, names = [];
+    var totalPaid = 0, names = [], kids = [];
     family.forEach(function (r) {
       var registered = rowRegisteredWeeks(r, weekIds);
       var paid = rowPaidWeeks(r, registered);
+      if (!paid.length) return;   // aquest jugador/a no té res pagat → no surt al rebut
       var preu = num(r.Preu) || 0;
-      if (registered.length && paid.length) totalPaid += Math.round(preu * (paid.length / registered.length));
-      paid.forEach(function (w) { var l = labelById[w] || w; if (!seen[l]) { seen[l] = true; paidLabels.push(l); } });
-      var nm = adminRowName(r, form);
-      if (nm && names.indexOf(nm) === -1) names.push(nm);
+      var amount = registered.length ? Math.round(preu * (paid.length / registered.length)) : 0;
+      totalPaid += amount;
+      // Totes les setmanes inscrites, marcant quines estan pagades (per pintar-les diferent).
+      var labels = registered.map(function (w) { return { label: labelById[w] || w, paid: paid.indexOf(w) !== -1 }; });
+      var nm = adminRowName(r, form) || "Jugador/a";
+      if (names.indexOf(nm) === -1) names.push(nm);
+      kids.push({ name: nm, weeks: labels, amount: amount });
     });
     if (totalPaid <= 0) return;   // encara no s'ha cobrat res → no hi ha rebut a enviar
 
     var to = family.map(findEmail).filter(Boolean)[0];
     if (!to) return;
     var formName = str(family[0].Formulario) || form;
-    sendReceipt(settings, to, names, totalPaid, paidLabels, formName);
+    sendReceipt(settings, to, names, totalPaid, kids, formName);
     family.forEach(function (r) { sheet.getRange(r.__row, col, 1, 1).setValue(stamp); });
     sent++; lastTo = to;
   });
@@ -1794,16 +1798,31 @@ function adminReceipt(form, ids) {
   return { ok: true, sent: sent, to: (sent === 1 ? lastTo : undefined) };
 }
 
-function sendReceipt(settings, to, names, totalPaid, paidLabels, formName) {
+function sendReceipt(settings, to, names, totalPaid, kids, formName) {
   var camp = settings.nombre_campus || "Casal";
   var who = (names && names.length) ? names.join(", ") : "la inscripció";
   var subject = settings.email_rebut_asunto || ("Rebut de pagament · " + (formName || camp));
   var avui = Utilities.formatDate(new Date(), "Europe/Madrid", "dd/MM/yyyy");
   var intro = settings.email_rebut_intro ||
-    ("Confirmem que hem rebut el pagament de " + who + (formName ? " per " + formName : "") + ". Aquí tens el teu rebut. Moltes gràcies!");
+    ("Confirmem que hem rebut el pagament de " + who + (formName ? " per " + formName : "") + ". Aquí tens el teu rebut amb el detall per jugador/a. Moltes gràcies!");
 
-  var pills = (paidLabels || []).map(function (l) {
-    return "<span style='display:inline-block;background:#16A34A;color:#fff;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:700;margin:0 6px 6px 0'>" + esc(l) + "</span>";
+  // Pill verda plena si està pagada; clara/buida (gris) si encara no aplica el pagament.
+  function pill(w) {
+    if (w && w.paid)
+      return "<span style='display:inline-block;background:#16A34A;color:#fff;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:700;margin:0 6px 6px 0'>" + esc(w.label) + "</span>";
+    return "<span style='display:inline-block;background:#F4F7FB;color:#A7B3C9;border:1px solid #E2E8F4;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;margin:0 6px 6px 0'>" + esc(w.label) + "</span>";
+  }
+  // Una targeta per jugador/a: nom + import + TOTES les seves setmanes (pagades i pendents).
+  var multi = (kids || []).length > 1;
+  var kidsBlock = (kids || []).map(function (k) {
+    var pills = (k.weeks || []).map(pill).join("");
+    return "<div style='border:1px solid #E2E8F4;border-radius:11px;padding:13px 15px;margin-bottom:10px'>" +
+        "<table style='width:100%;border-collapse:collapse'><tr>" +
+          "<td style='font-size:15px;font-weight:800;color:#0E2A63'>&#127953; " + esc(k.name) + "</td>" +
+          "<td style='text-align:right;font-size:14px;font-weight:800;color:#15803D;white-space:nowrap;vertical-align:top'>" + k.amount + " &euro;</td>" +
+        "</tr></table>" +
+        (pills ? "<div style='margin-top:9px'>" + pills + "</div>" : "") +
+      "</div>";
   }).join("");
 
   var html =
@@ -1814,17 +1833,17 @@ function sendReceipt(settings, to, names, totalPaid, paidLabels, formName) {
       // Capçalera amb segell de confirmació
       "<div style='background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:16px 16px 0 0;padding:32px 28px 26px;border-top:4px solid #16A34A;text-align:center'>" +
         "<div style='display:inline-block;width:58px;height:58px;line-height:58px;border-radius:50%;background:#16A34A;color:#ffffff;font-size:30px;font-weight:800;margin-bottom:14px'>&#10003;</div>" +
-        "<div style='font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:6px'>&#127945; " + esc(camp) + "</div>" +
+        "<div style='font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:6px'>&#127953; " + esc(camp) + "</div>" +
         "<div style='font-size:24px;font-weight:800;color:#ffffff;line-height:1.2'>Rebut de pagament</div>" +
       "</div>" +
       // Cos
       "<div style='background:#ffffff;border:1px solid #D6DEEC;border-top:none;padding:28px 30px'>" +
         "<p style='margin:0 0 22px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
-        "<div style='background:#DCFCE7;border-radius:12px;padding:18px 20px;margin-bottom:20px;text-align:center'>" +
-          "<div style='font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#15803D;font-weight:700;margin-bottom:5px'>Import pagat</div>" +
+        "<div style='background:#DCFCE7;border-radius:12px;padding:18px 20px;margin-bottom:22px;text-align:center'>" +
+          "<div style='font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#15803D;font-weight:700;margin-bottom:5px'>Import pagat" + (multi ? " (total)" : "") + "</div>" +
           "<div style='font-size:34px;font-weight:800;color:#15803D;line-height:1'>" + totalPaid + " &euro;</div>" +
         "</div>" +
-        (pills ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#7C90B2;font-weight:700;margin-bottom:9px'>Setmanes pagades</div><div>" + pills + "</div>" : "") +
+        (kidsBlock ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#7C90B2;font-weight:700;margin-bottom:10px'>" + (multi ? "Detall per jugador/a" : "Setmanes") + "</div>" + kidsBlock : "") +
       "</div>" +
       // Firma + data
       "<div style='background:#ffffff;border:1px solid #D6DEEC;border-top:1px solid #EEF3FB;border-radius:0 0 16px 16px;padding:22px 30px 26px'>" +
