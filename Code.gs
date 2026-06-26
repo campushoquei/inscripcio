@@ -757,9 +757,16 @@ function queueConfirmationEmail(payload, rows) {
   var key = "emailq_" + new Date().getTime() + "_" + Math.floor(Math.random() * 100000);
   try {
     props.setProperty(key, JSON.stringify(job));
-    // Un sol trigger pendent és suficient (processa tota la cua quan dispara).
-    var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "processEmailQueue"; });
-    if (!has) ScriptApp.newTrigger("processEmailQueue").timeBased().after(1000).create();
+    // Programa el trigger que processa la cua NOMÉS si no n'hi ha cap de pendent. Abans ho
+    // comprovàvem amb ScriptApp.getProjectTriggers() a CADA enviament (lent, ~0.3-0.5s); ara fem
+    // servir una bandera a la memòria cau (instantània). processEmailQueue la neteja quan corre,
+    // de manera que el següent enviament en torna a programar un. Així, en una ràfega d'enviaments,
+    // només el primer paga el cost de crear el trigger.
+    var cache = CacheService.getScriptCache();
+    if (!cache.get("qpending")) {
+      ScriptApp.newTrigger("processEmailQueue").timeBased().after(1000).create();
+      cache.put("qpending", "1", 90);
+    }
   } catch (e) {
     // Pla B (p. ex. sense permís de triggers): processem el job de forma síncrona. PRIMER el
     // traiem de la cua: si quedés desat, un trigger posterior el tornaria a processar i enviaria
@@ -813,6 +820,9 @@ function processEmailQueue() {
   // real —moure fitxers i enviar correus, que és lent (MailApp ~1-2s)— es fa DESPRÉS, fora del
   // lock, perquè no bloquegi les noves inscripcions. Reclamar abans de processar també evita
   // que dues execucions coincidents enviïn el mateix correu dues vegades.
+  // Permet que un enviament que arribi mentre processem torni a programar un trigger pel seu job.
+  try { CacheService.getScriptCache().remove("qpending"); } catch (e) {}
+
   var qlock = LockService.getScriptLock();
   if (!qlock.tryLock(10000)) {
     // Una altra execució (o una inscripció) té el lock. Reprogramem: aquest trigger ja no es
@@ -955,6 +965,31 @@ function sendConfirmation(settings, payload, rows) {
 
   var badge = "✓ Rebuda correctament" + (multi ? " &nbsp;·&nbsp; " + rows.length + " jugadors/es" : "");
 
+  // ── Versió en text pla (fallback robust) ─────────────────────────────────
+  // S'envia com a part alternativa: si un client de correu no renderitza bé l'HTML, mostra
+  // aquest resum net en comptes d'ensenyar el missatge "a trossos".
+  var txt = [intro, ""];
+  if (payload.campusName) txt.push("Casal: " + payload.campusName);
+  Object.keys(first).forEach(function (k) {
+    if (fieldGroup[k] === childGroupName || isInternal(k)) return;
+    if (first[k] === "" || first[k] == null) return;
+    txt.push((labels[k] || k) + ": " + (String(first[k]).indexOf("http") === 0 ? "(fitxer adjuntat)" : fmtDate(first[k])));
+  });
+  rows.forEach(function (r, idx) {
+    var d = r.data || {};
+    var nm = ""; for (var k in d) { if (/nom/i.test(k) && !/tutor|pare|mare/i.test(k) && !nm) nm = str(d[k]); }
+    txt.push("", (multi ? "— Jugador/a " + (idx + 1) + (nm ? " · " + nm : "") : "— " + (nm || "Jugador/a")));
+    Object.keys(d).forEach(function (k) {
+      if (fieldGroup[k] !== childGroupName || isInternal(k)) return;
+      if (d[k] === "" || d[k] == null) return;
+      txt.push("  " + (labels[k] || k) + ": " + (String(d[k]).indexOf("http") === 0 ? "(fitxer adjuntat)" : fmtDate(d[k])));
+    });
+    if (r.weekLabels && r.weekLabels.length) txt.push("  Setmanes: " + r.weekLabels.join(", "));
+    var pe = (payload.children && payload.children[idx]) || {};
+    if (pe.preu != null && pe.preu > 0) txt.push("  Preu: " + pe.preu + " €");
+  });
+  var textBody = txt.join("\n");
+
   // Estils de mode fosc: els clients mòbils (Gmail app, Apple Mail) enfosqueixen
   // els fons clars però sovint deixen el text fosc → text invisible. Declarem
   // color-scheme i sobreescrivim els colors inline amb classes + !important.
@@ -1007,7 +1042,7 @@ function sendConfirmation(settings, payload, rows) {
     "</div>" +
     "</body></html>";
 
-  MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: camp, replyTo: settings.email_contacto || undefined });
+  MailApp.sendEmail({ to: to, subject: subject, body: textBody, htmlBody: html, name: camp, replyTo: settings.email_contacto || undefined });
 }
 // Mapa id_camp → grup, i nom del grup "per jugador/a" (mateixa detecció que el frontend).
 function fieldGroups(form) {
@@ -1046,23 +1081,41 @@ function fieldLabels(form) {
 /* ---------- Full ---------- */
 function readTable(name) {
   if (_cache.tables[name]) return _cache.tables[name];
+  // Cau curta entre peticions (CacheService): readTable només llegeix fulls de CONFIGURACIÓ
+  // (Ajustes, Campos, Semanas, Formularios, Campus), que canvien molt poc. Així obrir el
+  // formulari i desar una inscripció no els rellegeixen del full cada vegada —que era una part
+  // important del temps d'enviament. El full d'inscripcions NO passa per aquí. Si edites la
+  // configuració al full i vols veure-ho a l'instant, executa clearConfigCache().
+  var sc = CacheService.getScriptCache();
+  var ckey = "tbl_" + name;
+  var hit = sc.get(ckey);
+  if (hit != null) { try { var arr = JSON.parse(hit); _cache.tables[name] = arr; return arr; } catch (e) {} }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(name);
-  if (!sheet || sheet.getLastRow() < 2) { _cache.tables[name] = []; return _cache.tables[name]; }
-  var values = sheet.getDataRange().getValues();
-  var header = values[0].map(function (h) { return String(h).trim(); });
   var out = [];
-  for (var i = 1; i < values.length; i++) {
-    var obj = {}, empty = true;
-    for (var c = 0; c < header.length; c++) {
-      if (!header[c]) continue;
-      obj[header[c]] = values[i][c];
-      if (values[i][c] !== "" && values[i][c] != null) empty = false;
+  if (sheet && sheet.getLastRow() >= 2) {
+    var values = sheet.getDataRange().getValues();
+    var header = values[0].map(function (h) { return String(h).trim(); });
+    for (var i = 1; i < values.length; i++) {
+      var obj = {}, empty = true;
+      for (var c = 0; c < header.length; c++) {
+        if (!header[c]) continue;
+        obj[header[c]] = values[i][c];
+        if (values[i][c] !== "" && values[i][c] != null) empty = false;
+      }
+      if (!empty) out.push(obj);
     }
-    if (!empty) out.push(obj);
   }
+  try { sc.put(ckey, JSON.stringify(out), 30); } catch (e) {}
   _cache.tables[name] = out;
   return out;
+}
+// Buida la cau dels fulls de configuració (executa-ho després d'editar Ajustes/Campos/Semanas
+// al full si vols veure el canvi immediatament, sense esperar els 30s de marge).
+function clearConfigCache() {
+  var sc = CacheService.getScriptCache();
+  sc.removeAll([SHEETS.settings, SHEETS.fields, SHEETS.weeks, SHEETS.forms, SHEETS.campus].map(function (n) { return "tbl_" + n; }));
 }
 
 /* ---------- Helpers ---------- */
@@ -1486,12 +1539,17 @@ function writeSetting(key, value) {
   for (var i = 1; i < values.length; i++) {
     if (String(values[i][kc]).trim() === key) {
       var rf = formCol >= 0 ? String(values[i][formCol]).trim() : "";
-      if (!rf) { sheet.getRange(i + 1, vc + 1, 1, 1).setValue(value); return; }
+      if (!rf) { sheet.getRange(i + 1, vc + 1, 1, 1).setValue(value); invalidateSettingsCache(); return; }
     }
   }
   var row = []; for (var j = 0; j < header.length; j++) row.push("");
   row[kc] = key; row[vc] = value;
   sheet.appendRow(row);
+  invalidateSettingsCache();
+}
+// Després d'escriure a Ajustes, buida'n la cau perquè el canvi es vegi a l'instant.
+function invalidateSettingsCache() {
+  try { CacheService.getScriptCache().remove("tbl_" + SHEETS.settings); } catch (e) {}
 }
 
 // Reenvia el correu de confirmació d'una fila concreta.
