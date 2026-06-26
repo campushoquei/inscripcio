@@ -750,6 +750,9 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .check input:focus-visible + .check__box { box-shadow: 0 0 0 3px rgba(31,90,224,.25); }
 .check__label { font-size: .9rem; color: var(--ink-soft); }
 .consent { padding: 4px 2px 22px; }
+/* Consentiment pendent en intentar enviar: ressalta la casella i l'etiqueta */
+.consent--invalid .check__box { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.18); }
+.consent--invalid .check__label { color: var(--danger); }
 
 /* ---------- Blocs de jugador/a (diversos fills) ---------- */
 .children { display: flex; flex-direction: column; gap: 16px; }

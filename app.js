@@ -7,7 +7,7 @@
 // 🔧 Enganxa aquí la URL del teu Apps Script (acaba en /exec).
 // Buida = MODE DEMO amb dades d'exemple.
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
-let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx72A3mHHPqc8lMSqQY6RDVKlQ8p_ukvk79mf1twgJ6geO-AoEmLrEEOwlodVWB0REX6Q/exec";
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwd6DenkPJ3ut5-lIiVKq4nr3TeMC6kHu8cX_iaZIYESYHXy_rgbPL2bw_Avwk5Kxfjtw/exec";
 
 // 🔧 Quin formulari es mostra. Es llegeix de la URL: ...index.html?form=primavera
 // Buit = formulari per defecte (les files del full sense columna "form").
@@ -134,6 +134,11 @@ async function init() {
   returningDismissed = loadReturningDismissed();
   els.retry.addEventListener("click", load);
   els.form.addEventListener("submit", onSubmit);
+  // En marcar el consentiment, treu el resaltat d'error que hi pugui haver.
+  const consentInput = document.getElementById("consent");
+  if (consentInput) consentInput.addEventListener("change", () => {
+    if (consentInput.checked) consentInput.closest(".consent")?.classList.remove("consent--invalid");
+  });
   els.form.addEventListener("input", () => { scheduleDraftSave(); scheduleUiUpdate(); });
   els.form.addEventListener("change", () => { scheduleDraftSave(); scheduleUiUpdate(); });
   els.another.addEventListener("click", resetForNew);
@@ -1495,28 +1500,48 @@ function validate() {
   return { ok, firstBad };
 }
 
+// Etiqueta llegible d'un camp obligatori (per dir a l'usuari QUIN falla).
+function fieldLabel(wrap) {
+  if (!wrap) return "aquest camp";
+  if (wrap.id === "consent" || wrap.querySelector?.("#consent")) return "la política de protecció de dades";
+  const el = wrap.querySelector?.(".field__label, .note__title, .child-weeks__title, .check__label");
+  const t = ((el ? el.textContent : wrap.textContent) || "").replace(/\*/g, "").trim();
+  return t || "aquest camp";
+}
+
+// Porta el camp a la vista: desplega el bloc de fill plegat, salta al pas del wizard
+// que el conté i hi fa scroll + focus. Així clicar "Enviar" sempre porta on falta.
+function revealField(wrap) {
+  if (!wrap) return;
+  const block = wrap.closest(".child-block");
+  if (block && block.classList.contains("child-block--collapsed")) expandChild(block);
+  if (wizardSteps.length) {
+    const section = wrap.closest(".section");
+    const stepIdx = section ? wizardSteps.indexOf(section) : -1;
+    if (stepIdx >= 0 && stepIdx !== wizardStep) { wizardStep = stepIdx; renderWizardStep(false); }
+  }
+  wrap.scrollIntoView({ behavior: "smooth", block: "center" });
+  const focusable = wrap.querySelector("input:not([type=hidden]), select, textarea");
+  if (focusable && focusable.focus) { try { focusable.focus({ preventScroll: true }); } catch {} }
+}
+
 // ---- Enviament ----
 async function onSubmit(e) {
   e.preventDefault();
   clearNote();
-  if (!document.getElementById("consent").checked) { haptic([10, 45, 10]); return flashNote("Cal acceptar la política de protecció de dades."); }
+  const consentInput = document.getElementById("consent");
+  if (!consentInput.checked) {
+    haptic([10, 45, 10]);
+    const consentWrap = consentInput.closest(".consent");
+    if (consentWrap) consentWrap.classList.add("consent--invalid");
+    revealField(consentWrap || consentInput);
+    return flashNote("Cal acceptar la política de protecció de dades.");
+  }
   const { ok: formOk, firstBad } = validate();
   if (!formOk) {
     haptic([10, 45, 10]);
-    // En mode wizard, salta al pas que conté el primer error
-    if (wizardSteps.length && firstBad) {
-      const parentSection = firstBad.closest(".section");
-      const stepIdx = parentSection ? wizardSteps.indexOf(parentSection) : -1;
-      if (stepIdx >= 0 && stepIdx !== wizardStep) {
-        wizardStep = stepIdx;
-        wizardSteps.forEach((s, i) => { s.hidden = i !== wizardStep; });
-        const priceCard = document.getElementById("price-total-card");
-        if (priceCard) priceCard.hidden = wizardStep !== wizardSteps.length - 1;
-        renderWizardNav();
-      }
-    }
-    if (firstBad) firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
-    return flashNote("Revisa els camps marcats.");
+    revealField(firstBad);
+    return flashNote(`Falta un camp: ${fieldLabel(firstBad)}.`);
   }
   setLoading(true);
   try {
