@@ -1221,6 +1221,7 @@ function handleAdmin(p) {
       case "admin_set_groups_config": return adminSetGroupsConfig(p.config);
       case "admin_resend":      return adminResend(form, p.id);
       case "admin_reminder":    return adminReminder(form, p.ids || (p.id ? [p.id] : []));
+      case "admin_receipt":     return adminReceipt(form, p.ids || (p.id ? [p.id] : []));
       case "admin_update":      return adminUpdate(form, p.id, p.patch);
       case "admin_cancel":      return adminCancel(form, p.id);
       default:                 return { ok: false, error: "unknown action" };
@@ -1460,6 +1461,7 @@ function adminList(form) {
       descompte: str(row.Descompte),
       estat: computeEstat(paid, registered),
       grups: parseGroupOverrides(str(row.Grups)),
+      rebutEnviat: str(row["Rebut enviat"]),
       sapNedar: pickFirstValue(row, [/sap_nedar/i, /nedar|nadar|swim/i]),
       fitxers: adminFileUrls(row),
       detall: detail
@@ -1544,11 +1546,13 @@ function adminSetGroup(form, id, week, color, rowNum) {
   var target = findRowByNumberOrId(data, rowNum, id);
   if (!target) return { ok: false, error: "row not found" };
 
-  var groups = groupsConfig(readSettings(form));
-  var auto = autoGroupColor(num(target.Edat), groups);
   var map = parseGroupOverrides(str(target.Grups));
   if (!week) return { ok: false, error: "week missing" };
-  if (!color || color === auto) delete map[week]; else map[week] = color;
+  // Una assignació manual SEMPRE es desa com a excepció explícita, per a qualsevol color
+  // (encara que coincideixi amb el grup automàtic per edat). Abans, si el color era
+  // l'automàtic no es desava res i moure un nen/a a aquell grup (p. ex. el vermell) no quedava
+  // mai guardat. Només es treu l'excepció si no arriba cap color.
+  if (!color) delete map[week]; else map[week] = color;
 
   var col = ensureColumn(sheet, data.header, "Grups");
   sheet.getRange(target.__row, col, 1, 1).setValue(serializeGroupOverrides(map));
@@ -1687,6 +1691,97 @@ function sendReminder(settings, form, row, registered, paid) {
               "</tr></table></div>"
           : "") +
         (pills ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes pendents</div><div style='margin-bottom:18px'>" + pills + "</div>" : "") +
+        (contacte ? "<p style='margin:0;color:#6B7C99;font-size:13px'>Per a qualsevol dubte, escriu-nos a <a href='mailto:" + esc(contacte) + "' style='color:#1F5AE0'>" + esc(contacte) + "</a>.</p>" : "") +
+      "</div>" +
+    "</div></body></html>";
+
+  MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: camp, replyTo: contacte || undefined });
+}
+
+/* ---------- Rebut de pagament ----------
+   Envia un correu de rebut confirmant l'import JA PAGAT pel campus (formulari).
+   Té en compte els pagaments parcials: l'import es calcula només sobre les setmanes
+   pagades (preu × setmanes_pagades / setmanes_inscrites). El rebut és per família/correu:
+   els germans comparteixen correu, així que s'agrupa per correu, s'envia un sol rebut amb
+   l'import total de la família i es marca la columna "Rebut enviat" a totes les seves files. */
+function adminReceipt(form, ids) {
+  var settings = readSettings(form);
+  var data = readSubmissionRows(form);
+  var sheet = data.sheet;
+  if (!sheet) return { ok: false, error: "sheet not found" };
+  var weeks = readWeeks(form);
+  var weekIds = weeks.map(function (w) { return w.id; });
+  var labelById = {};
+  weeks.forEach(function (w) { labelById[w.id] = w.etiqueta || w.id; });
+
+  function normEmail(r) { return String(findEmail(r) || "").trim().toLowerCase(); }
+
+  // Correus implicats per les inscripcions seleccionades.
+  var wanted = {};
+  (ids || []).map(String).forEach(function (id) {
+    data.rows.forEach(function (r) { if (str(r.ID) === id) { var e = normEmail(r); if (e) wanted[e] = true; } });
+  });
+
+  var col = ensureColumn(sheet, data.header, "Rebut enviat");
+  var stamp = Utilities.formatDate(new Date(), "Europe/Madrid", "yyyy-MM-dd HH:mm");
+  var sent = 0, lastTo = "";
+
+  Object.keys(wanted).forEach(function (email) {
+    var family = data.rows.filter(function (r) { return normEmail(r) === email; });
+    if (!family.length) return;
+
+    var totalPaid = 0, paidLabels = [], seen = {}, names = [];
+    family.forEach(function (r) {
+      var registered = rowRegisteredWeeks(r, weekIds);
+      var paid = rowPaidWeeks(r, registered);
+      var preu = num(r.Preu) || 0;
+      if (registered.length && paid.length) totalPaid += Math.round(preu * (paid.length / registered.length));
+      paid.forEach(function (w) { var l = labelById[w] || w; if (!seen[l]) { seen[l] = true; paidLabels.push(l); } });
+      var nm = adminRowName(r, form);
+      if (nm && names.indexOf(nm) === -1) names.push(nm);
+    });
+    if (totalPaid <= 0) return;   // encara no s'ha cobrat res → no hi ha rebut a enviar
+
+    var to = family.map(findEmail).filter(Boolean)[0];
+    if (!to) return;
+    var formName = str(family[0].Formulario) || form;
+    sendReceipt(settings, to, names, totalPaid, paidLabels, formName);
+    family.forEach(function (r) { sheet.getRange(r.__row, col, 1, 1).setValue(stamp); });
+    sent++; lastTo = to;
+  });
+
+  return { ok: true, sent: sent, to: (sent === 1 ? lastTo : undefined) };
+}
+
+function sendReceipt(settings, to, names, totalPaid, paidLabels, formName) {
+  var camp = settings.nombre_campus || "Casal";
+  var who = (names && names.length) ? names.join(", ") : "la inscripció";
+  var contacte = settings.email_contacto || "";
+  var subject = settings.email_rebut_asunto || ("Rebut de pagament · " + (formName || camp));
+  var intro = settings.email_rebut_intro ||
+    ("Confirmem que hem rebut el pagament de " + totalPaid + " € de " + who + " per " + (formName || camp) + ". Moltes gràcies!");
+
+  var pills = (paidLabels || []).map(function (l) {
+    return "<span style='display:inline-block;background:#16A34A;color:#fff;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;margin:0 5px 5px 0'>" + esc(l) + "</span>";
+  }).join("");
+
+  var html =
+    "<!DOCTYPE html><html lang='ca'><head><meta charset='utf-8'>" +
+    "<meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
+    "<body style='margin:0;padding:0'>" +
+    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#f0f4fb;padding:20px 10px;color:#16233D'>" +
+      "<div style='background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:14px 14px 0 0;padding:28px;border-top:4px solid #16A34A'>" +
+        "<div style='font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#BBF7D0;font-weight:700;margin-bottom:10px'>🏑 " + esc(camp) + "</div>" +
+        "<div style='font-size:23px;font-weight:800;color:#fff;line-height:1.2'>Rebut de pagament</div>" +
+      "</div>" +
+      "<div style='background:#fff;border:1px solid #D6DEEC;border-top:none;border-radius:0 0 14px 14px;padding:26px 28px'>" +
+        "<p style='margin:0 0 20px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
+        "<div style='background:#DCFCE7;border-left:4px solid #16A34A;border-radius:9px;padding:14px 16px;margin-bottom:18px'>" +
+          "<table style='border-collapse:collapse;width:100%'><tr>" +
+            "<td style='font-weight:700;color:#0E2A63;font-size:14px'>Import pagat</td>" +
+            "<td style='text-align:right;font-size:22px;font-weight:800;color:#15803D'>" + totalPaid + " €</td>" +
+          "</tr></table></div>" +
+        (pills ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes pagades</div><div style='margin-bottom:18px'>" + pills + "</div>" : "") +
         (contacte ? "<p style='margin:0;color:#6B7C99;font-size:13px'>Per a qualsevol dubte, escriu-nos a <a href='mailto:" + esc(contacte) + "' style='color:#1F5AE0'>" + esc(contacte) + "</a>.</p>" : "") +
       "</div>" +
     "</div></body></html>";

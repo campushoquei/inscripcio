@@ -586,8 +586,8 @@ function renderGroupsBoard() {
       const manual = !!(r.grups && r.grups[week]);
       const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
       const opts = groups.map((gg) => `<option value="${esc(gg.color)}"${gg.color === g.color ? " selected" : ""}>${esc(gg.label)}</option>`).join("");
-      // 🚱 a l'esquerra del nom (si no sap nedar) i l'edat sempre a la dreta.
-      const ns = noSwim ? '<span class="gchip__noswim" title="No sap nedar">🚱</span>' : "";
+      // 🐠 a l'esquerra del nom (si no sap nedar) i l'edat sempre a la dreta.
+      const ns = noSwim ? '<span class="gchip__noswim" title="No sap nedar">🐠</span>' : "";
       // Marca discreta (un punt del color del grup) per als moguts manualment. El selector
       // <select> es manté com a alternativa accessible i per a tàctil (on no s'arrossega).
       const mk = manual ? '<span class="gchip__moved" title="Mogut manualment"></span>' : "";
@@ -602,7 +602,7 @@ function renderGroupsBoard() {
       </div>`;
     }).join("");
     const noSwimCount = list.filter((r) => r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim())).length;
-    const medBadge = noSwimCount ? `<span class="gcol__med" title="No saben nedar">🚱 ${noSwimCount}</span>` : "";
+    const medBadge = noSwimCount ? `<span class="gcol__med" title="No saben nedar">🐠 ${noSwimCount}</span>` : "";
     return `<div class="gcol" data-color="${esc(g.color)}" style="--gc:${hex}">
       <div class="gcol__head"><span class="gcol__dot"></span><span class="gcol__name">${esc(g.label)}</span><span class="gcol__count">${list.length}</span></div>
       <div class="gcol__range"><span>${g.min}–${g.max} anys</span>${medBadge}</div>
@@ -623,13 +623,14 @@ function renderGroupsBoard() {
 async function setGroup(rowNum, week, color) {
   const row = state.list.find((r) => String(r.row) === String(rowNum));
   if (!row) return;
-  const auto = autoGroupColor(Number(row.edat));
   row.grups = row.grups || {};
-  // Estat anterior i nou per a aquesta setmana. Si el color de destí és l'automàtic, no es
-  // desa cap excepció (es treu). Si no canvia res (p. ex. deixar la fitxa al mateix grup),
-  // sortim sense tocar res ni cridar el servidor.
+  // Estat anterior i nou per a aquesta setmana. Una assignació manual SEMPRE es desa com a
+  // excepció explícita (per a qualsevol color), encara que coincideixi amb el grup automàtic
+  // per edat. Abans, si el color de destí era l'automàtic no es desava res, i això feia que
+  // moure un nen/a a un grup que ja era el seu per edat (p. ex. el vermell, 7–9 anys) no
+  // quedés mai guardat. Només es treu l'excepció si no arriba cap color.
   const prev = row.grups[week] || "";
-  const next = (!color || color === auto) ? "" : color;
+  const next = color || "";
   if (prev === next) return;
   if (next) row.grups[week] = next; else delete row.grups[week];
   renderGroupsBoard(); renderOccupancy(); renderTable(); // actualització optimista
@@ -854,6 +855,21 @@ function sortRows() {
   });
 }
 
+// Icona de rebut (factura) i icona de "rebut ja enviat" (cercle amb ✓).
+const RECEIPT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>';
+const RECEIPT_SENT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>';
+
+// Indica si ja s'ha enviat el rebut de pagament d'una inscripció. Com que els germans
+// comparteixen correu (i el rebut s'envia per família/correu), considerem "enviat" si
+// qualsevol inscripció amb el mateix correu ja en té un de marcat.
+function receiptSent(r) {
+  if (!r) return false;
+  if (r.rebutEnviat) return true;
+  if (!r.email) return false;
+  const e = norm(r.email);
+  return state.list.some((x) => x.rebutEnviat && x.email && norm(x.email) === e);
+}
+
 function renderTable() {
   const tbody = $("tbody");
   const rows = state.filtered;
@@ -867,9 +883,11 @@ function renderTable() {
       const gl = GROUP_LABEL[color] || color;
       return `<span class="wpill${isPaid ? " wpill--paid" : ""}" style="--wc:${hex}" title="${esc(w)} · ${esc(gl)} · ${isPaid ? "Pagada" : "Pendent"}">${esc(w)}${isPaid ? ' <span class="wpill__chk">✓</span>' : ""}</span>`;
     }).join("");
-    const canRemind = r.estat !== "Pagat" && r.email;
-    const remindBtn = canRemind
-      ? `<button class="iconbtn" data-remind="${esc(r.id)}" title="Recordatori de pagament" aria-label="Recordatori de pagament"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>`
+    // El rebut només té sentit si s'ha cobrat alguna cosa (Pagat o Parcial) i hi ha correu.
+    const canReceipt = (r.estat === "Pagat" || r.estat === "Parcial") && r.email;
+    const sent = receiptSent(r);
+    const receiptBtn = canReceipt
+      ? `<button class="iconbtn iconbtn--receipt${sent ? " is-sent" : ""}" data-receipt="${esc(r.id)}"${sent ? " disabled" : ""} title="${sent ? "Rebut de pagament ja enviat" : "Enviar rebut de pagament"}" aria-label="${sent ? "Rebut ja enviat" : "Enviar rebut de pagament"}">${sent ? RECEIPT_SENT_SVG : RECEIPT_SVG}</button>`
       : "";
     return `<tr data-i="${i}">
       <td class="sel-cell"><input type="checkbox" class="row-check" data-check="${esc(r.id)}"${state.selected.has(r.id) ? " checked" : ""} aria-label="Selecciona inscripció"></td>
@@ -880,7 +898,7 @@ function renderTable() {
       <td class="num">${r.preu ? eur(r.preu) : "—"}</td>
       <td>${estatBadge(r, true)}</td>
       <td><div class="row-actions">
-        ${remindBtn}
+        ${receiptBtn}
         <button class="iconbtn" data-resend="${esc(r.id)}" title="Reenviar correu" aria-label="Reenviar correu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
       </div></td>
     </tr>`;
@@ -889,7 +907,7 @@ function renderTable() {
   tbody.querySelectorAll("tr").forEach((tr) => {
     tr.addEventListener("click", (e) => {
       if (e.target.closest("[data-toggle]") || e.target.closest("[data-resend]") ||
-          e.target.closest("[data-remind]") || e.target.closest("[data-check]")) return;
+          e.target.closest("[data-receipt]") || e.target.closest("[data-check]")) return;
       openDrawer(state.filtered[Number(tr.dataset.i)]);
     });
   });
@@ -897,8 +915,8 @@ function renderTable() {
     b.addEventListener("click", (e) => { e.stopPropagation(); toggleAllPaid(b.dataset.toggle); }));
   tbody.querySelectorAll("[data-resend]").forEach((b) =>
     b.addEventListener("click", (e) => { e.stopPropagation(); resend(b.dataset.resend); }));
-  tbody.querySelectorAll("[data-remind]").forEach((b) =>
-    b.addEventListener("click", (e) => { e.stopPropagation(); remind(b.dataset.remind); }));
+  tbody.querySelectorAll("[data-receipt]").forEach((b) =>
+    b.addEventListener("click", (e) => { e.stopPropagation(); sendReceipt(b.dataset.receipt); }));
   tbody.querySelectorAll("[data-check]").forEach((c) =>
     c.addEventListener("change", (e) => { e.stopPropagation(); toggleSelect(c.dataset.check, c.checked); }));
 
@@ -1084,6 +1102,41 @@ async function remind(ids) {
   }
 }
 
+// Envia un rebut de pagament: un correu que confirma l'import ja pagat pel campus
+// (formulari). Té en compte els pagaments parcials (només compta les setmanes pagades).
+// El rebut és per família/correu, així que un cop enviat es marquen totes les inscripcions
+// que comparteixen aquell correu (germans) i el botó queda deshabilitat.
+async function sendReceipt(ids) {
+  const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
+  const targets = list.map((id) => state.list.find((r) => r.id === id)).filter(Boolean);
+  // Només té sentit enviar rebut a qui ha pagat alguna cosa (Pagat o Parcial) i té correu.
+  const payable = targets.filter((r) => (r.estat === "Pagat" || r.estat === "Parcial") && r.email);
+  if (!payable.length) return toast("Cap inscripció amb pagament registrat i correu.", true);
+
+  const emails = [...new Set(payable.map((r) => norm(r.email)))];
+  const msg = emails.length === 1
+    ? `S'enviarà un rebut de pagament a ${payable[0].email}.`
+    : `S'enviarà un rebut de pagament a ${emails.length} famílies.`;
+  const ok = await confirmModal({ title: "Enviar rebut de pagament?", message: msg, confirmLabel: "Envia rebut" });
+  if (!ok) return;
+
+  try {
+    const out = await api("admin_receipt", { ids: payable.map((r) => r.id) });
+    // Marca com a enviat totes les inscripcions amb un dels correus implicats (germans inclosos).
+    const stamp = new Date().toISOString();
+    state.list.forEach((r) => { if (r.email && emails.includes(norm(r.email))) r.rebutEnviat = stamp; });
+    applyFilters();
+    if (!$("drawer").hidden && targets[0]) {
+      const fresh = state.list.find((r) => r.id === targets[0].id);
+      if (fresh) openDrawer(fresh);
+    }
+    const n = (out && out.sent != null) ? out.sent : emails.length;
+    toast(`Rebut enviat a ${n} ${n === 1 ? "família" : "famílies"}.`);
+  } catch (err) {
+    toast("No s'ha pogut enviar: " + err.message, true);
+  }
+}
+
 /* ============================================================
    Selecció múltiple + accions en lot (punt 2)
    ============================================================ */
@@ -1201,6 +1254,9 @@ function openDrawer(r) {
   $("drawer-title").textContent = r.nom || "Inscripció";
   const groups = {};
   (r.detall || []).forEach((d) => { (groups[d.grup || "Dades"] = groups[d.grup || "Dades"] || []).push(d); });
+  // Rebut de pagament: disponible si s'ha cobrat alguna cosa i hi ha correu; deshabilitat si ja s'ha enviat.
+  const canReceipt = (r.estat === "Pagat" || r.estat === "Parcial") && r.email;
+  const receiptDone = receiptSent(r);
 
   let html = "";
   if (r.preu) {
@@ -1222,6 +1278,7 @@ function openDrawer(r) {
     html += `<div class="dgroup"><div class="dgroup__title">Pagaments per setmana</div>
       <div class="pay-actions">
         <button class="btn btn--ghost btn--sm" data-payall>${allPaid ? "Desmarcar totes" : "Marcar totes pagades"}</button>
+        ${canReceipt ? `<button class="btn btn--ghost btn--sm dw-receipt${receiptDone ? " is-sent" : ""}" id="dw-receipt"${receiptDone ? " disabled" : ""} title="${receiptDone ? "Rebut de pagament ja enviat" : "Enviar rebut de pagament al correu de la família"}">${receiptDone ? "Rebut enviat ✓" : "Enviar rebut"}</button>` : ""}
       </div>
       <div class="pay-weeks">` +
       r.weekIds.map((wid) => {
@@ -1242,10 +1299,8 @@ function openDrawer(r) {
       ).join("") + `</div>`;
   });
 
-  const canRemind = r.estat !== "Pagat" && r.email;
   html += `<div class="drawer__actions">
     <button class="btn btn--ghost btn--sm" id="dw-resend">Reenviar correu</button>
-    ${canRemind ? `<button class="btn btn--ghost btn--sm" id="dw-remind">Recordatori de pagament</button>` : ""}
     <button class="btn btn--ghost btn--sm" id="dw-edit">Edita contacte</button>
   </div>
   <div id="dw-edit-box"></div>`;
@@ -1256,7 +1311,8 @@ function openDrawer(r) {
   $("drawer-body").querySelectorAll("[data-payweek]").forEach((b) =>
     b.addEventListener("click", () => toggleWeekPaid(r.id, b.dataset.payweek)));
   $("dw-resend").addEventListener("click", () => resend(r.id));
-  if (canRemind) $("dw-remind").addEventListener("click", () => remind(r.id));
+  const dwReceipt = $("dw-receipt");
+  if (dwReceipt && !receiptDone) dwReceipt.addEventListener("click", () => sendReceipt(r.id));
   $("dw-edit").addEventListener("click", () => openEditContact(r));
 
   $("drawer-backdrop").hidden = false;
@@ -1378,15 +1434,15 @@ function printRosters() {
     const hex = GROUP_HEX[g.color] || "#64748B";
     const ll = list.slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
     const items = ll.map((r) => {
-      // 🚱 a l'esquerra (si no sap nedar) i l'edat sempre a la dreta.
-      const ns = noSwimOf(r) ? '<span class="ns" title="No sap nedar">🚱</span>' : "";
+      // 🐠 a l'esquerra (si no sap nedar) i l'edat sempre a la dreta.
+      const ns = noSwimOf(r) ? '<span class="ns" title="No sap nedar">🐠</span>' : "";
       const age = r.edat !== "" && r.edat != null ? `<span class="age">${esc(String(r.edat))}a</span>` : "";
       return `<li>${ns}<span class="nm">${esc(r.nom || "—")}</span>${age}</li>`;
     }).join("");
-    // Si el grup és gran, ocupa tota l'amplada i reparteix els noms en columnes
-    // perquè càpiga en una sola pàgina en lloc de desbordar-se.
-    const ncols = ll.length > PER_COL ? Math.min(3, Math.ceil(ll.length / PER_COL)) : 1;
-    const wide = ncols > 1 ? " team--wide" : "";
+    // Cada grup ocupa sempre el seu quadrant (vista 2×2). Si té molts nens/es, reparteix els
+    // noms en columnes DINS del quadrant perquè càpiga sense desbordar-se ni trencar la graella.
+    const ncols = ll.length > PER_COL ? 2 : 1;
+    const wide = ncols > 1 ? " team--cols" : "";
     return `<div class="team${ll.length ? "" : " team--empty"}${wide}" style="--gc:${hex};--cols:${ncols}">
       <div class="team__head">
         <span class="team__badge">${ll.length}</span>
@@ -1402,7 +1458,7 @@ function printRosters() {
     kids.forEach((r) => { const c = groupColorOf(r, w.id); (byColor[c] = byColor[c] || []).push(r); });
     const noSwimWeek = kids.filter(noSwimOf).length;
     const teams = groups.map((g) => teamFor(g, byColor[g.color] || [])).join("");
-    const nsPill = noSwimWeek ? `<span class="kpi kpi--ns">🚱 ${noSwimWeek} ${noSwimWeek === 1 ? "no neda" : "no neden"}</span>` : "";
+    const nsPill = noSwimWeek ? `<span class="kpi kpi--ns">🐠 ${noSwimWeek} ${noSwimWeek === 1 ? "no neda" : "no neden"}</span>` : "";
     return `<section class="wk" data-week="${esc(w.id)}">
       <div class="wk__banner">
         <div class="wk__bannerL">
@@ -1433,7 +1489,7 @@ function printRosters() {
       radial-gradient(1000px 600px at 110% 0%,rgba(99,102,241,.18),transparent 55%),var(--paper);}
     /* Capçalera */
     .hero{position:sticky;top:0;z-index:9;background:rgba(14,28,61,.78);backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
-    .hero__in{max-width:880px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:14px 18px;}
+    .hero__in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:14px 18px;}
     .emblem{width:46px;height:46px;border-radius:13px;overflow:hidden;flex:0 0 auto;box-shadow:0 8px 22px rgba(0,0,0,.4);}
     .emblem img{width:100%;height:100%;object-fit:cover;display:block;}
     .hero h1{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:1.25rem;color:#fff;margin:0;line-height:1;}
@@ -1441,14 +1497,14 @@ function printRosters() {
     .printbtn{margin-left:auto;border:0;cursor:pointer;font-family:inherit;font-weight:800;font-size:.9rem;color:var(--navy);background:#fff;border-radius:999px;padding:11px 20px;box-shadow:0 8px 22px rgba(0,0,0,.3);display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
     .printbtn:active{transform:translateY(1px);}
     /* Selector de setmanes */
-    .picker{max-width:880px;margin:0 auto;padding:16px 18px 4px;}
+    .picker{max-width:1180px;margin:0 auto;padding:16px 18px 4px;}
     .picker__hint{color:rgba(255,255,255,.6);font-size:.76rem;font-weight:600;margin:0 0 9px;}
     .chips{display:flex;flex-wrap:wrap;gap:8px;}
     .chip{border:1.5px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-family:inherit;font-weight:700;font-size:.85rem;border-radius:999px;padding:8px 16px;cursor:pointer;transition:all .15s ease;}
     .chip:hover{border-color:#fff;background:rgba(255,255,255,.14);}
     .chip.on{background:#fff;color:var(--navy);border-color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.25);}
     /* Setmana */
-    .wrap{max-width:880px;margin:0 auto;padding:10px 18px;}
+    .wrap{max-width:1180px;margin:0 auto;padding:10px 18px;}
     .wk{margin:14px 0 26px;}
     .wk__banner{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;
       background:linear-gradient(120deg,var(--blue),#6366F1);border-radius:20px 20px 6px 6px;padding:18px 22px;color:#fff;box-shadow:0 14px 34px rgba(31,90,224,.35);}
@@ -1459,11 +1515,10 @@ function printRosters() {
     .kpi{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:6px 13px;font-size:.82rem;font-weight:700;white-space:nowrap;}
     .kpi b{font-size:.95rem;}
     .kpi--ns{background:rgba(0,0,0,.22);}
-    /* Targetes-equip */
-    .teams{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:14px;}
+    /* Targetes-equip · graella 2×2 fixa (un grup per quadrant) */
+    .teams{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:14px;align-items:start;}
     .team{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.22);display:flex;flex-direction:column;}
-    .team--wide{grid-column:1 / -1;}
-    .team--wide .team__list{column-count:var(--cols,2);column-gap:6px;}
+    .team--cols .team__list{column-count:var(--cols,2);column-gap:10px;}
     .team__head{display:flex;align-items:center;gap:12px;padding:13px 16px;color:#fff;
       background:linear-gradient(135deg,var(--gc),color-mix(in srgb,var(--gc) 62%,#0b1430));}
     .team__badge{flex:0 0 auto;min-width:34px;height:34px;border-radius:50%;background:#fff;color:var(--gc);
@@ -1481,7 +1536,7 @@ function printRosters() {
     .team--empty{opacity:.55;}
     .team__empty{color:var(--ink-soft);font-size:.85rem;text-align:center;padding:16px 0;margin:0;}
     /* Peu */
-    .foot{max-width:880px;margin:18px auto 0;padding:0 18px;color:rgba(255,255,255,.45);font-size:.74rem;text-align:center;}
+    .foot{max-width:1180px;margin:18px auto 0;padding:0 18px;color:rgba(255,255,255,.45);font-size:.74rem;text-align:center;}
     @media(max-width:600px){
       .hero h1{font-size:1.05rem;} .hero .sub{display:none;}
       .printbtn{padding:9px 14px;font-size:.82rem;}
@@ -1489,22 +1544,23 @@ function printRosters() {
       .wk__name{font-size:1.5rem;}
     }
     @media print{
-      @page{margin:11mm;}
+      /* Apaïsat: més amplada útil → la graella 2×2 de grups encaixa millor (sobretot si un grup té molts nens/es). */
+      @page{size:A4 landscape;margin:10mm;}
       *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
       body{background:#fff!important;padding:0;}
       .hero,.picker,.foot{display:none!important;}
+      .wrap{max-width:none;padding:0;}
       .wk{margin:0 0 10px;}
       /* Quan s'imprimeixen totes les setmanes, cada una comença en una fulla nova */
       body[data-show="all"] .wk + .wk{break-before:page;page-break-before:always;}
       .wk__banner{box-shadow:none;break-after:avoid;border-radius:10px;padding:12px 16px;}
       .wk__name{font-size:1.4rem;}
-      /* Teams en multicolumna tipus diari: dins d'un multicol, break-inside:avoid SÍ
-         es respecta → cada grup queda sencer en una pàgina. Els grups petits flueixen
-         en 2 columnes; un grup gran ocupa tota l'amplada (column-span) amb columnes internes. */
-      .teams{display:block;column-count:2;column-gap:12px;margin-top:10px;}
-      .team{display:block;width:100%;overflow:visible;box-shadow:none;border:1px solid #ccc;margin:0 0 10px;
+      /* Graella 2×2 fixa: un grup per quadrant. Els grups grans NO trenquen la graella;
+         reparteixen els noms en columnes internes dins del seu quadrant. */
+      .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;align-items:start;}
+      .team{overflow:visible;box-shadow:none;border:1px solid #ccc;
             break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid;}
-      .team--wide{column-span:all;-webkit-column-span:all;}
+      .team--cols .team__list{column-count:var(--cols,2);column-gap:10px;}
       .team__head{padding:9px 13px;}
       .team__name{font-size:1.05rem;}
       .team__badge{min-width:28px;height:28px;font-size:.95rem;}
@@ -1767,8 +1823,7 @@ async function demoApi(action, extra) {
       || d.rows.find((x) => x.id === extra.id);
     if (r) {
       r.grups = r.grups || {};
-      const auto = autoGroupColor(Number(r.edat));
-      if (!extra.color || extra.color === auto) delete r.grups[extra.week]; else r.grups[extra.week] = extra.color;
+      if (!extra.color) delete r.grups[extra.week]; else r.grups[extra.week] = extra.color;
       return { ok: true, id: extra.id, grups: r.grups };
     }
     return { ok: false, error: "row not found" };
@@ -1801,6 +1856,15 @@ async function demoApi(action, extra) {
     let sent = 0;
     ids.forEach((id) => { const r = d.rows.find((x) => x.id === id); if (r && r.email && r.estat !== "Pagat") sent++; });
     return { ok: true, sent };
+  }
+  if (action === "admin_receipt") {
+    const ids = extra.ids || (extra.id ? [extra.id] : []);
+    const emails = new Set();
+    ids.forEach((id) => {
+      const r = d.rows.find((x) => x.id === id);
+      if (r && r.email && r.estat !== "Pendent") emails.add(String(r.email).toLowerCase());
+    });
+    return { ok: true, sent: emails.size };
   }
   if (action === "admin_update") {
     const r = d.rows.find((x) => x.id === extra.id);

@@ -290,7 +290,7 @@ body.is-dragging-chip { cursor: grabbing; user-select: none; -webkit-user-select
 /* .hide-sm: amaga elements només a pantalla petita (regla a la secció responsive). */
 
 /* Estat badge / toggle */
-.estat { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 11px 5px 9px; font-size: .8rem; font-weight: 700; border: 1.5px solid transparent; cursor: pointer; transition: all .15s ease; white-space: nowrap; }
+.estat { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 999px; padding: 5px 11px 5px 9px; font-family: inherit; font-size: .8rem; font-weight: 700; line-height: 1; border: 1.5px solid transparent; cursor: pointer; transition: all .15s ease; white-space: nowrap; vertical-align: middle; }
 .estat__dot { width: 8px; height: 8px; border-radius: 50%; }
 .estat--pagat { background: var(--ok-soft); color: #15803D; border-color: #bbf7d0; }
 .estat--pagat .estat__dot { background: var(--ok); }
@@ -316,6 +316,10 @@ span.estat { cursor: default; }
 .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .row-actions .iconbtn { width: 32px; height: 32px; border-radius: 8px; }
 .row-actions .iconbtn svg { width: 15px; height: 15px; }
+/* Botó de rebut de pagament: quan ja s'ha enviat queda en verd i deshabilitat. */
+.iconbtn--receipt.is-sent, .iconbtn--receipt:disabled { color: #15803D; border-color: #bbf7d0; background: var(--ok-soft); cursor: default; opacity: 1; }
+.iconbtn--receipt:disabled:hover { box-shadow: none; transform: none; }
+.btn.dw-receipt.is-sent, .btn.dw-receipt:disabled { color: #15803D; border-color: #bbf7d0; background: var(--ok-soft); cursor: default; opacity: 1; }
 .table-empty { text-align: center; color: var(--ink-soft); padding: 40px 20px; font-weight: 600; }
 
 /* ---------- Drawer ---------- */
