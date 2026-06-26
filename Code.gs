@@ -129,23 +129,26 @@ function doPost(e) {
 
     removeExistingSubmissionRows(form, shared);
 
-    // La part SÍNCRONA es limita a desar les dades dels camps (ràpid). Tot el que és lent
-    // —moure els fitxers a Drive, reutilitzar-ne d'altres campus i enviar el correu— s'ajorna
-    // a un trigger immediat (queueConfirmationEmail), de manera que la resposta torna de seguida.
+    // Tot SÍNCRON, sense triggers. Els triggers de l'Apps Script NO són immediats (un ".after"
+    // pot trigar 1-3 minuts a disparar-se): per això el correu arribava tard. Aquí desem la fila,
+    // movem els fitxers i enviem el correu dins la mateixa petició → el correu arriba a l'instant.
+    // Les fotos ja s'han pujat en segon pla mentre s'omplia el formulari (staging), així que aquí
+    // només cal moure-les a la carpeta final (ràpid). Quan no s'adjunta res, no es toca Drive.
     var rows = [];
     entries.forEach(function (child, idx) {
       var id = baseId + (entries.length > 1 ? "-" + (idx + 1) : "");
       var cd = child.data || {};
-      var childFiles = child.files || [];
-      // Els fitxers pujats en segon pla mentre s'omplia el formulari (ref) NO es mouen aquí:
-      // ho fa el trigger post-procés, perquè moure'ls a Drive és lent. Els inline en base64
-      // (fallback rar quan el staging falla) sí que es desen ara, perquè no caben a la cua.
-      var inlineFiles = childFiles.filter(function (f) { return !f.ref && f.dataBase64; });
-      var refFiles    = childFiles.filter(function (f) { return f.ref; });
       var filePayload = { data: cd, formName: payload.formName, form: form };
-      var saved = saveFiles(inlineFiles, settings, filePayload, id);
+
+      // Mou els fitxers (staging) + desa els inline (base64). saveFiles gestiona els dos casos.
+      // La reutilització de fitxers d'altres campus NO es fa aquí: escaneja altres fulls (lent) i
+      // justament es dispararia quan NO s'adjunta res. Es fa en segon pla (reuseMissingFilesJob,
+      // activador horari), així l'enviament és igual de ràpid s'adjunti o no la targeta.
+      var saved = saveFiles(child.files || [], settings, filePayload, id);
+      var allFiles = saved;
+
       var byField = {};
-      saved.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
+      allFiles.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
 
       var data = {};
       Object.keys(shared).forEach(function (k) { data[k] = shared[k]; });
@@ -160,12 +163,17 @@ function doPost(e) {
         descompte: child.descompte || ""
       };
       saveRow(id, rowPayload, data);
-      rows.push({ id: id, data: data, weekLabels: child.weekLabels || [], savedFiles: saved, refFiles: refFiles });
+      rows.push({ id: id, data: data, weekLabels: child.weekLabels || [], savedFiles: allFiles });
     });
 
-    // Encua el post-procés (moure fitxers + reutilització + correu de confirmació). Un trigger
-    // immediat el processa fora de la petició, així el doPost retorna sense esperar Drive ni MailApp.
-    queueConfirmationEmail(payload, rows);
+    // Correu de confirmació SÍNCRON → arriba a l'instant. Si falla l'enviament, la inscripció ja
+    // s'ha desat igualment, així que responem ok (no fem caure tot el procés per un error de correu).
+    try {
+      sendConfirmation(settings, {
+        form: form, formName: payload.formName, campusName: payload.campusName,
+        shared: shared, children: payload.children || []
+      }, rows);
+    } catch (mailErr) {}
 
     var resp = { ok: true, id: baseId, count: entries.length };
     if (sig) dupCache.put("dup_" + sig, JSON.stringify(resp), 30);
@@ -357,29 +365,84 @@ function handleStagedDelete(p) {
   } catch (err) {}
   return { ok: true };
 }
-// Activador horari (Activadors → cleanupStagedFiles → cada hora): esborra els
-// fitxers temporals orfes de més de 24h que no s'han arribat a enviar mai.
+// Activador horari (Activadors → cleanupStagedFiles → cada hora): esborra els fitxers temporals
+// orfes de més de 24h que no s'han arribat a enviar mai, i omple en segon pla les targetes que
+// falten reutilitzant-les d'altres campus (feina lenta que abans alentia l'enviament).
 function cleanupStagedFiles() {
-  var staging = getStagingFolder(readSettings(""));
-  var cutoff = Date.now() - 24 * 3600 * 1000;
-  var files = staging.getFiles();
-  while (files.hasNext()) {
-    var f = files.next();
-    if (f.getDateCreated().getTime() < cutoff) f.setTrashed(true);
-  }
+  try {
+    var staging = getStagingFolder(readSettings(""));
+    var cutoff = Date.now() - 24 * 3600 * 1000;
+    var files = staging.getFiles();
+    while (files.hasNext()) {
+      var f = files.next();
+      if (f.getDateCreated().getTime() < cutoff) f.setTrashed(true);
+    }
+  } catch (e) {}
+  try { reuseMissingFilesJob(); } catch (e) {}
+}
+
+// Premium en segon pla: per a cada inscripció recent on falti un fitxer (típicament la targeta
+// sanitària), si el mateix nen ja el va adjuntar en un altre campus, en copiem la imatge a la
+// carpeta d'aquest formulari i n'escrivim l'URL a la fila. Es feia abans dins de l'enviament;
+// ara va aquí perquè escanejar altres fulls és lent i no ha de fer esperar la família.
+function reuseMissingFilesJob() {
+  resetCache();
+  var formIds = readForms().map(function (f) { return f.id; });
+  if (formIds.indexOf("") === -1) formIds.unshift("");          // inclou el formulari per defecte
+  var cutoff = Date.now() - 3 * 24 * 3600 * 1000;               // només inscripcions dels últims 3 dies
+
+  formIds.forEach(function (form) {
+    var settings = readSettings(form);
+    if (/^(no|false|0)$/i.test(String(settings.reutilitzar_fitxers || ""))) return;
+    var fileFields = readFields(form).filter(function (f) { return f.tipo === "file"; }).map(function (f) { return f.id; });
+    if (!fileFields.length) return;
+
+    var data = readSubmissionRows(form);
+    if (!data.rows.length) return;
+
+    data.rows.forEach(function (row) {
+      var ts = (row.Timestamp instanceof Date) ? row.Timestamp.getTime() : new Date(row.Timestamp).getTime();
+      if (isNaN(ts) || ts < cutoff) return;   // només recents (evita reescanejar tot l'històric)
+
+      var have = [], missing = false;
+      fileFields.forEach(function (fid) {
+        if (/https?:\/\//.test(String(row[fid] || ""))) have.push({ field: fid });
+        else missing = true;
+      });
+      if (!missing) return;   // ja té tots els fitxers → res a fer
+
+      var filePayload = { data: row, formName: str(row.Formulario) || form, form: form };
+      var reused = reuseChildFilesFromOtherForms({ data: row, files: have }, settings, filePayload, have);
+      if (reused && reused.length) {
+        var byField = {};
+        reused.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
+        setRowFileUrls(form, str(row.ID), byField);
+      }
+    });
+  });
 }
 // Carpeta destí: arrel/<carpeta_fitxers>/<hoja del formulari>.
 // El nom de la subcarpeta és el mateix valor de la columna "hoja" de la pestanya
 // Formularios (via subsSheetName), de manera que la carpeta de fitxers coincideix
 // amb la pestanya on es guarden les inscripcions d'aquell formulari.
 function getUploadFolder(settings, payload) {
-  var root = getOrCreateFolder(DriveApp.getRootFolder(), settings.carpeta_fitxers || "Inscripcions - fitxers");
   var form = (payload && payload.form) || "";
   var sub = subsSheetName(form);
   // Fallbacks per si de cas (formulari sense hoja ni id).
   if (!sub) sub = (payload && payload.formName) || (payload && payload.campusName) || (payload && payload.campusId) || "General";
   sub = String(sub).replace(/[\/\\]+/g, "-").trim() || "General";
-  return getOrCreateFolder(root, sub);
+
+  // Cau de l'ID de carpeta: evita els getFoldersByName (arrel + subcarpeta) a cada enviament amb
+  // fitxers, que són ~0.5s. Així moure una foto és més ràpid.
+  var cache = CacheService.getScriptCache();
+  var ckey = "folder_" + sub;
+  var fid = cache.get(ckey);
+  if (fid) { try { return DriveApp.getFolderById(fid); } catch (e) {} }
+
+  var root = getOrCreateFolder(DriveApp.getRootFolder(), settings.carpeta_fitxers || "Inscripcions - fitxers");
+  var folder = getOrCreateFolder(root, sub);
+  try { cache.put(ckey, folder.getId(), 21600); } catch (e) {}
+  return folder;
 }
 // Treu l'extensió del nom original; si no en té, la dedueix del mimeType.
 function extensionFor(name, mime) {
@@ -734,49 +797,17 @@ function countWeekRegistrations(form) {
 }
 
 /* ---------- Correu ----------
-   Enviament asíncron: encuem el correu a ScriptProperties i un trigger immediat
-   (one-shot) el processa fora de la petició. Així el doPost retorna sense esperar
-   MailApp (~1-2s) i l'enviament del formulari és molt més ràpid. */
-function queueConfirmationEmail(payload, rows) {
-  // Només el necessari per al post-procés. Inclou les referències dels fitxers pujats en segon
-  // pla (refFiles) perquè el trigger els mogui a la carpeta final (operació lenta de Drive).
-  // No s'hi posa cap base64 (no cabria a les propietats): els inline ja s'han desat al doPost.
-  var job = {
-    form: payload.form, formName: payload.formName, campusName: payload.campusName,
-    shared: payload.shared || {},
-    children: (payload.children || []).map(function (c) { return { data: c.data, preu: c.preu, descompte: c.descompte }; }),
-    rows: (rows || []).map(function (r) {
-      return {
-        id: r.id, data: r.data, weekLabels: r.weekLabels || [],
-        savedFiles: (r.savedFiles || []).map(function (s) { return { field: s.field, name: s.name, url: s.url }; }),
-        refFiles: (r.refFiles || []).map(function (f) { return { ref: f.ref, name: f.name, mimeType: f.mimeType, field: f.field }; })
-      };
-    })
-  };
-  var props = PropertiesService.getScriptProperties();
-  var key = "emailq_" + new Date().getTime() + "_" + Math.floor(Math.random() * 100000);
-  try {
-    props.setProperty(key, JSON.stringify(job));
-    // Programa el trigger que processa la cua NOMÉS si no n'hi ha cap de pendent. Abans ho
-    // comprovàvem amb ScriptApp.getProjectTriggers() a CADA enviament (lent, ~0.3-0.5s); ara fem
-    // servir una bandera a la memòria cau (instantània). processEmailQueue la neteja quan corre,
-    // de manera que el següent enviament en torna a programar un. Així, en una ràfega d'enviaments,
-    // només el primer paga el cost de crear el trigger.
-    var cache = CacheService.getScriptCache();
-    if (!cache.get("qpending")) {
-      ScriptApp.newTrigger("processEmailQueue").timeBased().after(1000).create();
-      cache.put("qpending", "1", 90);
-    }
-  } catch (e) {
-    // Pla B (p. ex. sense permís de triggers): processem el job de forma síncrona. PRIMER el
-    // traiem de la cua: si quedés desat, un trigger posterior el tornaria a processar i enviaria
-    // un segon correu (era una de les causes dels correus duplicats).
-    try { props.deleteProperty(key); } catch (_) {}
-    try { finalizeJob(job); } catch (e2) {}
-  }
-}
-// Reutilitza fitxers d'altres campus (actualitza fila + correu) i envia la confirmació.
-// S'executa fora de la petició (trigger), o de forma síncrona com a pla B.
+   El correu de confirmació s'envia SÍNCRONAMENT dins de doPost (vegeu sendConfirmation més avall),
+   de manera que arriba a l'instant. Abans s'encuava i el processava un trigger, però els triggers
+   de l'Apps Script NO són immediats (poden trigar minuts a disparar-se) → el correu arribava tard.
+
+   Les funcions de sota (processEmailQueue + finalizeJob) ja NO s'usen per a enviaments nous: només
+   queden per BUIDAR, un sol cop, la cua que pogués haver deixat la versió anterior (inscripcions
+   enviades just abans de tornar a desplegar). Quan la cua queda buida i els triggers pendents es
+   disparen, s'autodesinstal·len i aquestes funcions queden inactives. */
+
+// Buida un job pendent de la cua antiga: mou els fitxers que faltaven, reutilitza els d'altres
+// campus i envia la confirmació. Només s'executa per a feina deixada per la versió anterior.
 function finalizeJob(job) {
   var settings = readSettings(String(job.form || "").trim());
   try {
@@ -813,26 +844,15 @@ function applyRowFileUrls(form, id, saved, r) {
     var ex = str(r.data[f]); r.data[f] = ex ? ex + "\n" + byField[f].join("\n") : byField[f].join("\n");
   });
 }
-// Processa la cua de correus i s'autodesinstal·la (one-shot).
+// LEGACY (només transició): buida la cua que pogués haver deixat la versió asíncrona anterior i
+// elimina els seus triggers pendents (s'autodesinstal·la). Els enviaments nous ja no fan servir
+// cua: el correu s'envia síncronament a doPost. Quan no queden jobs, aquesta funció no fa res.
 function processEmailQueue() {
-  // El lock es comparteix amb les inscripcions (getScriptLock és global). Per això només el
-  // mantenim un instant per RECLAMAR la cua (llegir i esborrar les propietats); el processat
-  // real —moure fitxers i enviar correus, que és lent (MailApp ~1-2s)— es fa DESPRÉS, fora del
-  // lock, perquè no bloquegi les noves inscripcions. Reclamar abans de processar també evita
-  // que dues execucions coincidents enviïn el mateix correu dues vegades.
-  // Permet que un enviament que arribi mentre processem torni a programar un trigger pel seu job.
-  try { CacheService.getScriptCache().remove("qpending"); } catch (e) {}
-
   var qlock = LockService.getScriptLock();
-  if (!qlock.tryLock(10000)) {
-    // Una altra execució (o una inscripció) té el lock. Reprogramem: aquest trigger ja no es
-    // tornarà a disparar, així que sense això la cua podria quedar sense processar.
-    try { ScriptApp.newTrigger("processEmailQueue").timeBased().after(10000).create(); } catch (e) {}
-    return;
-  }
+  if (!qlock.tryLock(10000)) return;   // si una inscripció té el lock, ja es buidarà més tard
   var jobs = [];
   try {
-    // Esborra els triggers ja disparats d'aquesta funció (es recreen des de queueConfirmationEmail si cal).
+    // Esborra els triggers pendents d'aquesta funció (els crea només la versió antiga).
     try {
       ScriptApp.getProjectTriggers().forEach(function (t) {
         if (t.getHandlerFunction() === "processEmailQueue") ScriptApp.deleteTrigger(t);
@@ -843,12 +863,12 @@ function processEmailQueue() {
     Object.keys(all).forEach(function (k) {
       if (k.indexOf("emailq_") !== 0) return;
       jobs.push(all[k]);
-      try { props.deleteProperty(k); } catch (e) {}   // reclama el job (esborra'l de la cua)
+      try { props.deleteProperty(k); } catch (e) {}
     });
   } finally {
     try { qlock.releaseLock(); } catch (e) {}
   }
-  // Fora del lock: mou els fitxers a Drive i envia els correus.
+  // Fora del lock: mou els fitxers a Drive i envia els correus pendents.
   jobs.forEach(function (raw) { try { finalizeJob(JSON.parse(raw)); } catch (e) {} });
 }
 
