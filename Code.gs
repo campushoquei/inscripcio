@@ -29,7 +29,9 @@ var _cache = { tables: {}, subs: {} };
 function resetCache() { _cache = { tables: {}, subs: {} }; }
 
 /* ---------- Rate limiting & Seguretat d'admin ---------- */
-var SUB_RATE_LIMIT  = 30;    // màx. enviaments per minut (global)
+var SUB_RATE_LIMIT  = 60;    // màx. enviaments per minut (global). És un fre antiabús; el posem
+                             // prou alt perquè una obertura d'inscripcions amb molta gent alhora
+                             // no doni un fals "Massa sol·licituds" a famílies legítimes.
 var ADMIN_MAX_FAILS = 5;     // intents fallits fins al bloqueig
 var ADMIN_LOCK_SECS = 900;   // 15 minuts de bloqueig
 var ADMIN_TOK_SECS  = 28800; // 8 hores de sessió
@@ -104,6 +106,16 @@ function doPost(e) {
     var form = String(payload.form || "").trim();
     if (!form) { var g = readSettings(""); form = String(g.form_defecto || "").trim(); }
     payload.form = form;
+
+    // Anti-duplicats: un doble clic o un reintent de xarxa envien la mateixa inscripció
+    // dues vegades. Com que el lock serialitza les peticions, la primera la processa i en
+    // desa la resposta a la memòria cau; la segona (mateixa signatura) la retorna tal qual,
+    // sense reprocessar ni reenviar cap correu. Una correcció real té dades diferents →
+    // signatura diferent → no es bloqueja.
+    var sig = submissionSignature(payload);
+    var dupCache = CacheService.getScriptCache();
+    if (sig) { var prev = dupCache.get("dup_" + sig); if (prev) return json(JSON.parse(prev)); }
+
     var baseId = "INS-" + new Date().getTime();
     var settings = readSettings(form);
 
@@ -117,20 +129,21 @@ function doPost(e) {
 
     removeExistingSubmissionRows(form, shared);
 
-    // Cada fill puja els seus propis fitxers i l'URL va només a la seva fila.
+    // La part SÍNCRONA es limita a desar les dades dels camps (ràpid). Tot el que és lent
+    // —moure els fitxers a Drive, reutilitzar-ne d'altres campus i enviar el correu— s'ajorna
+    // a un trigger immediat (queueConfirmationEmail), de manera que la resposta torna de seguida.
     var rows = [];
     entries.forEach(function (child, idx) {
       var id = baseId + (entries.length > 1 ? "-" + (idx + 1) : "");
       var cd = child.data || {};
       var childFiles = child.files || [];
-      // Passa les dades del fill concret perquè el nom del fitxer reflecteixi el seu nom,
-      // no sempre el del primer fill. També passem el formulari perquè els fitxers
-      // es desin en una carpeta amb el nom del formulari (no a "General").
+      // Els fitxers pujats en segon pla mentre s'omplia el formulari (ref) NO es mouen aquí:
+      // ho fa el trigger post-procés, perquè moure'ls a Drive és lent. Els inline en base64
+      // (fallback rar quan el staging falla) sí que es desen ara, perquè no caben a la cua.
+      var inlineFiles = childFiles.filter(function (f) { return !f.ref && f.dataBase64; });
+      var refFiles    = childFiles.filter(function (f) { return f.ref; });
       var filePayload = { data: cd, formName: payload.formName, form: form };
-      var saved = saveFiles(childFiles, settings, filePayload, id);
-      // Premium (reutilitzar fitxers d'altres campus): es fa al trigger post-procés
-      // perquè escaneja altres fulls i alentiria la resposta. Aquí només desem els
-      // fitxers que arriben en aquesta inscripció.
+      var saved = saveFiles(inlineFiles, settings, filePayload, id);
       var byField = {};
       saved.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
 
@@ -147,19 +160,41 @@ function doPost(e) {
         descompte: child.descompte || ""
       };
       saveRow(id, rowPayload, data);
-      rows.push({ id: id, data: data, weekLabels: child.weekLabels || [], savedFiles: saved });
+      rows.push({ id: id, data: data, weekLabels: child.weekLabels || [], savedFiles: saved, refFiles: refFiles });
     });
 
-    // El correu de confirmació s'encua i l'envia un trigger immediat: així no
-    // bloca la resposta (MailApp triga ~1-2s) i l'enviament del formulari és molt
-    // més ràpid. El correu arriba uns segons després.
+    // Encua el post-procés (moure fitxers + reutilització + correu de confirmació). Un trigger
+    // immediat el processa fora de la petició, així el doPost retorna sense esperar Drive ni MailApp.
     queueConfirmationEmail(payload, rows);
-    return json({ ok: true, id: baseId, count: entries.length });
+
+    var resp = { ok: true, id: baseId, count: entries.length };
+    if (sig) dupCache.put("dup_" + sig, JSON.stringify(resp), 30);
+    return json(resp);
   } catch (err) {
     return json({ ok: false, error: String(err) });
   } finally {
     lock.releaseLock();
   }
+}
+
+// Signatura estable d'una inscripció (form + dades compartides + dades i setmanes de cada
+// fill), SENSE el timestamp, per detectar enviaments duplicats (doble clic / reintent de xarxa).
+function submissionSignature(payload) {
+  try {
+    var parts = ["f=" + String((payload && payload.form) || "")];
+    var sh = (payload && payload.shared) || {};
+    Object.keys(sh).sort().forEach(function (k) { parts.push(k + "=" + str(sh[k])); });
+    var kids = (payload && payload.children && payload.children.length)
+      ? payload.children
+      : [{ data: (payload && payload.data) || {}, weeks: (payload && payload.weeks) || [] }];
+    kids.forEach(function (c) {
+      var d = c.data || {};
+      Object.keys(d).sort().forEach(function (k) { parts.push(k + "=" + str(d[k])); });
+      parts.push("w=" + (c.weeks || []).join(","));
+    });
+    var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, parts.join("|"), Utilities.Charset.UTF_8);
+    return digest.map(function (b) { return ("0" + (b & 255).toString(16)).slice(-2); }).join("");
+  } catch (e) { return ""; }
 }
 
 /* ---------- Config ---------- */
@@ -496,12 +531,20 @@ function setRowFileUrls(form, id, byField) {
   });
 }
 
+// El full mostra les dates (Timestamp inclòs) en la zona horària del document. La forcem a
+// Espanya perquè l'hora de recepció sigui sempre la d'aquí, independentment d'on s'executi el
+// script o de com tingui configurat el full el propietari. Idempotent: només escriu si cal.
+function ensureSpainTimezone(ss) {
+  try { if (ss.getSpreadsheetTimeZone() !== "Europe/Madrid") ss.setSpreadsheetTimeZone("Europe/Madrid"); } catch (e) {}
+}
+
 /* ---------- Guardar fila ----------
    Columnes: Timestamp · ID · [camps no-nota, amb Edat després de la data
    de naixement] · una columna 1/0 per setmana · Setmanes (text) */
 function saveRow(id, payload, data) {
   var form = String(payload.form || "").trim();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSpainTimezone(ss);   // l'hora de recepció (Timestamp) sempre en hora d'Espanya
   var name = subsSheetName(form);
   var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
 
@@ -669,15 +712,24 @@ function computeAge(v) {
 /* ---------- Places ---------- */
 function countWeekRegistrations(form) {
   form = String(form || "").trim();
+  // Cau curta entre peticions (CacheService): obrir el formulari recompta les places de cada
+  // setmana, cosa que requereix llegir TOT el full d'inscripcions. Com que molta gent obre el
+  // formulari i poca l'envia, evitem aquesta lectura pesada en cada càrrega. Les places són
+  // informatives (no s'imposen al servidor), així que uns segons de marge no passa res.
+  var cache = CacheService.getScriptCache();
+  var ckey = "wkcount_" + form;
+  var hit = cache.get(ckey);
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+
   var counts = {};
   var data = readSubmissionRows(form);          // cau per petició
-  if (!data.rows.length) return counts;
   var weeks = readTable(SHEETS.weeks).filter(function (r) { return r.id && rowMatchesForm(r, form); }).map(function (r) { return String(r.id).trim(); });
   weeks.forEach(function (wid) {
     var c = 0;
     data.rows.forEach(function (row) { if (Number(row[wid]) === 1) c++; });
     counts[wid] = c;
   });
+  try { cache.put(ckey, JSON.stringify(counts), 20); } catch (e) {}
   return counts;
 }
 
@@ -686,7 +738,9 @@ function countWeekRegistrations(form) {
    (one-shot) el processa fora de la petició. Així el doPost retorna sense esperar
    MailApp (~1-2s) i l'enviament del formulari és molt més ràpid. */
 function queueConfirmationEmail(payload, rows) {
-  // Només el necessari per al post-procés (res de base64 de fitxers).
+  // Només el necessari per al post-procés. Inclou les referències dels fitxers pujats en segon
+  // pla (refFiles) perquè el trigger els mogui a la carpeta final (operació lenta de Drive).
+  // No s'hi posa cap base64 (no cabria a les propietats): els inline ja s'han desat al doPost.
   var job = {
     form: payload.form, formName: payload.formName, campusName: payload.campusName,
     shared: payload.shared || {},
@@ -694,20 +748,23 @@ function queueConfirmationEmail(payload, rows) {
     rows: (rows || []).map(function (r) {
       return {
         id: r.id, data: r.data, weekLabels: r.weekLabels || [],
-        savedFiles: (r.savedFiles || []).map(function (s) { return { field: s.field, name: s.name, url: s.url }; })
+        savedFiles: (r.savedFiles || []).map(function (s) { return { field: s.field, name: s.name, url: s.url }; }),
+        refFiles: (r.refFiles || []).map(function (f) { return { ref: f.ref, name: f.name, mimeType: f.mimeType, field: f.field }; })
       };
     })
   };
+  var props = PropertiesService.getScriptProperties();
+  var key = "emailq_" + new Date().getTime() + "_" + Math.floor(Math.random() * 100000);
   try {
-    var props = PropertiesService.getScriptProperties();
-    var key = "emailq_" + new Date().getTime() + "_" + Math.floor(Math.random() * 100000);
     props.setProperty(key, JSON.stringify(job));
     // Un sol trigger pendent és suficient (processa tota la cua quan dispara).
     var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "processEmailQueue"; });
     if (!has) ScriptApp.newTrigger("processEmailQueue").timeBased().after(1000).create();
   } catch (e) {
-    // Pla B (p. ex. sense permís de triggers): fem el post-procés de forma síncrona,
-    // així no perdem ni el correu ni la reutilització de fitxers.
+    // Pla B (p. ex. sense permís de triggers): processem el job de forma síncrona. PRIMER el
+    // traiem de la cua: si quedés desat, un trigger posterior el tornaria a processar i enviaria
+    // un segon correu (era una de les causes dels correus duplicats).
+    try { props.deleteProperty(key); } catch (_) {}
     try { finalizeJob(job); } catch (e2) {}
   }
 }
@@ -720,39 +777,69 @@ function finalizeJob(job) {
       var child = (job.children && job.children[idx]) || {};
       var cdata = child.data || r.data || {};
       var filePayload = { data: cdata, formName: job.formName, form: job.form };
-      var savedSoFar = r.savedFiles || [];
+
+      // 1) Mou ara els fitxers pujats en segon pla (staging) a la carpeta final i escriu-ne
+      //    els URLs a la fila ja desada. Es fa aquí —no a la petició— perquè les operacions de
+      //    Drive (reanomenar + moure) són lentes i eren el que feia lent l'enviament del formulari.
+      var moved = saveFiles(r.refFiles || [], settings, filePayload, r.id);
+      var savedSoFar = (r.savedFiles || []).concat(moved);
+      applyRowFileUrls(job.form, r.id, moved, r);
+
+      // 2) Premium: reutilitza fitxers d'altres campus si en falta algun.
       var reused = reuseChildFilesFromOtherForms({ data: cdata, files: savedSoFar }, settings, filePayload, savedSoFar);
-      if (reused && reused.length) {
-        var byField = {};
-        reused.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
-        setRowFileUrls(job.form, r.id, byField);
-        Object.keys(byField).forEach(function (f) {
-          var ex = str(r.data[f]); r.data[f] = ex ? ex + "\n" + byField[f].join("\n") : byField[f].join("\n");
-        });
-        r.savedFiles = savedSoFar.concat(reused);
-      }
+      applyRowFileUrls(job.form, r.id, reused, r);
+
+      r.savedFiles = savedSoFar.concat(reused);
     });
   } catch (e) {}
   sendConfirmation(settings, { form: job.form, formName: job.formName, campusName: job.campusName, shared: job.shared, children: job.children }, job.rows);
 }
+
+// Escriu un conjunt de fitxers desats a les columnes corresponents de la fila (per ID) i els
+// afegeix també a r.data, perquè surtin al correu de confirmació com a "(fitxer adjuntat)".
+function applyRowFileUrls(form, id, saved, r) {
+  if (!saved || !saved.length) return;
+  var byField = {};
+  saved.forEach(function (s) { (byField[s.field] = byField[s.field] || []).push(s.url); });
+  setRowFileUrls(form, id, byField);
+  Object.keys(byField).forEach(function (f) {
+    var ex = str(r.data[f]); r.data[f] = ex ? ex + "\n" + byField[f].join("\n") : byField[f].join("\n");
+  });
+}
 // Processa la cua de correus i s'autodesinstal·la (one-shot).
 function processEmailQueue() {
-  // Evita que dues execucions coincidents processin la mateixa cua (correus duplicats).
+  // El lock es comparteix amb les inscripcions (getScriptLock és global). Per això només el
+  // mantenim un instant per RECLAMAR la cua (llegir i esborrar les propietats); el processat
+  // real —moure fitxers i enviar correus, que és lent (MailApp ~1-2s)— es fa DESPRÉS, fora del
+  // lock, perquè no bloquegi les noves inscripcions. Reclamar abans de processar també evita
+  // que dues execucions coincidents enviïn el mateix correu dues vegades.
   var qlock = LockService.getScriptLock();
-  if (!qlock.tryLock(5000)) return;
+  if (!qlock.tryLock(10000)) {
+    // Una altra execució (o una inscripció) té el lock. Reprogramem: aquest trigger ja no es
+    // tornarà a disparar, així que sense això la cua podria quedar sense processar.
+    try { ScriptApp.newTrigger("processEmailQueue").timeBased().after(10000).create(); } catch (e) {}
+    return;
+  }
+  var jobs = [];
   try {
-    ScriptApp.getProjectTriggers().forEach(function (t) {
-      if (t.getHandlerFunction() === "processEmailQueue") ScriptApp.deleteTrigger(t);
+    // Esborra els triggers ja disparats d'aquesta funció (es recreen des de queueConfirmationEmail si cal).
+    try {
+      ScriptApp.getProjectTriggers().forEach(function (t) {
+        if (t.getHandlerFunction() === "processEmailQueue") ScriptApp.deleteTrigger(t);
+      });
+    } catch (e) {}
+    var props = PropertiesService.getScriptProperties();
+    var all = props.getProperties();
+    Object.keys(all).forEach(function (k) {
+      if (k.indexOf("emailq_") !== 0) return;
+      jobs.push(all[k]);
+      try { props.deleteProperty(k); } catch (e) {}   // reclama el job (esborra'l de la cua)
     });
-  } catch (e) {}
-  var props = PropertiesService.getScriptProperties();
-  var all = props.getProperties();
-  Object.keys(all).forEach(function (k) {
-    if (k.indexOf("emailq_") !== 0) return;
-    try { finalizeJob(JSON.parse(all[k])); } catch (e) {}
-    try { props.deleteProperty(k); } catch (e) {}
-  });
-  try { qlock.releaseLock(); } catch (e) {}
+  } finally {
+    try { qlock.releaseLock(); } catch (e) {}
+  }
+  // Fora del lock: mou els fitxers a Drive i envia els correus.
+  jobs.forEach(function (raw) { try { finalizeJob(JSON.parse(raw)); } catch (e) {} });
 }
 
 function sendConfirmation(settings, payload, rows) {
@@ -1165,7 +1252,9 @@ function adminBaseId(id) { return String(id || "").replace(/-\d+$/, ""); }
 function adminToISODate(v) {
   var d = (v instanceof Date) ? v : new Date(v);
   if (isNaN(d.getTime())) return "";
-  return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  // Sempre en hora d'Espanya, perquè l'agrupació per dia del panell no depengui de la
+  // zona horària on s'executi el script.
+  return Utilities.formatDate(d, "Europe/Madrid", "yyyy-MM-dd");
 }
 function adminFileUrls(row) {
   var urls = [];

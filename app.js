@@ -2039,10 +2039,9 @@ function prefillFamilySelection(entry, selectedIdxs) {
     const block = blocks[i]; if (!block) return;
     fillControlsIn(block, ch.data, false);
     syncEmailConfirmIn(block);
-    (ch.weeks || []).forEach((wid) => {
-      const inp = block.querySelector(`.weeks input[value="${wid}"]`);
-      if (inp && !inp.disabled) { inp.checked = true; inp.dispatchEvent(new Event("change")); }
-    });
+    // NO restaurem les setmanes triades altres vegades: cada formulari/campus té les
+    // seves pròpies setmanes i dates, i deixar-les marcades porta a confusions (marcar
+    // setmanes que no es volen). L'usuari les ha de triar sempre de nou.
   });
   updateAllPrices();
   updateProgress();
