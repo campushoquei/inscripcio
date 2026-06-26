@@ -448,8 +448,11 @@ async function switchHeroForm(idx) {
 
 // ---- Render ----
 function renderForm() {
-  // Si el bloc de consentiment estava dins de les seccions (re-render), el recuperem primer
-  const consentEl = document.querySelector(".consent");
+  // Si el bloc de consentiment estava dins de les seccions (re-render), el recuperem primer.
+  // IMPORTANT: l'identifiquem pel #consent real, no per .consent: el camp "drets d'imatge"
+  // també fa servir la classe .consent i, en ser el primer del DOM, abans es rescatava per
+  // error i s'esborrava el consentiment de protecció de dades (getElementById("consent") = null).
+  const consentEl = document.getElementById("consent")?.closest(".consent");
   if (consentEl && consentEl.closest("#form-sections")) {
     document.getElementById("price-total-card").insertAdjacentElement("beforebegin", consentEl);
   }
@@ -1530,7 +1533,7 @@ async function onSubmit(e) {
   e.preventDefault();
   clearNote();
   const consentInput = document.getElementById("consent");
-  if (!consentInput.checked) {
+  if (consentInput && !consentInput.checked) {
     haptic([10, 45, 10]);
     const consentWrap = consentInput.closest(".consent");
     if (consentWrap) consentWrap.classList.add("consent--invalid");
