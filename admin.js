@@ -583,7 +583,9 @@ function renderGroupsBoard() {
     const list = (byColor[g.color] || []).slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
     const hex = GROUP_HEX[g.color] || "#64748B";
     const chips = list.map((r) => {
-      const manual = !!(r.grups && r.grups[week]);
+      // El camp de grup sempre està desat; considerem "mogut manualment" només si difereix
+      // del grup que li tocaria per edat.
+      const manual = !!(r.grups && r.grups[week]) && r.grups[week] !== autoGroupColor(Number(r.edat));
       const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
       const opts = groups.map((gg) => `<option value="${esc(gg.color)}"${gg.color === g.color ? " selected" : ""}>${esc(gg.label)}</option>`).join("");
       // 🐠 a l'esquerra del nom (si no sap nedar) i l'edat sempre a la dreta.
@@ -930,7 +932,7 @@ function estatBadge(r, clickable) {
   let cls = "estat--pendent", label = "Pendent";
   if (r.estat === "Pagat") { cls = "estat--pagat"; label = "Pagat"; }
   else if (r.estat === "Parcial") { cls = "estat--parcial"; label = `Parcial ${paid}/${reg}`; }
-  const attr = clickable ? ` data-toggle="${esc(r.id)}" title="Marcar/desmarcar totes les setmanes"` : "";
+  const attr = clickable ? ` data-toggle="${esc(String(r.row))}" title="Marcar/desmarcar totes les setmanes"` : "";
   const tag = clickable ? "button" : "span";
   return `<${tag} class="estat ${cls}"${attr}><span class="estat__dot"></span>${label}</${tag}>`;
 }
@@ -944,9 +946,16 @@ function fmtDate(iso) {
    Accions de fila
    ============================================================ */
 // Operació base: defineix les setmanes pagades d'una fila i refresca el dashboard.
-async function setPayment(id, weeks, opts) {
-  const row = state.list.find((r) => r.id === id);
+// IMPORTANT: identifiquem la inscripció pel número de fila del full (únic), NO per l'ID:
+// dos germans poden compartir ID, i buscar per ID feia que l'actualització optimista toqués
+// una fila i el servidor en desés una altra → l'estat no canviava fins al segon clic.
+async function setPayment(rowNum, weeks, opts) {
+  const row = state.list.find((r) => String(r.row) === String(rowNum));
   if (!row) return;
+  // Evita solapaments: si ja hi ha un canvi en vol per a aquesta fila, no en llancem un altre
+  // (els clics ràpids es trepitjaven i deixaven l'estat desincronitzat).
+  if (row._payBusy) return;
+  row._payBusy = true;
   const prev = { paidWeeks: row.paidWeeks, estat: row.estat };
   // Actualització optimista: la UI respon a l'instant; després confirmem amb el servidor.
   const paid = (weeks || []).filter((w) => (row.weekIds || []).includes(w));
@@ -954,34 +963,42 @@ async function setPayment(id, weeks, opts) {
   row.estat = paid.length === 0 ? "Pendent" : paid.length >= (row.weekIds || []).length ? "Pagat" : "Parcial";
   recomputePayments();
   applyFilters();
-  if (opts && opts.reopen) openDrawer(row);
+  if (opts && opts.reopen && !$("drawer").hidden) openDrawer(row);
   try {
-    const out = await api("admin_set_payment", { id, weeks });
+    const out = await api("admin_set_payment", { id: row.id, row: row.row, weeks });
     row.paidWeeks = out.paidWeeks || paid;
     row.estat = out.estat;
+    // Re-render amb la veritat del servidor: així, si l'optimista i el servidor difereixen,
+    // s'autocorregeix tot sol en lloc d'esperar al següent clic.
+    recomputePayments();
+    applyFilters();
+    if (opts && opts.reopen && !$("drawer").hidden) openDrawer(row);
   } catch (err) {
     row.paidWeeks = prev.paidWeeks; row.estat = prev.estat;
     recomputePayments(); applyFilters();
+    if (opts && opts.reopen && !$("drawer").hidden) openDrawer(row);
     toast("No s'ha pogut actualitzar: " + err.message, true);
+  } finally {
+    row._payBusy = false;
   }
 }
 
 // Botó d'estat de la taula: marca totes les setmanes o cap (alterna).
-function toggleAllPaid(id, opts) {
-  const row = state.list.find((r) => r.id === id);
+function toggleAllPaid(rowNum, opts) {
+  const row = state.list.find((r) => String(r.row) === String(rowNum));
   if (!row) return;
   const reg = (row.weekIds || []);
   const allPaid = reg.length > 0 && reg.every((w) => (row.paidWeeks || []).includes(w));
-  setPayment(id, allPaid ? [] : reg.slice(), opts);
+  setPayment(row.row, allPaid ? [] : reg.slice(), opts);
 }
 
 // Alterna una setmana concreta (des del calaix de detall).
-function toggleWeekPaid(id, weekId) {
-  const row = state.list.find((r) => r.id === id);
+function toggleWeekPaid(rowNum, weekId) {
+  const row = state.list.find((r) => String(r.row) === String(rowNum));
   if (!row) return;
   const paid = new Set(row.paidWeeks || []);
   paid.has(weekId) ? paid.delete(weekId) : paid.add(weekId);
-  setPayment(id, [...paid], { reopen: true });
+  setPayment(row.row, [...paid], { reopen: true });
 }
 
 function recomputePayments() {
@@ -1183,7 +1200,7 @@ async function bulkAction(kind) {
       confirmLabel: setPaid ? "Marca pagades" : "Marca pendents"
     });
     if (!ok) return;
-    for (const r of rows) await setPayment(r.id, setPaid ? (r.weekIds || []).slice() : []);
+    for (const r of rows) await setPayment(r.row, setPaid ? (r.weekIds || []).slice() : []);
     toast(`${rows.length} inscripcions actualitzades.`);
     return;
   }
@@ -1307,9 +1324,9 @@ function openDrawer(r) {
 
   $("drawer-body").innerHTML = html;
   const payAll = $("drawer-body").querySelector("[data-payall]");
-  if (payAll) payAll.addEventListener("click", () => toggleAllPaid(r.id, { reopen: true }));
+  if (payAll) payAll.addEventListener("click", () => toggleAllPaid(r.row, { reopen: true }));
   $("drawer-body").querySelectorAll("[data-payweek]").forEach((b) =>
-    b.addEventListener("click", () => toggleWeekPaid(r.id, b.dataset.payweek)));
+    b.addEventListener("click", () => toggleWeekPaid(r.row, b.dataset.payweek)));
   $("dw-resend").addEventListener("click", () => resend(r.id));
   const dwReceipt = $("dw-receipt");
   if (dwReceipt && !receiptDone) dwReceipt.addEventListener("click", () => sendReceipt(r.id));
@@ -1549,8 +1566,8 @@ function printRosters() {
       *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
       body{background:#fff!important;padding:0;}
       .hero,.picker,.foot{display:none!important;}
-      .wrap{max-width:none;padding:0;}
-      .wk{margin:0 0 10px;}
+      .wrap{max-width:none;padding:0;height:auto!important;overflow:visible!important;}
+      .wk{margin:0 0 10px;transform:none!important;}
       /* Quan s'imprimeixen totes les setmanes, cada una comença en una fulla nova */
       body[data-show="all"] .wk + .wk{break-before:page;page-break-before:always;}
       .wk__banner{box-shadow:none;break-after:avoid;border-radius:10px;padding:12px 16px;}
@@ -1570,13 +1587,51 @@ function printRosters() {
     }`;
 
   const js = `
+    // Encaixa la setmana visible dins de la pantalla (sense scroll): la foto completa del grup.
+    // Mesura l'alçada natural i, si cal, l'escala perquè càpiga a la finestra.
+    function fit(){
+      var show = document.body.dataset.show;
+      var wrap = document.querySelector('.wrap');
+      // reset abans de mesurar
+      document.querySelectorAll('.wk').forEach(function(s){ s.style.transform=''; });
+      wrap.style.height=''; wrap.style.overflow=''; document.body.style.overflow='';
+      if (show==='all'){ return; }              // "Totes": scroll normal, una per full en imprimir
+      var wk = document.querySelector('.wk:not([hidden])');
+      if (!wk){ return; }
+      window.scrollTo(0,0);
+      var top = wrap.getBoundingClientRect().top;
+      var avail = window.innerHeight - top - 14;
+      var natural = wk.offsetHeight;
+      if (natural>0 && avail>0){
+        var scale = Math.min(1, avail/natural);
+        wk.style.transformOrigin='top center';
+        wk.style.transform = scale<1 ? 'scale('+scale+')' : '';
+        wrap.style.height = avail+'px';
+        wrap.style.overflow='hidden';
+        document.body.style.overflow='hidden';
+      }
+    }
     function pick(w){
       document.body.dataset.show=w;
       document.querySelectorAll('.wk').forEach(function(s){ s.hidden = (w!=='all' && s.dataset.week!==w); });
       document.querySelectorAll('.chip').forEach(function(c){ c.classList.toggle('on', c.dataset.week===w); });
-      window.scrollTo({top:0,behavior:'smooth'});
+      fit();
     }
-    document.querySelectorAll('.chip').forEach(function(c){ c.addEventListener('click', function(){ pick(c.dataset.week); }); });`;
+    document.querySelectorAll('.chip').forEach(function(c){ c.addEventListener('click', function(){ pick(c.dataset.week); }); });
+    window.addEventListener('resize', fit);
+    window.addEventListener('load', fit);
+    // En imprimir, treu l'escalat perquè la impressió faci servir la maquetació de pàgina.
+    window.addEventListener('beforeprint', function(){
+      document.querySelectorAll('.wk').forEach(function(s){ s.style.transform=''; });
+      var wr=document.querySelector('.wrap'); wr.style.height=''; wr.style.overflow=''; document.body.style.overflow='';
+    });
+    window.addEventListener('afterprint', fit);
+    // En obrir, mostra la primera setmana ja encaixada (foto completa sense scroll).
+    var firstChip = document.querySelector('.chip[data-week]:not([data-week="all"])');
+    if (firstChip){ pick(firstChip.dataset.week); } else { fit(); }
+    // Refit després de carregar fonts/imatges (poden canviar l'alçada mesurada).
+    setTimeout(fit, 350);
+    if (document.fonts && document.fonts.ready){ document.fonts.ready.then(fit); }`;
 
   const win = window.open("", "_blank");
   if (!win) return toast("Permet les finestres emergents per imprimir.", true);
@@ -1833,7 +1888,8 @@ async function demoApi(action, extra) {
     return { ok: true, groups: _demoGroups };
   }
   if (action === "admin_set_payment") {
-    const r = d.rows.find((x) => x.id === extra.id);
+    const r = (extra.row != null && d.rows.find((x) => String(x.row) === String(extra.row)))
+      || d.rows.find((x) => x.id === extra.id);
     if (r) {
       const paid = (extra.weeks || []).filter((w) => (r.weekIds || []).includes(w));
       r.paidWeeks = paid;

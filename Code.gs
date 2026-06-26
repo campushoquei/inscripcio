@@ -657,7 +657,16 @@ function saveRow(id, payload, data) {
     if (col === "Descompte") return payload.descompte || "";
     if (col === "Estat") return payload.estat || "Pendent";
     if (col === "Setmanes pagades") return payload.pagat_setmanes || "";
-    if (col === "Grups") return payload.grups || "";
+    if (col === "Grups") {
+      if (payload.grups) return payload.grups;
+      // El grup (vestidor) sempre queda desat: per defecte, el que toca per edat a cada setmana
+      // inscrita. En moure el nen/a de grup al panell, s'actualitzarà aquest valor.
+      var gconf = groupsConfig(readSettings(form));
+      var autoColor = autoGroupColor(edat, gconf);
+      var gmap = {};
+      (payload.weeks || []).forEach(function (w) { gmap[w] = autoColor; });
+      return serializeGroupOverrides(gmap);
+    }
     if (selectedIsWeek(col, weeks)) return selected[col] ? 1 : 0;
     var fieldId = fieldIdForColumn(col, fields, labelById);
     if (fieldId && data[fieldId] != null) return data[fieldId];
@@ -1216,7 +1225,7 @@ function handleAdmin(p) {
       case "admin_overview":    return adminOverview(form);
       case "admin_list":        return adminList(form);
       case "admin_set_status":  return adminSetStatus(form, p.id, p.estat);
-      case "admin_set_payment": return adminSetPayment(form, p.id, p.weeks);
+      case "admin_set_payment": return adminSetPayment(form, p.id, p.weeks, p.row);
       case "admin_set_group":   return adminSetGroup(form, p.id, p.week, p.color, p.row);
       case "admin_set_groups_config": return adminSetGroupsConfig(p.config);
       case "admin_resend":      return adminResend(form, p.id);
@@ -1425,9 +1434,36 @@ function adminOverview(form) {
   };
 }
 
+// Omple la columna "Grups" de les files a què els falti: a cada setmana inscrita hi posa el
+// grup (vestidor) que toca per edat. Així el camp mai queda buit a l'Excel; en moure un nen/a
+// de grup, només se'n canvia el valor d'aquella setmana. Escriu en bloc (una sola operació) i
+// només quan realment falta alguna cosa, de manera que en càrregues posteriors no fa res.
+function backfillGroups(form, data) {
+  var sheet = data.sheet;
+  if (!sheet || !data.rows.length) return;
+  var groups = groupsConfig(readSettings(form));
+  var weekIds = readWeeks(form).map(function (w) { return w.id; });
+  if (!weekIds.length) return;
+  var col = ensureColumn(sheet, data.header, "Grups");
+  var n = data.rows.length;
+  var colVals = sheet.getRange(2, col, n, 1).getValues();
+  var changed = false;
+  data.rows.forEach(function (r, i) {
+    var registered = rowRegisteredWeeks(r, weekIds);
+    if (!registered.length) return;
+    var map = parseGroupOverrides(str(colVals[i][0]));
+    var auto = autoGroupColor(num(r.Edat), groups);
+    var rowChanged = false;
+    registered.forEach(function (w) { if (!map[w]) { map[w] = auto; rowChanged = true; } });
+    if (rowChanged) { var v = serializeGroupOverrides(map); colVals[i][0] = v; r.Grups = v; changed = true; }
+  });
+  if (changed) sheet.getRange(2, col, n, 1).setValues(colVals);
+}
+
 // Llista completa per a la taula + detall.
 function adminList(form) {
   var data = readSubmissionRows(form);
+  backfillGroups(form, data);   // garanteix que tots els nens/es tenen grup desat (per edat)
   var fields = readFields(form).filter(function (f) { return f.tipo !== "nota"; });
   var labels = fieldLabels(form);
   var childGroup = childGroupForForm(form);
@@ -1484,13 +1520,15 @@ function ensureColumn(sheet, header, name) {
 
 // Defineix quines setmanes estan pagades d'una fila i recalcula l'estat
 // (Pagat / Parcial / Pendent). És l'operació base del pagament per setmanes.
-function adminSetPayment(form, id, weeks) {
+function adminSetPayment(form, id, weeks, rowNum) {
   var data = readSubmissionRows(form);
   var sheet = data.sheet;
   if (!sheet) return { ok: false, error: "sheet not found" };
   var weekIds = readWeeks(form).map(function (w) { return w.id; });
-  var target = null;
-  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
+  // Resolem per número de fila del full (únic) i no només per ID: dos germans poden compartir
+  // ID i, buscant per ID, s'acabava escrivint sempre a la mateixa fila (l'estat no s'actualitzava
+  // a la fila correcta). Compatible amb peticions antigues que només envien l'ID.
+  var target = findRowByNumberOrId(data, rowNum, id);
   if (!target) return { ok: false, error: "row not found" };
 
   var registered = rowRegisteredWeeks(target, weekIds);
@@ -1548,11 +1586,14 @@ function adminSetGroup(form, id, week, color, rowNum) {
 
   var map = parseGroupOverrides(str(target.Grups));
   if (!week) return { ok: false, error: "week missing" };
-  // Una assignació manual SEMPRE es desa com a excepció explícita, per a qualsevol color
-  // (encara que coincideixi amb el grup automàtic per edat). Abans, si el color era
-  // l'automàtic no es desava res i moure un nen/a a aquell grup (p. ex. el vermell) no quedava
-  // mai guardat. Només es treu l'excepció si no arriba cap color.
-  if (!color) delete map[week]; else map[week] = color;
+  // El grup sempre queda desat per a totes les setmanes inscrites: primer omplim les que
+  // faltin amb el valor per edat, i després assignem el color triat a la setmana moguda.
+  // Així el camp mai queda buit i moure un nen/a a qualsevol grup (inclòs el vermell) es desa.
+  var groups = groupsConfig(readSettings(form));
+  var auto = autoGroupColor(num(target.Edat), groups);
+  rowRegisteredWeeks(target, readWeeks(form).map(function (w) { return w.id; }))
+    .forEach(function (w) { if (!map[w]) map[w] = auto; });
+  if (color) map[week] = color; else map[week] = auto;
 
   var col = ensureColumn(sheet, data.header, "Grups");
   sheet.getRange(target.__row, col, 1, 1).setValue(serializeGroupOverrides(map));
