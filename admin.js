@@ -1163,7 +1163,6 @@ function openDrawer(r) {
     <button class="btn btn--ghost btn--sm" id="dw-resend">Reenviar correu</button>
     ${canRemind ? `<button class="btn btn--ghost btn--sm" id="dw-remind">Recordatori de pagament</button>` : ""}
     <button class="btn btn--ghost btn--sm" id="dw-edit">Edita contacte</button>
-    <button class="btn btn--ghost btn--sm btn--danger-ghost" id="dw-cancel">Anul·la inscripció</button>
   </div>
   <div id="dw-edit-box"></div>`;
 
@@ -1175,7 +1174,6 @@ function openDrawer(r) {
   $("dw-resend").addEventListener("click", () => resend(r.id));
   if (canRemind) $("dw-remind").addEventListener("click", () => remind(r.id));
   $("dw-edit").addEventListener("click", () => openEditContact(r));
-  $("dw-cancel").addEventListener("click", () => cancelRegistration(r.id));
 
   $("drawer-backdrop").hidden = false;
   $("drawer").hidden = false;
