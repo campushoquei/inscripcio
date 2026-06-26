@@ -1797,37 +1797,44 @@ function adminReceipt(form, ids) {
 function sendReceipt(settings, to, names, totalPaid, paidLabels, formName) {
   var camp = settings.nombre_campus || "Casal";
   var who = (names && names.length) ? names.join(", ") : "la inscripció";
-  var contacte = settings.email_contacto || "";
   var subject = settings.email_rebut_asunto || ("Rebut de pagament · " + (formName || camp));
+  var avui = Utilities.formatDate(new Date(), "Europe/Madrid", "dd/MM/yyyy");
   var intro = settings.email_rebut_intro ||
-    ("Confirmem que hem rebut el pagament de " + totalPaid + " € de " + who + " per " + (formName || camp) + ". Moltes gràcies!");
+    ("Confirmem que hem rebut el pagament de " + who + (formName ? " per " + formName : "") + ". Aquí tens el teu rebut. Moltes gràcies!");
 
   var pills = (paidLabels || []).map(function (l) {
-    return "<span style='display:inline-block;background:#16A34A;color:#fff;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;margin:0 5px 5px 0'>" + esc(l) + "</span>";
+    return "<span style='display:inline-block;background:#16A34A;color:#fff;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:700;margin:0 6px 6px 0'>" + esc(l) + "</span>";
   }).join("");
 
   var html =
     "<!DOCTYPE html><html lang='ca'><head><meta charset='utf-8'>" +
     "<meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
-    "<body style='margin:0;padding:0'>" +
-    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#f0f4fb;padding:20px 10px;color:#16233D'>" +
-      "<div style='background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:14px 14px 0 0;padding:28px;border-top:4px solid #16A34A'>" +
-        "<div style='font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#BBF7D0;font-weight:700;margin-bottom:10px'>🏑 " + esc(camp) + "</div>" +
-        "<div style='font-size:23px;font-weight:800;color:#fff;line-height:1.2'>Rebut de pagament</div>" +
+    "<body style='margin:0;padding:0;background:#eef2f9'>" +
+    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:24px 12px;color:#16233D'>" +
+      // Capçalera amb segell de confirmació
+      "<div style='background:linear-gradient(135deg,#0E2A63 0%,#16357C 55%,#1F5AE0 100%);border-radius:16px 16px 0 0;padding:32px 28px 26px;border-top:4px solid #16A34A;text-align:center'>" +
+        "<div style='display:inline-block;width:58px;height:58px;line-height:58px;border-radius:50%;background:#16A34A;color:#ffffff;font-size:30px;font-weight:800;margin-bottom:14px'>&#10003;</div>" +
+        "<div style='font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:6px'>&#127945; " + esc(camp) + "</div>" +
+        "<div style='font-size:24px;font-weight:800;color:#ffffff;line-height:1.2'>Rebut de pagament</div>" +
       "</div>" +
-      "<div style='background:#fff;border:1px solid #D6DEEC;border-top:none;border-radius:0 0 14px 14px;padding:26px 28px'>" +
-        "<p style='margin:0 0 20px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
-        "<div style='background:#DCFCE7;border-left:4px solid #16A34A;border-radius:9px;padding:14px 16px;margin-bottom:18px'>" +
-          "<table style='border-collapse:collapse;width:100%'><tr>" +
-            "<td style='font-weight:700;color:#0E2A63;font-size:14px'>Import pagat</td>" +
-            "<td style='text-align:right;font-size:22px;font-weight:800;color:#15803D'>" + totalPaid + " €</td>" +
-          "</tr></table></div>" +
-        (pills ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:8px'>Setmanes pagades</div><div style='margin-bottom:18px'>" + pills + "</div>" : "") +
-        (contacte ? "<p style='margin:0;color:#6B7C99;font-size:13px'>Per a qualsevol dubte, escriu-nos a <a href='mailto:" + esc(contacte) + "' style='color:#1F5AE0'>" + esc(contacte) + "</a>.</p>" : "") +
+      // Cos
+      "<div style='background:#ffffff;border:1px solid #D6DEEC;border-top:none;padding:28px 30px'>" +
+        "<p style='margin:0 0 22px;color:#4B5C7A;font-size:15px;line-height:1.65'>" + esc(intro) + "</p>" +
+        "<div style='background:#DCFCE7;border-radius:12px;padding:18px 20px;margin-bottom:20px;text-align:center'>" +
+          "<div style='font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#15803D;font-weight:700;margin-bottom:5px'>Import pagat</div>" +
+          "<div style='font-size:34px;font-weight:800;color:#15803D;line-height:1'>" + totalPaid + " &euro;</div>" +
+        "</div>" +
+        (pills ? "<div style='font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#7C90B2;font-weight:700;margin-bottom:9px'>Setmanes pagades</div><div>" + pills + "</div>" : "") +
+      "</div>" +
+      // Firma + data
+      "<div style='background:#ffffff;border:1px solid #D6DEEC;border-top:1px solid #EEF3FB;border-radius:0 0 16px 16px;padding:22px 30px 26px'>" +
+        "<div style='font-size:14px;color:#4B5C7A'>Una salutació cordial,</div>" +
+        "<div style='font-size:16px;font-weight:800;color:#0E2A63;margin-top:3px'>" + esc(camp) + "</div>" +
+        "<div style='font-size:12px;color:#9AA8C2;margin-top:12px'>Rebut em&egrave;s el " + esc(avui) + "</div>" +
       "</div>" +
     "</div></body></html>";
 
-  MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: camp, replyTo: contacte || undefined });
+  MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: camp, replyTo: settings.email_contacto || undefined });
 }
 
 /* ---------- Edició de dades de contacte ----------

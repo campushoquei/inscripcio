@@ -861,15 +861,12 @@ function sortRows() {
 const RECEIPT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>';
 const RECEIPT_SENT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>';
 
-// Indica si ja s'ha enviat el rebut de pagament d'una inscripció. Com que els germans
-// comparteixen correu (i el rebut s'envia per família/correu), considerem "enviat" si
-// qualsevol inscripció amb el mateix correu ja en té un de marcat.
+// Indica si ja s'ha enviat el rebut de pagament d'una inscripció. La columna "Rebut enviat"
+// de l'Excel és la font de veritat: en enviar-lo es marca a totes les files de la família
+// (germans), i si es buida la cel·la a l'Excel (i es refresca el panell) el botó es torna a
+// habilitar i es pot reenviar.
 function receiptSent(r) {
-  if (!r) return false;
-  if (r.rebutEnviat) return true;
-  if (!r.email) return false;
-  const e = norm(r.email);
-  return state.list.some((x) => x.rebutEnviat && x.email && norm(x.email) === e);
+  return !!(r && r.rebutEnviat);
 }
 
 function renderTable() {
@@ -1561,19 +1558,21 @@ function printRosters() {
       .wk__name{font-size:1.5rem;}
     }
     @media print{
-      /* Apaïsat: més amplada útil → la graella 2×2 de grups encaixa millor (sobretot si un grup té molts nens/es). */
-      @page{size:A4 landscape;margin:10mm;}
+      /* Vertical: una setmana sencera per pàgina. Una sola setmana s'escala en línia (fitPrint)
+         perquè càpiga SENCERA en una pàgina i no es parteixi mai. */
+      @page{size:A4 portrait;margin:8mm;}
       *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
       body{background:#fff!important;padding:0;}
       .hero,.picker,.foot{display:none!important;}
-      .wrap{max-width:none;padding:0;height:auto!important;overflow:visible!important;}
-      .wk{margin:0 0 10px;transform:none!important;}
-      /* Quan s'imprimeixen totes les setmanes, cada una comença en una fulla nova */
+      .wrap{padding:0;}
+      /* Mode "Totes": maquetació normal, cada setmana comença en un full nou. */
+      body[data-show="all"] .wrap{max-width:none;}
+      body[data-show="all"] .wk{margin:0 0 10px;}
       body[data-show="all"] .wk + .wk{break-before:page;page-break-before:always;}
       .wk__banner{box-shadow:none;break-after:avoid;border-radius:10px;padding:12px 16px;}
       .wk__name{font-size:1.4rem;}
-      /* Graella 2×2 fixa: un grup per quadrant. Els grups grans NO trenquen la graella;
-         reparteixen els noms en columnes internes dins del seu quadrant. */
+      /* Graella 2×2 fixa: un grup per quadrant. Els grups grans reparteixen els noms en
+         columnes internes dins del seu quadrant. */
       .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;align-items:start;}
       .team{overflow:visible;box-shadow:none;border:1px solid #ccc;
             break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid;}
@@ -1587,29 +1586,51 @@ function printRosters() {
     }`;
 
   const js = `
-    // Encaixa la setmana visible dins de la pantalla (sense scroll): la foto completa del grup.
-    // Mesura l'alçada natural i, si cal, l'escala perquè càpiga a la finestra.
-    function fit(){
-      var show = document.body.dataset.show;
+    var MM = 3.7795;   // 1 mm en px (referència 96dpi)
+    // Treu tot l'escalat i deixa la maquetació natural.
+    function resetFit(){
       var wrap = document.querySelector('.wrap');
-      // reset abans de mesurar
-      document.querySelectorAll('.wk').forEach(function(s){ s.style.transform=''; });
-      wrap.style.height=''; wrap.style.overflow=''; document.body.style.overflow='';
-      if (show==='all'){ return; }              // "Totes": scroll normal, una per full en imprimir
+      document.querySelectorAll('.wk').forEach(function(s){ s.style.transform=''; s.style.margin=''; });
+      wrap.style.height=''; wrap.style.overflow=''; wrap.style.width=''; wrap.style.maxWidth='';
+      wrap.style.paddingTop=''; wrap.style.paddingBottom='';
+      document.body.style.overflow='';
+    }
+    // Encaixa la setmana visible en una caixa d'alçada 'boxH'. Si 'boxW' ve donat, també hi
+    // ajusta l'amplada (mode impressió: la caixa és una pàgina). Compta marges i padding perquè
+    // la foto càpiga SENCERA, sense tall ni scroll.
+    function applyFit(boxH, boxW){
+      var wrap = document.querySelector('.wrap');
+      resetFit();
+      if (document.body.dataset.show==='all'){ return; }   // "Totes": maquetació normal
       var wk = document.querySelector('.wk:not([hidden])');
       if (!wk){ return; }
-      window.scrollTo(0,0);
+      // mesura net: sense marge de la targeta ni padding vertical del contenidor
+      document.querySelectorAll('.wk').forEach(function(s){ s.style.margin='0'; });
+      wrap.style.paddingTop='0'; wrap.style.paddingBottom='0';
+      if (boxW){ wrap.style.width=boxW+'px'; wrap.style.maxWidth=boxW+'px'; }
+      else { window.scrollTo(0,0); }
+      var nh = wk.offsetHeight, nw = wk.offsetWidth;
+      if (nh<=0 || boxH<=0) return;
+      var scale = Math.min(1, (boxH-4)/nh);
+      if (boxW){ scale = Math.min(scale, boxW/nw); }
+      wk.style.transformOrigin = boxW ? 'top left' : 'top center';
+      wk.style.transform = scale<1 ? 'scale('+scale+')' : '';
+      wrap.style.height = boxH+'px';
+      wrap.style.overflow='hidden';
+      if (!boxW) document.body.style.overflow='hidden';
+    }
+    // Pantalla: encaixa a l'alçada lliure de la finestra.
+    function fit(){
+      if (document.body.dataset.show==='all'){ resetFit(); return; }
+      var wrap = document.querySelector('.wrap');
+      resetFit(); window.scrollTo(0,0);
       var top = wrap.getBoundingClientRect().top;
-      var avail = window.innerHeight - top - 14;
-      var natural = wk.offsetHeight;
-      if (natural>0 && avail>0){
-        var scale = Math.min(1, avail/natural);
-        wk.style.transformOrigin='top center';
-        wk.style.transform = scale<1 ? 'scale('+scale+')' : '';
-        wrap.style.height = avail+'px';
-        wrap.style.overflow='hidden';
-        document.body.style.overflow='hidden';
-      }
+      applyFit(window.innerHeight - top - 8, null);
+    }
+    // Impressió: encaixa la setmana en UNA pàgina A4 vertical (marges 8mm) → mai es parteix.
+    function fitPrint(){
+      if (document.body.dataset.show==='all'){ resetFit(); return; }
+      applyFit((297-16)*MM, (210-16)*MM);
     }
     function pick(w){
       document.body.dataset.show=w;
@@ -1620,11 +1641,7 @@ function printRosters() {
     document.querySelectorAll('.chip').forEach(function(c){ c.addEventListener('click', function(){ pick(c.dataset.week); }); });
     window.addEventListener('resize', fit);
     window.addEventListener('load', fit);
-    // En imprimir, treu l'escalat perquè la impressió faci servir la maquetació de pàgina.
-    window.addEventListener('beforeprint', function(){
-      document.querySelectorAll('.wk').forEach(function(s){ s.style.transform=''; });
-      var wr=document.querySelector('.wrap'); wr.style.height=''; wr.style.overflow=''; document.body.style.overflow='';
-    });
+    window.addEventListener('beforeprint', fitPrint);
     window.addEventListener('afterprint', fit);
     // En obrir, mostra la primera setmana ja encaixada (foto completa sense scroll).
     var firstChip = document.querySelector('.chip[data-week]:not([data-week="all"])');
