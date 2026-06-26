@@ -591,11 +591,14 @@ function renderGroupsBoard() {
       // Marca discreta (un punt del color del grup) per als moguts manualment. El selector
       // <select> es manté com a alternativa accessible i per a tàctil (on no s'arrossega).
       const mk = manual ? '<span class="gchip__moved" title="Mogut manualment"></span>' : "";
-      return `<div class="gchip${manual ? " gchip--manual" : ""}" data-chip="${esc(r.id)}" title="${manual ? "Mogut manualment · arrossega per moure" : "Assignat per edat · arrossega per moure"}">
+      // Identifiquem la fitxa per la fila del full (data-row), que és única, i NO per l'ID:
+      // dos germans poden compartir ID (mateixa inscripció / mateix mil·lisegon) i això feia
+      // que moure'n un mogués sempre l'altre, de manera que no es podien posar al mateix grup.
+      return `<div class="gchip${manual ? " gchip--manual" : ""}" data-row="${esc(String(r.row))}" title="${manual ? "Mogut manualment · arrossega per moure" : "Assignat per edat · arrossega per moure"}">
         ${mk}${ns}
         <span class="gchip__name" title="${esc(r.nom || "")}">${esc(r.nom || "—")}</span>
         <span class="gchip__age">${r.edat !== "" ? r.edat + "a" : ""}</span>
-        <select class="gchip__move" data-move="${esc(r.id)}" aria-label="Mou de grup">${opts}</select>
+        <select class="gchip__move" aria-label="Mou de grup">${opts}</select>
       </div>`;
     }).join("");
     const noSwimCount = list.filter((r) => r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim())).length;
@@ -608,15 +611,17 @@ function renderGroupsBoard() {
   }).join("");
 
   const board = $("groups-board");
-  board.querySelectorAll("[data-move]").forEach((sel) =>
-    sel.addEventListener("change", () => setGroup(sel.dataset.move, week, sel.value)));
+  board.querySelectorAll(".gchip__move").forEach((sel) =>
+    sel.addEventListener("change", () => setGroup(sel.closest(".gchip").dataset.row, week, sel.value)));
   // Arrossegar fitxes entre columnes (ratolí/llapis).
-  board.querySelectorAll("[data-chip]").forEach((chip) =>
+  board.querySelectorAll("[data-row]").forEach((chip) =>
     chip.addEventListener("pointerdown", (e) => onChipPointerDown(e, chip)));
 }
 
-async function setGroup(id, week, color) {
-  const row = state.list.find((r) => r.id === id);
+// rowNum identifica la fila del full (única). Resolem la inscripció per fila, no per ID,
+// perquè germans amb el mateix ID no es trepitgin entre ells.
+async function setGroup(rowNum, week, color) {
+  const row = state.list.find((r) => String(r.row) === String(rowNum));
   if (!row) return;
   const auto = autoGroupColor(Number(row.edat));
   row.grups = row.grups || {};
@@ -628,7 +633,8 @@ async function setGroup(id, week, color) {
   if (prev === next) return;
   if (next) row.grups[week] = next; else delete row.grups[week];
   renderGroupsBoard(); renderOccupancy(); renderTable(); // actualització optimista
-  try { await api("admin_set_group", { id, week, color }); }
+  // Enviem la fila (row) perquè el servidor escrigui a la fila exacta; l'id va com a verificació.
+  try { await api("admin_set_group", { id: row.id, row: row.row, week, color }); }
   catch (err) { toast("No s'ha pogut moure: " + err.message, true); loadAll(); }
 }
 
@@ -641,11 +647,11 @@ function onChipPointerDown(e, chip) {
   if (e.pointerType === "touch") return;            // tàctil → fa servir el selector
   if (e.button != null && e.button !== 0) return;   // només botó principal
   if (e.target.closest(".gchip__move")) return;     // clic al selector: no arrosseguem
-  const id = chip.dataset.chip;
-  if (!id) return;
+  const rowNum = chip.dataset.row;
+  if (!rowNum) return;
   const rect = chip.getBoundingClientRect();
   _chipDrag = {
-    id, chip, ghost: null, targetCol: null, moved: false,
+    rowNum, chip, ghost: null, targetCol: null, moved: false,
     startX: e.clientX, startY: e.clientY,
     offX: e.clientX - rect.left, offY: e.clientY - rect.top, width: rect.width
   };
@@ -686,7 +692,7 @@ function onChipPointerUp() {
   d.chip.classList.remove("gchip--dragging");
   if (d.targetCol) {
     d.targetCol.classList.remove("gcol--drop");   // treu el contorn discontinu un cop deixat anar
-    if (d.moved && d.targetCol.dataset.color) setGroup(d.id, state.groupWeek, d.targetCol.dataset.color);
+    if (d.moved && d.targetCol.dataset.color) setGroup(d.rowNum, state.groupWeek, d.targetCol.dataset.color);
   }
 }
 
@@ -1757,7 +1763,8 @@ async function demoApi(action, extra) {
   if (action === "admin_overview") return demoOverview(d);
   if (action === "admin_list") return { ok: true, form: state.form, rows: d.rows.slice().reverse() };
   if (action === "admin_set_group") {
-    const r = d.rows.find((x) => x.id === extra.id);
+    const r = (extra.row != null && d.rows.find((x) => String(x.row) === String(extra.row)))
+      || d.rows.find((x) => x.id === extra.id);
     if (r) {
       r.grups = r.grups || {};
       const auto = autoGroupColor(Number(r.edat));

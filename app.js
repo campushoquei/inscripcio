@@ -1041,7 +1041,10 @@ function fieldEl(f, scope) {
       note.dataset.required = "1";
       if (scoped) note.dataset.scope = String(scope);
       const labId = `f_${f.id}${sfx}`;
-      const lab = document.createElement("label"); lab.className = "check"; lab.style.marginTop = "12px";
+      // Mateix embolcall que el consentiment de protecció de dades (.consent dins .section):
+      // així hereta el mateix divisor superior i l'espaiat.
+      const consent = document.createElement("div"); consent.className = "consent";
+      const lab = document.createElement("label"); lab.className = "check";
       const input = document.createElement("input");
       input.type = "checkbox"; input.id = labId; input.name = nm; input.value = "Sí";
       input.dataset.field = f.id; input.dataset.type = "checkbox"; input.dataset.name = nm;
@@ -1049,9 +1052,10 @@ function fieldEl(f, scope) {
       const box = document.createElement("span"); box.className = "check__box"; box.setAttribute("aria-hidden", "true");
       const span = document.createElement("span"); span.className = "check__label";
       span.textContent = "Accepto els drets d'imatge.";
-      lab.append(input, box, span); note.appendChild(lab);
+      lab.append(input, box, span); consent.appendChild(lab);
       const err = document.createElement("p"); err.className = "field__error";
-      err.textContent = "Cal acceptar els drets d'imatge per continuar."; note.appendChild(err);
+      err.textContent = "Cal acceptar els drets d'imatge per continuar."; consent.appendChild(err);
+      note.appendChild(consent);
     }
     return note;
   }

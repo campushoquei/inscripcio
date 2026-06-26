@@ -1217,7 +1217,7 @@ function handleAdmin(p) {
       case "admin_list":        return adminList(form);
       case "admin_set_status":  return adminSetStatus(form, p.id, p.estat);
       case "admin_set_payment": return adminSetPayment(form, p.id, p.weeks);
-      case "admin_set_group":   return adminSetGroup(form, p.id, p.week, p.color);
+      case "admin_set_group":   return adminSetGroup(form, p.id, p.week, p.color, p.row);
       case "admin_set_groups_config": return adminSetGroupsConfig(p.config);
       case "admin_resend":      return adminResend(form, p.id);
       case "admin_reminder":    return adminReminder(form, p.ids || (p.id ? [p.id] : []));
@@ -1514,15 +1514,34 @@ function adminSetStatus(form, id, estat) {
   return adminSetPayment(form, id, (str(estat) === "Pagat") ? registered : []);
 }
 
+// Troba una fila de forma robusta: primer pel número de fila del full (únic) i, si l'ID el
+// confirma, la retorna; si no, cau a buscar per ID. Així dues files amb el mateix ID (germans)
+// no es confonen, però seguim sent compatibles amb peticions antigues que només envien l'ID.
+function findRowByNumberOrId(data, rowNum, id) {
+  var n = Number(rowNum);
+  if (n) {
+    for (var i = 0; i < data.rows.length; i++) {
+      if (Number(data.rows[i].__row) === n) {
+        if (!id || str(data.rows[i].ID) === str(id)) return data.rows[i];
+        break;   // la fila s'ha desplaçat (l'ID no quadra) → millor buscar per ID
+      }
+    }
+  }
+  var match = null;
+  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) match = r; });
+  return match;
+}
+
 // Mou un jugador/a a un color de grup per a una setmana concreta.
 // Si el color coincideix amb l'automàtic (per edat), s'esborra l'excepció.
-function adminSetGroup(form, id, week, color) {
+function adminSetGroup(form, id, week, color, rowNum) {
   week = str(week); color = str(color).toLowerCase();
   var data = readSubmissionRows(form);
   var sheet = data.sheet;
   if (!sheet) return { ok: false, error: "sheet not found" };
-  var target = null;
-  data.rows.forEach(function (r) { if (str(r.ID) === str(id)) target = r; });
+  // Resolem la fila pel número de fila del full (únic), no per l'ID: dos germans poden compartir
+  // ID i, buscant per ID, sempre s'acabava escrivint a la mateixa fila (no es podien separar de grup).
+  var target = findRowByNumberOrId(data, rowNum, id);
   if (!target) return { ok: false, error: "row not found" };
 
   var groups = groupsConfig(readSettings(form));
