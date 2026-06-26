@@ -546,8 +546,15 @@ function autoGroupColor(age) {
   return age < sorted[0].min ? sorted[0].color : sorted[sorted.length - 1].color;
 }
 // Color efectiu d'un nen/a en una setmana: excepció manual o automàtic per edat.
+// Si l'excepció desada apunta a un color que ja no és cap grup configurat, l'ignorem i tornem
+// a l'automàtic, perquè la fitxa sempre caigui en una columna existent (si no, desapareixeria).
 function groupColorOf(row, week) {
-  return (row.grups && row.grups[week]) || autoGroupColor(Number(row.edat));
+  const manual = row.grups && row.grups[week];
+  if (manual) {
+    const groups = state.groups || DEFAULT_GROUPS;
+    if (groups.some((g) => g.color === manual)) return manual;
+  }
+  return autoGroupColor(Number(row.edat));
 }
 
 function renderGroups() {
@@ -576,13 +583,16 @@ function renderGroupsBoard() {
     const list = (byColor[g.color] || []).slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
     const hex = GROUP_HEX[g.color] || "#64748B";
     const chips = list.map((r) => {
-      const manual = r.grups && r.grups[week];
+      const manual = !!(r.grups && r.grups[week]);
       const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
       const opts = groups.map((gg) => `<option value="${esc(gg.color)}"${gg.color === g.color ? " selected" : ""}>${esc(gg.label)}</option>`).join("");
       // 🚱 a l'esquerra del nom (si no sap nedar) i l'edat sempre a la dreta.
       const ns = noSwim ? '<span class="gchip__noswim" title="No sap nedar">🚱</span>' : "";
-      return `<div class="gchip${manual ? " gchip--manual" : ""}" title="${manual ? "Mogut manualment" : "Assignat per edat"}">
-        ${ns}
+      // Marca discreta (un punt del color del grup) per als moguts manualment. El selector
+      // <select> es manté com a alternativa accessible i per a tàctil (on no s'arrossega).
+      const mk = manual ? '<span class="gchip__moved" title="Mogut manualment"></span>' : "";
+      return `<div class="gchip${manual ? " gchip--manual" : ""}" data-chip="${esc(r.id)}" title="${manual ? "Mogut manualment · arrossega per moure" : "Assignat per edat · arrossega per moure"}">
+        ${mk}${ns}
         <span class="gchip__name" title="${esc(r.nom || "")}">${esc(r.nom || "—")}</span>
         <span class="gchip__age">${r.edat !== "" ? r.edat + "a" : ""}</span>
         <select class="gchip__move" data-move="${esc(r.id)}" aria-label="Mou de grup">${opts}</select>
@@ -590,15 +600,19 @@ function renderGroupsBoard() {
     }).join("");
     const noSwimCount = list.filter((r) => r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim())).length;
     const medBadge = noSwimCount ? `<span class="gcol__med" title="No saben nedar">🚱 ${noSwimCount}</span>` : "";
-    return `<div class="gcol" style="--gc:${hex}">
+    return `<div class="gcol" data-color="${esc(g.color)}" style="--gc:${hex}">
       <div class="gcol__head"><span class="gcol__dot"></span><span class="gcol__name">${esc(g.label)}</span><span class="gcol__count">${list.length}</span></div>
       <div class="gcol__range"><span>${g.min}–${g.max} anys</span>${medBadge}</div>
       <div class="gcol__list">${chips || '<p class="gcol__empty">Cap nen/a</p>'}</div>
     </div>`;
   }).join("");
 
-  $("groups-board").querySelectorAll("[data-move]").forEach((sel) =>
+  const board = $("groups-board");
+  board.querySelectorAll("[data-move]").forEach((sel) =>
     sel.addEventListener("change", () => setGroup(sel.dataset.move, week, sel.value)));
+  // Arrossegar fitxes entre columnes (ratolí/llapis).
+  board.querySelectorAll("[data-chip]").forEach((chip) =>
+    chip.addEventListener("pointerdown", (e) => onChipPointerDown(e, chip)));
 }
 
 async function setGroup(id, week, color) {
@@ -606,10 +620,74 @@ async function setGroup(id, week, color) {
   if (!row) return;
   const auto = autoGroupColor(Number(row.edat));
   row.grups = row.grups || {};
-  if (!color || color === auto) delete row.grups[week]; else row.grups[week] = color;
+  // Estat anterior i nou per a aquesta setmana. Si el color de destí és l'automàtic, no es
+  // desa cap excepció (es treu). Si no canvia res (p. ex. deixar la fitxa al mateix grup),
+  // sortim sense tocar res ni cridar el servidor.
+  const prev = row.grups[week] || "";
+  const next = (!color || color === auto) ? "" : color;
+  if (prev === next) return;
+  if (next) row.grups[week] = next; else delete row.grups[week];
   renderGroupsBoard(); renderOccupancy(); renderTable(); // actualització optimista
   try { await api("admin_set_group", { id, week, color }); }
   catch (err) { toast("No s'ha pogut moure: " + err.message, true); loadAll(); }
+}
+
+/* ---------- Arrossegar per moure de grup (drag & drop) ----------
+   Funciona amb ratolí o llapis. En tàctil es manté el selector <select> de cada fitxa
+   (l'arrossegament nadiu xoca amb el desplaçament del dit). Mentre s'arrossega, la columna
+   sota el punter es marca amb un contorn discontinu; en deixar-la anar, el contorn desapareix. */
+let _chipDrag = null;
+function onChipPointerDown(e, chip) {
+  if (e.pointerType === "touch") return;            // tàctil → fa servir el selector
+  if (e.button != null && e.button !== 0) return;   // només botó principal
+  if (e.target.closest(".gchip__move")) return;     // clic al selector: no arrosseguem
+  const id = chip.dataset.chip;
+  if (!id) return;
+  const rect = chip.getBoundingClientRect();
+  _chipDrag = {
+    id, chip, ghost: null, targetCol: null, moved: false,
+    startX: e.clientX, startY: e.clientY,
+    offX: e.clientX - rect.left, offY: e.clientY - rect.top, width: rect.width
+  };
+  window.addEventListener("pointermove", onChipPointerMove);
+  window.addEventListener("pointerup", onChipPointerUp, { once: true });
+}
+function onChipPointerMove(e) {
+  const d = _chipDrag; if (!d) return;
+  if (!d.moved) {
+    // Llindar: distingeix un clic d'un arrossegament real.
+    if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 5) return;
+    d.moved = true;
+    const ghost = d.chip.cloneNode(true);
+    ghost.classList.add("gchip--ghost");
+    ghost.style.width = d.width + "px";
+    const srcCol = d.chip.closest(".gcol");
+    if (srcCol) ghost.style.setProperty("--gc", getComputedStyle(srcCol).getPropertyValue("--gc"));
+    document.body.appendChild(ghost);
+    d.ghost = ghost;
+    d.chip.classList.add("gchip--dragging");
+    document.body.classList.add("is-dragging-chip");
+  }
+  e.preventDefault();
+  d.ghost.style.left = (e.clientX - d.offX) + "px";
+  d.ghost.style.top = (e.clientY - d.offY) + "px";
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const col = under && under.closest(".gcol");
+  if (d.targetCol && d.targetCol !== col) d.targetCol.classList.remove("gcol--drop");
+  if (col) col.classList.add("gcol--drop");
+  d.targetCol = col;
+}
+function onChipPointerUp() {
+  window.removeEventListener("pointermove", onChipPointerMove);
+  const d = _chipDrag; _chipDrag = null;
+  if (!d) return;
+  document.body.classList.remove("is-dragging-chip");
+  if (d.ghost) d.ghost.remove();
+  d.chip.classList.remove("gchip--dragging");
+  if (d.targetCol) {
+    d.targetCol.classList.remove("gcol--drop");   // treu el contorn discontinu un cop deixat anar
+    if (d.moved && d.targetCol.dataset.color) setGroup(d.id, state.groupWeek, d.targetCol.dataset.color);
+  }
 }
 
 function toggleGroupsConfig() {

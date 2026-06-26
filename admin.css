@@ -214,9 +214,18 @@ body.adm {
 .gcol__med { font-size: .72rem; font-weight: 700; color: var(--warn); white-space: nowrap; }
 .gcol__list { display: flex; flex-direction: column; gap: 6px; padding: 10px; flex: 1; min-width: 0; }
 .gcol__empty { color: var(--ink-soft); font-size: .82rem; text-align: center; margin: 8px 0; opacity: .7; }
-.gchip { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .86rem; min-width: 0; transition: border-color .15s ease, box-shadow .15s ease; }
+.gchip { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .86rem; min-width: 0; cursor: grab; transition: border-color .15s ease, box-shadow .15s ease; }
 .gchip:hover { border-color: var(--gc); box-shadow: 0 2px 8px rgba(14,42,99,.08); }
-.gchip--manual { border-style: dashed; border-color: var(--gc); }
+/* Mogut manualment: només una marca discreta (sense contorn discontinu). */
+.gchip--manual { border-color: var(--gc); }
+.gchip__moved { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--gc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gc) 22%, #fff); }
+/* Arrossegant: l'original s'esvaeix i el clon (ghost) segueix el punter. */
+.gchip--dragging { opacity: .3; }
+.gchip--ghost { position: fixed; left: 0; top: 0; z-index: 2000; margin: 0; width: auto; pointer-events: none; background: #fff; border-color: var(--gc); box-shadow: 0 12px 28px rgba(14,42,99,.28); transform: rotate(-1.5deg); cursor: grabbing; }
+/* Columna sota el punter mentre s'arrossega (contorn discontinu temporal). */
+.gcol--drop { border-color: var(--gc); background: color-mix(in srgb, var(--gc) 7%, #fbfcfe); }
+.gcol--drop .gcol__list { outline: 2px dashed var(--gc); outline-offset: -5px; border-radius: 9px; }
+body.is-dragging-chip { cursor: grabbing; user-select: none; -webkit-user-select: none; }
 .gchip__name { font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gchip__age { color: var(--ink-soft); font-size: .78rem; font-variant-numeric: tabular-nums; flex: 0 0 auto; min-width: 24px; text-align: right; }
 .gchip__noswim { flex: 0 0 auto; font-size: .9rem; line-height: 1; }
