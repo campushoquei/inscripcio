@@ -477,20 +477,20 @@ span.estat { cursor: default; }
     display: grid; gap: 5px 8px; align-items: center;
     grid-template-columns: 1fr auto auto;
     grid-template-areas:
-      "name  name   status"
-      "weeks weeks  price"
-      "tutor date   actions";
+      "name  name   price"
+      "weeks weeks  status"
+      "tutor tutor  actions";
     background: #fff; border: 1px solid var(--line); border-radius: 12px;
     box-shadow: 0 1px 2px rgba(14,42,99,.05); margin: 8px 12px; padding: 10px 12px;
   }
   .dtable tbody tr:hover { background: #fff; }      /* sense ressaltat de fila sencera */
   .dtable td { display: block; padding: 0; border: 0; min-width: 0; }
   .dtable td.sel-cell { display: none; }
-  .dtable td:nth-child(2) { grid-area: date; }       /* data */
+  .dtable td:nth-child(2) { display: none; }          /* data: amagada a mòbil (guanyem espai) */
   .dtable td:nth-child(3) { grid-area: name; }       /* nom + edat */
   .dtable td:nth-child(4) { grid-area: tutor; }      /* tutor + email */
   .dtable td:nth-child(5) { grid-area: weeks; }      /* setmanes */
-  .dtable td:nth-child(6) { grid-area: price; }      /* preu */
+  .dtable td:nth-child(6) { grid-area: price; justify-self: end; }   /* preu */
   .dtable td:nth-child(7) { grid-area: status; justify-self: end; }   /* estat */
   .dtable td:nth-child(8) { grid-area: actions; justify-self: end; }  /* accions */
 
@@ -499,19 +499,21 @@ span.estat { cursor: default; }
   .dtable .cell-sub { font-size: .72rem; }
   .dtable td:nth-child(4) { font-size: .78rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dtable td:nth-child(4) .cell-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dtable td:nth-child(2) { font-size: .72rem; color: var(--ink-soft); font-weight: 600; white-space: nowrap; text-align: right; }
-  .dtable td:nth-child(2)::before { content: "📅 "; }
-  .dtable td.num { font-size: .92rem; color: var(--navy); text-align: right; }
+  .dtable td.num { font-size: 1.35rem; font-weight: 800; color: var(--navy); text-align: right; }
   .dtable .weeks-pills { gap: 4px; }
   .dtable .wpill { padding: 1px 6px; font-size: .68rem; }
-  .dtable .estat { padding: 4px 9px 4px 8px; font-size: .74rem; }
+  /* Pill d'estat gran i fàcil de clicar amb el dit (aprofitem l'espai de la data) */
+  .dtable .estat { padding: 8px 14px; font-size: .84rem; gap: 7px; min-height: 34px; }
+  .dtable .estat .estat__dot { width: 9px; height: 9px; }
 
-  /* Línia separadora fina abans de la fila de tutor/data/accions */
-  .dtable td:nth-child(2),
-  .dtable td:nth-child(4),
-  .dtable td:nth-child(8) { border-top: 1px solid var(--line-soft); padding-top: 6px; }
-  .dtable .row-actions { justify-content: flex-end; gap: 2px; }
-  .dtable .row-actions .iconbtn { width: 28px; height: 28px; }
+  /* Línia separadora fina abans del tutor (no sobre la icona de rebut) */
+  .dtable td:nth-child(4) { border-top: 1px solid var(--line-soft); padding-top: 6px; }
+  .dtable td:nth-child(8) { padding-top: 6px; }
+  .dtable .row-actions { justify-content: flex-end; gap: 2px; align-items: center; }
+  /* A mòbil només deixem el botó d'enviar rebut; amaguem el de reenviar correu */
+  .dtable .row-actions [data-resend] { display: none; }
+  .dtable .row-actions .iconbtn { width: 38px; height: 38px; }
+  .dtable .row-actions .iconbtn svg { width: 18px; height: 18px; }
 }
 @media (max-width: 760px) {
   /* Mostra la barra inferior i amaga totes les seccions menys la de la vista activa */
