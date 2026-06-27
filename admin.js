@@ -1678,9 +1678,7 @@ function printRosters() {
     setTimeout(fit, 350);
     if (document.fonts && document.fonts.ready){ document.fonts.ready.then(fit); }`;
 
-  const win = window.open("", "_blank");
-  if (!win) return toast("Permet les finestres emergents per imprimir.", true);
-  win.document.write(`<!DOCTYPE html><html lang="ca"><head><meta charset="utf-8">
+  const doc = `<!DOCTYPE html><html lang="ca"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Llistes de vestidor · ${esc(camp)}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1702,8 +1700,34 @@ function printRosters() {
       <div class="wrap">${body}</div>
       <p class="foot">${esc(camp)} · ${totalKids} inscrits en total</p>
       <script>${js}<\/script>
-    </body></html>`);
-  win.document.close();
+    </body></html>`;
+
+  // Mostra la vista DINS de la mateixa pàgina (overlay amb un iframe aïllat), no en una pestanya
+  // nova. Funciona igual a la web i a la PWA. L'iframe aïlla els estils (no xoquen amb el panell)
+  // i la impressió segueix imprimint només el contingut de l'iframe (botó "Imprimir" de dins).
+  let ov = document.getElementById("rosters-overlay");
+  if (!ov) { ov = document.createElement("div"); ov.id = "rosters-overlay"; document.body.appendChild(ov); }
+  ov.innerHTML = `
+    <div class="rovl__bar">
+      <button class="rovl__home" id="rovl-home" type="button" aria-label="Tornar al panell">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+        Inici
+      </button>
+      <span class="rovl__title">Grups i vestidors</span>
+    </div>
+    <iframe class="rovl__frame" id="rovl-frame" title="Llistes de vestidor"></iframe>`;
+  ov.hidden = false;
+  document.body.classList.add("rovl-open");
+  document.getElementById("rovl-frame").srcdoc = doc;
+
+  const closeRosters = () => {
+    ov.hidden = true; ov.innerHTML = "";
+    document.body.classList.remove("rovl-open");
+    document.removeEventListener("keydown", onRostersKey);
+  };
+  function onRostersKey(e) { if (e.key === "Escape") closeRosters(); }
+  document.getElementById("rovl-home").addEventListener("click", closeRosters);
+  document.addEventListener("keydown", onRostersKey);
 }
 
 /* ============================================================

@@ -566,3 +566,12 @@ span.estat { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ====== Vista de llistes de vestidor (overlay dins l'app, en comptes de pestanya nova) ====== */
+#rosters-overlay { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; background: #0E1C3D; }
+#rosters-overlay[hidden] { display: none; }
+.rovl__bar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #0E2A63; color: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.35); padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+.rovl__home { display: inline-flex; align-items: center; gap: 7px; border: 1.5px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; font-family: inherit; font-weight: 800; font-size: .9rem; border-radius: 999px; padding: 9px 16px; cursor: pointer; transition: all .15s ease; }
+.rovl__home:hover { background: rgba(255,255,255,.18); border-color: #fff; }
+.rovl__title { font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .03em; font-size: 1rem; color: #fff; opacity: .92; }
+.rovl__frame { flex: 1 1 auto; width: 100%; border: 0; background: transparent; }
