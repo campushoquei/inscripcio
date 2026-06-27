@@ -95,7 +95,6 @@ function init() {
   $("filters-toggle").addEventListener("click", toggleFiltersPanel);
   $("export-btn").addEventListener("click", () => exportCsv());
   $("emails-btn").addEventListener("click", exportEmails);
-  $("groups-config-btn").addEventListener("click", toggleGroupsConfig);
   $("groups-print-btn").addEventListener("click", printRosters);
   $("compare-btn").addEventListener("click", loadComparison);
   $("check-all").addEventListener("change", (e) => toggleSelectAll(e.target.checked));
@@ -605,7 +604,6 @@ function renderGroups() {
   tabs.querySelectorAll("[data-week]").forEach((b) =>
     b.addEventListener("click", () => { state.groupWeek = b.dataset.week; renderGroups(); }));
   renderGroupsBoard();
-  renderGroupsConfig();
 }
 
 function renderGroupsBoard() {
@@ -735,46 +733,6 @@ function onChipPointerUp() {
   }
 }
 
-function toggleGroupsConfig() {
-  const box = $("groups-config");
-  box.hidden = !box.hidden;
-  if (!box.hidden) renderGroupsConfig(true);
-}
-function renderGroupsConfig(force) {
-  const box = $("groups-config");
-  if (box.hidden && !force) return;
-  const groups = state.groups || DEFAULT_GROUPS;
-  box.innerHTML = `<p class="groups-config__hint">Assignació automàtica per edat. Els canvis manuals sempre tenen prioritat.</p>
-    <div class="groups-config__rows">` +
-    groups.map((g) => `<div class="gconf-row" data-color="${esc(g.color)}">
-      <span class="gconf-dot" style="background:${GROUP_HEX[g.color] || "#64748B"}"></span>
-      <span class="gconf-name">${esc(g.label)}</span>
-      <input class="gconf-min" type="number" min="0" max="99" value="${g.min}">
-      <span>–</span>
-      <input class="gconf-max" type="number" min="0" max="99" value="${g.max}">
-      <span class="cell-sub">anys</span>
-    </div>`).join("") +
-    `</div><div class="groups-config__actions"><button class="btn btn--primary btn--sm" id="gconf-save">Desa els intervals</button></div>`;
-  $("gconf-save").addEventListener("click", saveGroupsConfig);
-}
-async function saveGroupsConfig() {
-  const config = [...$("groups-config").querySelectorAll(".gconf-row")].map((r) => ({
-    color: r.dataset.color,
-    min: Number(r.querySelector(".gconf-min").value) || 0,
-    max: Number(r.querySelector(".gconf-max").value) || 99
-  }));
-  try {
-    const out = await api("admin_set_groups_config", { config });
-    state.groups = orderGroups((out.groups && out.groups.length) ? out.groups
-      : config.map((c) => ({ ...c, label: GROUP_LABEL[c.color] || c.color })));
-    toast("Intervals desats.");
-    renderGroups();
-    renderGroupFilter();
-    renderAges();
-    renderOccupancy();
-    applyFilters();
-  } catch (err) { toast("No s'ha pogut desar: " + err.message, true); }
-}
 
 /* ============================================================
    RENDER — Taula
