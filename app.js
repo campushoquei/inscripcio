@@ -1146,6 +1146,22 @@ function fieldEl(f, scope) {
   const err = document.createElement("p"); err.className = "field__error"; err.textContent = "Aquest camp és obligatori.";
   wrap.appendChild(err);
   if (f.id === "email") {
+    // Suggeriment de typo de domini (gmal.com → gmail.com). No bloqueja; es pot aplicar amb un clic.
+    const sug = document.createElement("button");
+    sug.type = "button"; sug.className = "field__suggest"; sug.hidden = true;
+    wrap.appendChild(sug);
+    const refreshSug = () => {
+      const s = emailSuggestion(control.value);
+      if (s) { sug.textContent = "Volies dir " + s + "?"; sug.dataset.fix = s; sug.hidden = false; }
+      else { sug.hidden = true; }
+    };
+    control.addEventListener("blur", refreshSug);
+    control.addEventListener("input", () => { if (!sug.hidden) sug.hidden = true; });
+    sug.addEventListener("click", () => {
+      control.value = sug.dataset.fix; sug.hidden = true;
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+      validateSingleField(wrap);
+    });
     const frag = document.createDocumentFragment();
     frag.appendChild(wrap);
     frag.appendChild(buildEmailConfirmField(scope, sfx));
@@ -1367,6 +1383,51 @@ function childWeeksEl(i) {
 }
 
 // ---- Recollida + validació ----
+/* ---------- Validació intel·ligent (punt 5) ---------- */
+// NIF (DNI) i NIE amb lletra de control correcta (mòdul 23), no només el format.
+const NIF_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
+function nifIsValid(value) {
+  const v = String(value || "").trim().toUpperCase().replace(/[\s-]/g, "");
+  if (/^[XYZ]\d{7}[A-Z]$/.test(v)) {
+    const num = ({ X: "0", Y: "1", Z: "2" })[v[0]] + v.slice(1, 8);
+    return v[8] === NIF_LETTERS[Number(num) % 23];
+  }
+  if (/^\d{8}[A-Z]$/.test(v)) return v[8] === NIF_LETTERS[Number(v.slice(0, 8)) % 23];
+  return false;
+}
+function nifLooksComplete(value) {
+  const v = String(value || "").trim().toUpperCase().replace(/[\s-]/g, "");
+  return /^\d{8}[A-Z]$/.test(v) || /^[XYZ]\d{7}[A-Z]$/.test(v);
+}
+// Telèfon espanyol: 9 dígits que comencen per 6/7/8/9 (accepta prefix +34 o 0034 i separadors).
+function phoneIsValid(value) {
+  const v = String(value || "").replace(/[\s.\-()]/g, "").replace(/^(\+34|0034)/, "");
+  return /^[6789]\d{8}$/.test(v);
+}
+// Suggeriment de typo de domini d'email (gmal.com → gmail.com), sense bloquejar.
+const EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "hotmail.es", "outlook.com", "outlook.es", "yahoo.com", "yahoo.es", "icloud.com", "live.com", "telefonica.net"];
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => { const r = new Array(n + 1).fill(0); r[0] = i; return r; });
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[m][n];
+}
+function emailSuggestion(value) {
+  const v = String(value || "").trim().toLowerCase();
+  const m = v.match(/^([^@\s]+)@([^@\s]+)$/);
+  if (!m) return null;
+  const domain = m[2];
+  if (EMAIL_DOMAINS.indexOf(domain) !== -1) return null;   // ja és un domini conegut
+  let best = null, bestD = 3;                              // tolerància de 2 errors
+  for (const d of EMAIL_DOMAINS) {
+    const dist = levenshtein(domain, d);
+    if (dist > 0 && dist < bestD) { bestD = dist; best = d; }
+  }
+  return best ? m[1] + "@" + best : null;
+}
+
 function validateSingleField(wrap) {
   const c = wrap.querySelector("[data-field]");
   if (!c) return true;
@@ -1395,12 +1456,16 @@ function validateSingleField(wrap) {
         if (!ref || ref.value.trim() !== val) {
           empty = true; if (errEl) errEl.textContent = "Els correus no coincideixen.";
         }
-      } else if (c.dataset.field === "nif" && !/^\d{8}[A-Za-z]$|^[XYZ]\d{7}[A-Za-z]$/i.test(val)) {
-        empty = true; if (errEl) errEl.textContent = "Format de NIF no vàlid (p.ex. 12345678A).";
+      } else if (c.dataset.field === "nif" && !nifIsValid(val)) {
+        empty = true;
+        // Si té el format correcte però falla el control, és que la lletra no quadra.
+        if (errEl) errEl.textContent = nifLooksComplete(val)
+          ? "La lletra del NIF/NIE no és correcta."
+          : "Format de NIF no vàlid (p. ex. 12345678A).";
       } else if (c.dataset.field === "codi_postal" && !/^\d{5}$/.test(val)) {
         empty = true; if (errEl) errEl.textContent = "El codi postal ha de tenir 5 dígits.";
-      } else if (c.dataset.field === "telefon" && !/^[0-9\s+\-.]{7,15}$/.test(val)) {
-        empty = true; if (errEl) errEl.textContent = "Introdueix un telèfon vàlid.";
+      } else if (c.dataset.field === "telefon" && !phoneIsValid(val)) {
+        empty = true; if (errEl) errEl.textContent = "Introdueix un telèfon vàlid de 9 dígits (p. ex. 612345678).";
       } else {
         if (errEl) errEl.textContent = "Aquest camp és obligatori.";
       }

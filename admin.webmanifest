@@ -1,0 +1,15 @@
+{
+  "name": "Panell · Campus d'Hoquei Riudebitlles",
+  "short_name": "Panell Hoquei",
+  "description": "Gestió d'inscripcions del Campus d'Hoquei Riudebitlles (pagaments, grups, llistes).",
+  "start_url": "admin.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0E2A63",
+  "theme_color": "#0E2A63",
+  "icons": [
+    { "src": "logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

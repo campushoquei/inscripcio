@@ -723,6 +723,9 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .field--invalid .input, .field--invalid .select, .field--invalid .textarea { border-color: var(--danger); }
 .field__error { color: var(--danger); font-size: .82rem; margin: 6px 0 0; display: none; }
 .field--invalid .field__error { display: block; }
+/* Suggeriment de correcció d'email (typo de domini): no bloqueja, es pot aplicar amb un clic */
+.field__suggest { display: block; margin: 6px 0 0; padding: 0; background: none; border: 0; font: inherit; font-size: .82rem; font-weight: 700; color: var(--blue); cursor: pointer; text-align: left; }
+.field__suggest:hover { color: var(--blue-deep); text-decoration: underline; }
 
 /* opcions radio/checkbox */
 .choices { display: flex; flex-direction: column; gap: 8px; }

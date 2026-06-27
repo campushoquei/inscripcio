@@ -60,6 +60,10 @@ const norm = (s) => String(s == null ? "" : s).toLowerCase().normalize("NFD").re
 document.addEventListener("DOMContentLoaded", init);
 
 function init() {
+  // PWA: registra el service worker del panell (instal·lable + càrrega ràpida/offline de la closca).
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("admin-sw.js").catch(() => {}));
+  }
   $("login-form").addEventListener("submit", onLogin);
   $("logout-btn").addEventListener("click", logout);
   $("refresh-btn").addEventListener("click", () => loadAll(true));
