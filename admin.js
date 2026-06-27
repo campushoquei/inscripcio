@@ -9,7 +9,7 @@
    ============================================================ */
 
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
-let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx72A3mHHPqc8lMSqQY6RDVKlQ8p_ukvk79mf1twgJ6geO-AoEmLrEEOwlodVWB0REX6Q/exec";
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwd6DenkPJ3ut5-lIiVKq4nr3TeMC6kHu8cX_iaZIYESYHXy_rgbPL2bw_Avwk5Kxfjtw/exec";
 
 const TOKEN_KEY = "casal_admin_token";  // token de sessió UUID (no el PIN)
 const VIEW_KEY  = "casal_admin_view2";  // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
@@ -46,7 +46,7 @@ const state = {
   groups: DEFAULT_GROUPS.slice(),
   groupWeek: "",
   selected: new Set(),
-  formScope: "active"   // per defecte només habilitado=TRUE · "all" = tots els formularis
+  formScope: "active"   // per defecte només dashboard_activo=TRUE · "all" = tots els formularis
 };
 
 const $ = (id) => document.getElementById(id);
@@ -131,10 +131,11 @@ function restoreView() {
 }
 
 // Formularis visibles al selector segons l'àmbit triat ("tots" o "només actius").
-// Un formulari és actiu si el camp "habilitado" no és FALSE (per defecte ho és).
+// Al dashboard, "actiu" es controla amb el camp "dashboard_activo" (independent de "habilitado",
+// que regeix el formulari públic). Si el backend no l'envia, caiem a "habilitado".
 function visibleForms() {
   if (state.formScope === "active") {
-    const act = state.forms.filter((f) => f.habilitado !== false);
+    const act = state.forms.filter((f) => (f.dashboardActiu != null ? f.dashboardActiu : f.habilitado) !== false);
     return act.length ? act : state.forms;   // si no n'hi ha cap d'actiu, mostra'ls tots
   }
   return state.forms;
@@ -173,7 +174,14 @@ async function api(action, extra) {
     body: JSON.stringify(body)
   });
   const out = await res.json();
-  if (!out.ok) throw new Error(out.error || "error");
+  if (!out.ok) {
+    // "unknown action" = el servidor (Apps Script desplegat) no coneix aquesta acció, és a dir,
+    // s'està parlant amb una versió antiga del backend. Missatge clar perquè no sembli un error
+    // del panell sinó del desplegament.
+    if (String(out.error) === "unknown action")
+      throw new Error("el servidor està desactualitzat — torna a desplegar l'Apps Script (mateix desplegament → versió nova)");
+    throw new Error(out.error || "error");
+  }
   return out;
 }
 
@@ -1756,9 +1764,9 @@ function toast(msg, isError) {
    ============================================================ */
 // Llista de formularis del mode demo (el selector de dalt).
 const DEMO_FORMS = [
-  { id: "estiu", nombre: "Casal d'Estiu 2026", habilitado: true },
-  { id: "primavera", nombre: "Casal de Primavera 2027", habilitado: true },
-  { id: "hivern", nombre: "Casal de Nadal 2026", habilitado: false }
+  { id: "estiu", nombre: "Casal d'Estiu 2026", habilitado: true, dashboardActiu: true },
+  { id: "primavera", nombre: "Casal de Primavera 2027", habilitado: true, dashboardActiu: false },
+  { id: "hivern", nombre: "Casal de Nadal 2026", habilitado: false, dashboardActiu: false }
 ];
 
 // Cada formulari té el seu propi conjunt de dades (setmanes, nom i quantitat),

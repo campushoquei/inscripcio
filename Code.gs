@@ -246,7 +246,12 @@ function readForms() {
   }).map(function (r) {
     var id = str(r.id || r.vs);
     var hab = (r.habilitado == null || String(r.habilitado).trim() === "") ? true : truthy(r.habilitado);
-    return { id: id, nombre: str(r.nombre), habilitado: hab, hoja: str(r.hoja), estacio: str(r.estacio) };
+    // "dashboard_activo" controla si el formulari es mostra al panell d'administració,
+    // independentment de "habilitado" (que controla el formulari públic). Si la columna no
+    // existeix o és buida, per compatibilitat caiem a "habilitado".
+    var dashRaw = r.dashboard_activo;
+    var dash = (dashRaw == null || String(dashRaw).trim() === "") ? hab : truthy(dashRaw);
+    return { id: id, nombre: str(r.nombre), habilitado: hab, dashboardActiu: dash, hoja: str(r.hoja), estacio: str(r.estacio) };
   });
 }
 function findForm(id) {
@@ -1185,10 +1190,10 @@ function adminAuth(pin) {
 function adminForms() {
   var g = readSettings("");
   var def = str(g.form_defecto);
-  var forms = readForms().map(function (f) { return { id: f.id, nombre: f.nombre || f.id, estacio: f.estacio, habilitado: f.habilitado }; });
-  if (!forms.length) forms = [{ id: def, nombre: str(g.nombre_campus) || "Formulari", estacio: "", habilitado: true }];
+  var forms = readForms().map(function (f) { return { id: f.id, nombre: f.nombre || f.id, estacio: f.estacio, habilitado: f.habilitado, dashboardActiu: f.dashboardActiu }; });
+  if (!forms.length) forms = [{ id: def, nombre: str(g.nombre_campus) || "Formulari", estacio: "", habilitado: true, dashboardActiu: true }];
   else if (def && !forms.some(function (f) { return f.id === def; })) {
-    forms.unshift({ id: def, nombre: str(g.nombre_campus) || def, estacio: "", habilitado: true });
+    forms.unshift({ id: def, nombre: str(g.nombre_campus) || def, estacio: "", habilitado: true, dashboardActiu: true });
   }
   return forms;
 }
