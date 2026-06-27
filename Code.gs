@@ -1201,6 +1201,14 @@ function adminForms() {
 // Router de les accions d'administració.
 function handleAdmin(p) {
   try {
+    // El panell ha de veure SEMPRE la configuració actual del full (formularis actius/inactius,
+    // ajustos...). Per a les accions de càrrega buidem la cau de config, de manera que en
+    // canviar l'Excel i refrescar el panell els canvis es vegin a l'instant, sense esperar que
+    // expiri la cau ni netejar-la a mà.
+    if (p.action === "admin_login" || p.action === "admin_session" || p.action === "admin_data" ||
+        p.action === "admin_overview" || p.action === "admin_list") {
+      clearConfigCache();
+    }
     // Login: autentica amb PIN i retorna un token de sessió UUID.
     if (p.action === "admin_login") {
       var auth = adminAuth(p.pin);
@@ -1222,10 +1230,10 @@ function handleAdmin(p) {
         var sc = readSettings("");
         return { ok: true, forms: adminForms(), settings: { nombre_campus: str(sc.nombre_campus), club: str(sc.club) } };
       }
-      case "admin_data": {       // overview + llista en una sola petició (cau compartida)
+      case "admin_data": {       // overview + llista (+ formularis, per refrescar quins són actius)
         var ov = adminOverview(form);
         var ls = adminList(form);
-        return { ok: true, overview: ov, list: ls.rows };
+        return { ok: true, overview: ov, list: ls.rows, forms: adminForms() };
       }
       case "admin_overview":    return adminOverview(form);
       case "admin_list":        return adminList(form);

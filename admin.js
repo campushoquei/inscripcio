@@ -9,7 +9,7 @@
    ============================================================ */
 
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
-let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCwzf8HrY75XDuQOvFq1wE2Qf9PTQH8MU6OQGd4LqLSl-m_Fymsu062PMvHSySzqTwbg/exec";
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwd6DenkPJ3ut5-lIiVKq4nr3TeMC6kHu8cX_iaZIYESYHXy_rgbPL2bw_Avwk5Kxfjtw/exec";
 
 const TOKEN_KEY = "casal_admin_token";  // token de sessió UUID (no el PIN)
 const VIEW_KEY  = "casal_admin_view2";  // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
@@ -298,6 +298,13 @@ async function loadAll(spin) {
     try {
       const out = await api("admin_data");          // 1 sola petició (ràpid)
       ov = out.overview; list = out.list || [];
+      // Refresca quins formularis són actius (dashboard_activo) sense haver de tornar a entrar.
+      if (out.forms && out.forms.length) {
+        state.forms = out.forms;
+        renderFormScope();
+        renderFormSelect();
+        $("form-select").value = state.form;
+      }
     } catch (e1) {
       // Backend antic sense "admin_data": tornem al mètode de 2 peticions.
       if (!/unknown action/i.test(e1.message)) throw e1;
