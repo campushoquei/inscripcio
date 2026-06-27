@@ -9,7 +9,7 @@
    ============================================================ */
 
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
-let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCwzf8HrY75XDuQOvFq1wE2Qf9PTQH8MU6OQGd4LqLSl-m_Fymsu062PMvHSySzqTwbg/exec";
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwd6DenkPJ3ut5-lIiVKq4nr3TeMC6kHu8cX_iaZIYESYHXy_rgbPL2bw_Avwk5Kxfjtw/exec";
 
 const TOKEN_KEY = "casal_admin_token";  // token de sessió UUID (no el PIN)
 const VIEW_KEY  = "casal_admin_view2";  // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
@@ -42,7 +42,7 @@ const state = {
   list: [],
   filtered: [],
   sort: { key: "nom", dir: "asc" },   // per defecte: ordenat per nom A→Z
-  filters: { q: "", week: "", status: "", group: "", swim: "", from: "", to: "" },
+  filters: { q: "", week: "", status: [], group: "", swim: "", from: "", to: "" },   // status: múltiple
   groups: DEFAULT_GROUPS.slice(),
   groupWeek: "",
   selected: new Set(),
@@ -72,7 +72,21 @@ function init() {
   $("search").addEventListener("input", onSearchInput);
   $("search").addEventListener("compositionupdate", onSearchInput);
   $("filter-week").addEventListener("change", (e) => { state.filters.week = e.target.value; applyFilters(); });
-  $("filter-status").addEventListener("change", (e) => { state.filters.status = e.target.value; applyFilters(); });
+  // PC: desplegable d'un sol estat. Escriu el mateix model (array) que les pills.
+  $("filter-status-sel").addEventListener("change", (e) => {
+    state.filters.status = e.target.value ? [e.target.value] : [];
+    syncFilterInputs();
+    applyFilters();
+  });
+  // Mòbil: pills de multi-selecció.
+  document.querySelectorAll("#filter-status .status-chip").forEach((b) =>
+    b.addEventListener("click", () => {
+      const arr = state.filters.status;
+      const i = arr.indexOf(b.dataset.status);
+      if (i >= 0) arr.splice(i, 1); else arr.push(b.dataset.status);
+      syncFilterInputs();
+      applyFilters();
+    }));
   $("filter-group").addEventListener("change", (e) => { state.filters.group = e.target.value; applyFilters(); });
   $("filter-swim").addEventListener("change", (e) => { state.filters.swim = e.target.value; applyFilters(); });
   $("filter-from").addEventListener("change", (e) => { state.filters.from = e.target.value; applyFilters(); });
@@ -124,7 +138,10 @@ function restoreView() {
     const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "null");
     if (!v) return;
     if (v.formScope === "active" || v.formScope === "all") state.formScope = v.formScope;
-    if (v.filters) state.filters = Object.assign({ q: "", week: "", status: "", group: "", swim: "", from: "", to: "" }, v.filters);
+    if (v.filters) state.filters = Object.assign({ q: "", week: "", status: [], group: "", swim: "", from: "", to: "" }, v.filters);
+    // Compatibilitat amb vistes desades quan l'estat era un sol valor (string).
+    if (typeof state.filters.status === "string") state.filters.status = state.filters.status ? [state.filters.status] : [];
+    if (!Array.isArray(state.filters.status)) state.filters.status = [];
     if (v.sort && v.sort.key) state.sort = v.sort;
     if (v.form && state.forms.some((f) => f.id === v.form)) state.form = v.form;
   } catch (_) {}
@@ -241,7 +258,11 @@ async function enter() {
 // Posa els controls de filtre d'acord amb l'estat (en restaurar la vista o netejar).
 function syncFilterInputs() {
   $("search").value = state.filters.q || "";
-  $("filter-status").value = state.filters.status || "";
+  const st = Array.isArray(state.filters.status) ? state.filters.status : [];
+  document.querySelectorAll("#filter-status .status-chip").forEach((b) =>
+    b.classList.toggle("is-active", st.includes(b.dataset.status)));
+  const stSel = $("filter-status-sel");
+  if (stSel) stSel.value = st.length === 1 ? st[0] : "";   // el desplegable (PC) mostra un sol valor
   $("filter-swim").value = state.filters.swim || "";
   $("filter-from").value = state.filters.from || "";
   $("filter-to").value = state.filters.to || "";
@@ -782,7 +803,7 @@ function applyFilters() {
   const { q, week, status, group, swim, from, to } = state.filters;
   const nq = norm(q);
   state.filtered = state.list.filter((r) => {
-    if (status && r.estat !== status) return false;
+    if (status && status.length && status.indexOf(r.estat) === -1) return false;
     if (week && !(r.weekIds || []).includes(week)) return false;
     if (from && (!r.ts || r.ts < from)) return false;
     if (to && (!r.ts || r.ts > to)) return false;
@@ -809,7 +830,8 @@ function applyFilters() {
 // Comptador de resultats + visibilitat del botó "Esborra filtres".
 function updateFilterMeta() {
   const f = state.filters;
-  const active = !!(f.q || f.week || f.status || f.group || f.swim || f.from || f.to);
+  const statusActive = Array.isArray(f.status) && f.status.length > 0;
+  const active = !!(f.q || f.week || statusActive || f.group || f.swim || f.from || f.to);
   const countEl = $("table-count");
   if (countEl) {
     countEl.hidden = false;
@@ -820,7 +842,7 @@ function updateFilterMeta() {
   const clear = $("clear-filters");
   if (clear) clear.hidden = !active;
   // Comptador de filtres actius (sense la cerca) per al badge del botó de filtres (mòbil)
-  const n = ["week", "status", "group", "swim", "from", "to"].filter((k) => f[k]).length;
+  const n = ["week", "group", "swim", "from", "to"].filter((k) => f[k]).length + (statusActive ? 1 : 0);
   const badge = $("filters-badge");
   if (badge) { badge.hidden = n === 0; badge.textContent = String(n); }
   const tgl = $("filters-toggle");
@@ -835,7 +857,7 @@ function toggleFiltersPanel() {
 }
 
 function clearFilters() {
-  state.filters = { q: "", week: "", status: "", group: "", swim: "", from: "", to: "" };
+  state.filters = { q: "", week: "", status: [], group: "", swim: "", from: "", to: "" };
   $("filter-week").value = "";
   $("filter-group").value = "";
   syncFilterInputs();
@@ -1451,7 +1473,8 @@ function printRosters() {
   const logo = (() => { try { return new URL("logo.png", location.href).href; } catch (_) { return ""; } })();
 
   // Targeta-equip d'un grup (vestidor) per a una setmana.
-  const PER_COL = 15;   // noms per columna abans de passar a multicolumna (evita partir el grup entre pàgines)
+  const ROWS_WEB = 6;    // màx. nens per columna a la web (la resta flueix a una columna del costat)
+  const ROWS_PDF = 12;   // màx. nens per columna al PDF
   const teamFor = (g, list) => {
     const hex = GROUP_HEX[g.color] || "#64748B";
     const ll = list.slice().sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
@@ -1461,11 +1484,11 @@ function printRosters() {
       const age = r.edat !== "" && r.edat != null ? `<span class="age">${esc(String(r.edat))}a</span>` : "";
       return `<li>${ns}<span class="nm">${esc(r.nom || "—")}</span>${age}</li>`;
     }).join("");
-    // Cada grup ocupa sempre el seu quadrant (vista 2×2). Si té molts nens/es, reparteix els
-    // noms en columnes DINS del quadrant perquè càpiga sense desbordar-se ni trencar la graella.
-    const ncols = ll.length > PER_COL ? 2 : 1;
-    const wide = ncols > 1 ? " team--cols" : "";
-    return `<div class="team${ll.length ? "" : " team--empty"}${wide}" style="--gc:${hex};--cols:${ncols}">
+    // Nombre de columnes internes: prou perquè cada columna tingui com a màxim N noms (la llista
+    // es reparteix en columnes al costat en lloc de fer scroll). --cw per a la web, --cp per al PDF.
+    const cw = Math.max(1, Math.ceil(ll.length / ROWS_WEB));
+    const cp = Math.max(1, Math.ceil(ll.length / ROWS_PDF));
+    return `<div class="team${ll.length ? "" : " team--empty"}" style="--gc:${hex};--cw:${cw};--cp:${cp}">
       <div class="team__head">
         <span class="team__badge">${ll.length}</span>
         <span class="team__name">${esc(g.label)}</span>
@@ -1511,7 +1534,7 @@ function printRosters() {
       radial-gradient(1000px 600px at 110% 0%,rgba(99,102,241,.18),transparent 55%),var(--paper);}
     /* Capçalera */
     .hero{position:sticky;top:0;z-index:9;background:rgba(14,28,61,.78);backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
-    .hero__in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:14px 18px;}
+    .hero__in{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:14px 18px;}
     .emblem{width:46px;height:46px;border-radius:13px;overflow:hidden;flex:0 0 auto;box-shadow:0 8px 22px rgba(0,0,0,.4);}
     .emblem img{width:100%;height:100%;object-fit:cover;display:block;}
     .hero h1{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:1.25rem;color:#fff;margin:0;line-height:1;}
@@ -1519,14 +1542,24 @@ function printRosters() {
     .printbtn{margin-left:auto;border:0;cursor:pointer;font-family:inherit;font-weight:800;font-size:.9rem;color:var(--navy);background:#fff;border-radius:999px;padding:11px 20px;box-shadow:0 8px 22px rgba(0,0,0,.3);display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
     .printbtn:active{transform:translateY(1px);}
     /* Selector de setmanes */
-    .picker{max-width:1180px;margin:0 auto;padding:16px 18px 4px;}
+    .picker{max-width:1400px;margin:0 auto;padding:16px 18px 4px;}
     .picker__hint{color:rgba(255,255,255,.6);font-size:.76rem;font-weight:600;margin:0 0 9px;}
     .chips{display:flex;flex-wrap:wrap;gap:8px;}
     .chip{border:1.5px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-family:inherit;font-weight:700;font-size:.85rem;border-radius:999px;padding:8px 16px;cursor:pointer;transition:all .15s ease;}
     .chip:hover{border-color:#fff;background:rgba(255,255,255,.14);}
     .chip.on{background:#fff;color:var(--navy);border-color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.25);}
+    /* Fila de setmanes + botó de "no nedadors" a la dreta */
+    .chips-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+    .chips-row .chips{flex:1 1 auto;}
+    /* Botó per mostrar/amagar les marques de "no sap nedar" */
+    .optbtn{margin-left:auto;border:1.5px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-family:inherit;font-weight:700;font-size:.82rem;border-radius:999px;padding:8px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .15s ease;white-space:nowrap;}
+    .optbtn:hover{border-color:#fff;}
+    .optbtn.is-on{background:rgba(22,163,74,.22);border-color:#34D399;color:#fff;}
+    .optbtn:not(.is-on){opacity:.6;}
+    /* Quan està amagat, no es mostren ni les icones per nen ni el resum del bàner */
+    body.hide-noswim .ns, body.hide-noswim .kpi--ns{display:none!important;}
     /* Setmana */
-    .wrap{max-width:1180px;margin:0 auto;padding:10px 18px;}
+    .wrap{max-width:1400px;margin:0 auto;padding:10px 18px;}
     .wk{margin:14px 0 26px;}
     .wk__banner{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;
       background:linear-gradient(120deg,var(--blue),#6366F1);border-radius:20px 20px 6px 6px;padding:18px 22px;color:#fff;box-shadow:0 14px 34px rgba(31,90,224,.35);}
@@ -1538,17 +1571,20 @@ function printRosters() {
     .kpi b{font-size:.95rem;}
     .kpi--ns{background:rgba(0,0,0,.22);}
     /* Targetes-equip · graella 2×2 fixa (un grup per quadrant) */
-    .teams{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:14px;align-items:start;}
-    .team{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.22);display:flex;flex-direction:column;}
-    .team--cols .team__list{column-count:var(--cols,2);column-gap:10px;}
+    /* Stretch: les dues taules d'una mateixa fila igualen l'alçada (la més plena marca la mida);
+       l'espai sobrant de la més curta es completa amb el color de fons del grup. */
+    .teams{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:14px;align-items:stretch;}
+    .team{background:color-mix(in srgb,var(--gc) 6%,#fff);border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.22);display:flex;flex-direction:column;}
     .team__head{display:flex;align-items:center;gap:12px;padding:13px 16px;color:#fff;
       background:linear-gradient(135deg,var(--gc),color-mix(in srgb,var(--gc) 62%,#0b1430));}
     .team__badge{flex:0 0 auto;min-width:34px;height:34px;border-radius:50%;background:#fff;color:var(--gc);
       font-family:"Anton",sans-serif;font-size:1.1rem;display:flex;align-items:center;justify-content:center;padding:0 8px;box-shadow:0 3px 8px rgba(0,0,0,.25);}
     .team__name{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.02em;font-size:1.2rem;}
-    .team__list{list-style:none;margin:0;padding:6px 8px 10px;counter-reset:n;}
-    .team__list li{display:flex;align-items:center;gap:10px;padding:8px 8px;font-size:.95rem;border-radius:9px;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .team__list li:nth-child(odd){background:color-mix(in srgb,var(--gc) 7%,#fff);}
+    /* A la web, omple fins a 6 noms per columna i després passa a la columna del costat
+       (column-fill:auto + alçada de 6 files; la fila té alçada fixa perquè el tall sigui exacte). */
+    .team__list{list-style:none;margin:0;padding:6px 8px 10px;counter-reset:n;column-count:var(--cw,1);column-gap:10px;column-fill:auto;max-height:248px;}
+    .team__list li{display:flex;align-items:center;gap:10px;padding:0 8px;height:38px;box-sizing:border-box;font-size:.95rem;border-radius:9px;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .team__list li:nth-child(odd){background:color-mix(in srgb,var(--gc) 13%,#fff);}
     .team__list li::before{counter-increment:n;content:counter(n);flex:0 0 auto;width:22px;height:22px;border-radius:7px;
       background:color-mix(in srgb,var(--gc) 16%,#fff);color:color-mix(in srgb,var(--gc) 78%,#10203f);font-size:.72rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
     .nm{font-weight:700;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1558,7 +1594,7 @@ function printRosters() {
     .team--empty{opacity:.55;}
     .team__empty{color:var(--ink-soft);font-size:.85rem;text-align:center;padding:16px 0;margin:0;}
     /* Peu */
-    .foot{max-width:1180px;margin:18px auto 0;padding:0 18px;color:rgba(255,255,255,.45);font-size:.74rem;text-align:center;}
+    .foot{max-width:1400px;margin:18px auto 0;padding:0 18px;color:rgba(255,255,255,.45);font-size:.74rem;text-align:center;}
     @media(max-width:600px){
       .hero h1{font-size:1.05rem;} .hero .sub{display:none;}
       .printbtn{padding:9px 14px;font-size:.82rem;}
@@ -1581,15 +1617,16 @@ function printRosters() {
       .wk__name{font-size:1.4rem;}
       /* Graella 2×2 fixa: un grup per quadrant. Els grups grans reparteixen els noms en
          columnes internes dins del seu quadrant. */
-      .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;align-items:start;}
-      .team{overflow:visible;box-shadow:none;border:1px solid #ccc;
+      .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;align-items:stretch;}
+      .team{overflow:hidden;box-shadow:none;border:1px solid #ccc;
             break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid;}
-      .team--cols .team__list{column-count:var(--cols,2);column-gap:10px;}
+      /* PDF: omple fins a 12 noms per columna i després passa a la del costat
+         (column-fill:auto + alçada de 12 files de 26px). */
+      .team__list{column-count:var(--cp,1);column-gap:10px;padding:4px 7px 7px;column-fill:auto;max-height:328px;}
       .team__head{padding:9px 13px;}
       .team__name{font-size:1.05rem;}
       .team__badge{min-width:28px;height:28px;font-size:.95rem;}
-      .team__list{padding:4px 7px 7px;}
-      .team__list li{padding:4px 7px;font-size:.84rem;}
+      .team__list li{padding:0 7px;height:26px;font-size:.84rem;}
       .team__list li::before{width:18px;height:18px;}
     }`;
 
@@ -1617,9 +1654,17 @@ function printRosters() {
       wrap.style.paddingTop='0'; wrap.style.paddingBottom='0';
       if (boxW){ wrap.style.width=boxW+'px'; wrap.style.maxWidth=boxW+'px'; }
       else { window.scrollTo(0,0); }
-      var nh = wk.offsetHeight, nw = wk.offsetWidth;
-      if (nh<=0 || boxH<=0) return;
-      var scale = Math.min(1, (boxH-4)/nh);
+      // Alçada de referència = la setmana MÉS ALTA (mesurem totes, encara que estiguin amagades).
+      // Així totes fan servir la MATEIXA escala i, per tant, la mateixa amplada.
+      var ref = 0;
+      document.querySelectorAll('.wk').forEach(function(s){
+        var wasHidden = s.hidden; s.hidden = false;
+        var h = s.offsetHeight; if (h > ref) ref = h;
+        s.hidden = wasHidden;
+      });
+      var nw = wk.offsetWidth;
+      if (ref<=0 || boxH<=0) return;
+      var scale = Math.min(1, (boxH-4)/ref);
       if (boxW){ scale = Math.min(scale, boxW/nw); }
       wk.style.transformOrigin = boxW ? 'top left' : 'top center';
       wk.style.transform = scale<1 ? 'scale('+scale+')' : '';
@@ -1627,14 +1672,10 @@ function printRosters() {
       wrap.style.overflow='hidden';
       if (!boxW) document.body.style.overflow='hidden';
     }
-    // Pantalla: encaixa a l'alçada lliure de la finestra.
-    function fit(){
-      if (document.body.dataset.show==='all'){ resetFit(); return; }
-      var wrap = document.querySelector('.wrap');
-      resetFit(); window.scrollTo(0,0);
-      var top = wrap.getBoundingClientRect().top;
-      applyFit(window.innerHeight - top - 8, null);
-    }
+    // Pantalla: NO escalem. Cada setmana individual es mostra exactament a la mateixa amplada
+    // que la vista "Totes" (amplada completa); si és molt alta, la pàgina fa scroll amb normalitat.
+    // L'encaix a una pàgina només s'aplica en imprimir (fitPrint).
+    function fit(){ resetFit(); }
     // Impressió: encaixa la setmana en UNA pàgina A4 vertical (marges 8mm) → mai es parteix.
     function fitPrint(){
       if (document.body.dataset.show==='all'){ resetFit(); return; }
@@ -1654,6 +1695,16 @@ function printRosters() {
     // En obrir, mostra la primera setmana ja encaixada (foto completa sense scroll).
     var firstChip = document.querySelector('.chip[data-week]:not([data-week="all"])');
     if (firstChip){ pick(firstChip.dataset.week); } else { fit(); }
+    // Botó per mostrar/amagar les marques de "no sap nedar" (per defecte, mostrades).
+    var nsBtn = document.getElementById('toggle-ns');
+    function renderNs(){
+      var shown = !document.body.classList.contains('hide-noswim');
+      nsBtn.classList.toggle('is-on', shown);
+      nsBtn.setAttribute('aria-pressed', shown ? 'true' : 'false');
+      nsBtn.title = shown ? 'Amaga les marques de "no sap nedar"' : 'Mostra les marques de "no sap nedar"';
+    }
+    nsBtn.addEventListener('click', function(){ document.body.classList.toggle('hide-noswim'); renderNs(); fit(); });
+    renderNs();
     // Refit després de carregar fonts/imatges (poden canviar l'alçada mesurada).
     setTimeout(fit, 350);
     if (document.fonts && document.fonts.ready){ document.fonts.ready.then(fit); }`;
@@ -1674,7 +1725,10 @@ function printRosters() {
       </div></div>
       <div class="picker">
         <p class="picker__hint">Tria una setmana per compartir-la (captura de pantalla) o imprimir-la · «Totes» per veure-les juntes</p>
-        <div class="chips">${chips}</div>
+        <div class="chips-row">
+          <div class="chips">${chips}</div>
+          <button class="optbtn is-on" id="toggle-ns" type="button">🐠 Mostrar no nedadors</button>
+        </div>
       </div>
       <div class="wrap">${body}</div>
       <p class="foot">${esc(camp)} · ${totalKids} inscrits en total</p>

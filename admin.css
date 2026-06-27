@@ -357,8 +357,10 @@ span.estat { cursor: default; }
 .compare__sub { font-size: .78rem; color: var(--ink-soft); font-weight: 600; }
 .compare__loading { color: var(--ink-soft); font-size: .85rem; font-weight: 600; }
 
-/* ---------- Filtre d'estat (multi-selecció amb pills) ---------- */
-.status-filter { display: inline-flex; gap: 6px; align-items: center; }
+/* ---------- Filtre d'estat ----------
+   PC: desplegable d'un sol valor (.filter-status-sel). Mòbil: pills de multi-selecció
+   (.status-filter), que per defecte queden amagades i només es mostren al breakpoint mòbil. */
+.status-filter { display: none; gap: 6px; align-items: center; }
 .status-chip {
   border: 1.5px solid var(--line); background: #fff; color: var(--ink-soft);
   border-radius: 999px; padding: 9px 14px; font-family: inherit; font-size: .85rem; font-weight: 700;
@@ -483,7 +485,8 @@ span.estat { cursor: default; }
   .filters.is-open .date-filter,
   .filters.is-open #emails-btn,
   .filters.is-open #export-btn { display: none; }
-  /* L'estat (multi-selecció) ocupa tota l'amplada i reparteix les 3 pills en una fila, compactes */
+  /* A mòbil: amaguem el desplegable d'estat i mostrem les pills de multi-selecció */
+  .filters.is-open .filter-status-sel { display: none; }
   .filters.is-open .status-filter { grid-column: 1 / -1; display: flex; gap: 6px; }
   .filters.is-open .status-chip { flex: 1; text-align: center; padding: 7px 4px; font-size: .78rem; }
 

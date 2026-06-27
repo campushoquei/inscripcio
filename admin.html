@@ -131,12 +131,19 @@
           </button>
           <div class="filters" id="filters">
             <select id="filter-week" aria-label="Filtra per setmana"><option value="">Totes les setmanes</option></select>
-            <select id="filter-status" aria-label="Filtra per estat">
+            <!-- PC: desplegable d'un sol estat -->
+            <select id="filter-status-sel" class="filter-status-sel" aria-label="Filtra per estat">
               <option value="">Tots els estats</option>
               <option value="Pagat">Pagat</option>
               <option value="Parcial">Parcial</option>
               <option value="Pendent">Pendent</option>
             </select>
+            <!-- Mòbil: pills de multi-selecció -->
+            <div class="status-filter" id="filter-status" role="group" aria-label="Filtra per estat (pots triar-ne més d'un)">
+              <button class="status-chip" type="button" data-status="Pagat">Pagat</button>
+              <button class="status-chip" type="button" data-status="Parcial">Parcial</button>
+              <button class="status-chip" type="button" data-status="Pendent">Pendent</button>
+            </div>
             <select id="filter-group" aria-label="Filtra per grup"><option value="">Tots els grups</option></select>
             <select id="filter-swim" aria-label="Filtra per saber nedar">
               <option value="">Nedar (tots)</option>
