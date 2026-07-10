@@ -202,9 +202,6 @@ body {
   box-shadow: 0 14px 36px -16px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.25);
   animation: rise .6s .55s ease both;   /* entra com un sol bloc, després del lead */
 }
-/* Els duplicats només existeixen per a la marquesina del mòbil.
-   Doble classe: guanya el display:inline-flex de .hero-fact (que va després). */
-.hero-fact.hero-fact--dup { display: none; }
 .hero-fact {
   position: relative;
   display: inline-flex; align-items: center; gap: 10px;
@@ -235,38 +232,30 @@ body {
   font-size: .92rem; font-weight: 700; color: #0E2A63;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* Al mòbil: UNA sola línia en marquesina contínua però INTERACTIVA: és un scroll
-   natiu que el JS fa avançar sol (setupFactsMarquee); el dit de l'usuari sempre
-   guanya i el moviment es reprèn després d'uns segons. Esvaïment a les vores.
-   Els xips tornen a ser targetes soltes amb l'estil clar del formulari. */
+/* Al mòbil: res de caixes — el hero mòbil és tipogràfic i clar, així que les
+   dades van com una fitxa editorial de text (icona + valor) en DUES línies
+   estables: les dades curtes a dalt i el lloc sempre a la seva pròpia línia. */
 @media (max-width: 520px) {
-  .hero-facts {
-    margin-top: 18px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
-    mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
-  }
-  .hero-facts::-webkit-scrollbar { display: none; }
+  .hero-facts { margin-top: 16px; }
   .hero-facts__track {
-    flex-wrap: nowrap; width: max-content;
-    background: none; border: none; border-radius: 0;
-    -webkit-backdrop-filter: none; backdrop-filter: none;
-    animation: none;
+    display: flex; flex-wrap: wrap; gap: 8px 18px;
+    width: 100%;
+    background: none; border: none; border-radius: 0; box-shadow: none;
   }
-  .hero-fact.hero-fact--dup { display: inline-flex; }
-  .hero-fact {
-    margin-right: 8px;   /* en lloc de gap: així el bucle de mig recorregut encaixa exacte */
-    padding: 7px 13px 7px 8px; border-radius: 12px;
-    background: var(--card);
-    border: 1px solid var(--line-ink);
-    box-shadow: 0 1px 3px rgba(14,42,99,.06);
+  .hero-fact { padding: 0; gap: 6px; align-items: center; }
+  .hero-fact:not(:first-child)::before { content: none; }   /* sense separadors */
+  /* El lloc (últim xip, valor llarg) sempre en línia pròpia: composició estable */
+  .hero-fact:last-child { flex-basis: 100%; }
+  .hero-fact__icon {
+    width: 15px; height: 15px; border-radius: 0;
+    background: none; color: var(--blue);
   }
-  .hero-fact::before { display: none; }   /* targetes soltes: sense separadors */
-  .hero-fact__icon { width: 28px; height: 28px; background: var(--blue-soft); color: var(--blue); }
-  .hero-fact__label { color: var(--ink-soft); }
-  .hero-fact__value { font-size: .84rem; color: var(--navy); }
+  .hero-fact__icon svg { width: 14px; height: 14px; }
+  .hero-fact__label { display: none; }
+  .hero-fact__value {
+    font-size: .85rem; font-weight: 600; color: var(--navy);
+    white-space: normal; line-height: 1.35;
+  }
 }
 
 /* línies de la pista (blaves sobre el parquet de la dreta) */
@@ -712,6 +701,12 @@ body {
 
 /* ---------- Seccions del formulari ---------- */
 .form { animation: rise .5s ease both; }
+/* Aparició amb l'scroll (PC sense wizard): .sec-reveal la posa el JS */
+.section.sec-reveal { opacity: 0; transform: translateY(18px); }
+.section.sec-reveal.sec-inview {
+  opacity: 1; transform: none;
+  transition: opacity .55s ease, transform .55s ease;
+}
 .section {
   background: var(--card); border: 1px solid var(--line-ink); border-radius: var(--radius);
   padding: 22px 20px; margin-bottom: 18px; box-shadow: var(--shadow);
@@ -1653,6 +1648,14 @@ body.pc-summary-on .child-price { display: none !important; }
   font-size: .8rem; padding: 4px 10px; border-radius: 999px;
   background: var(--card); border: 1.5px solid var(--line-ink);
   color: var(--ink-soft); font-weight: 600;
+}
+
+/* Xifres tabulars a tots els imports: amplada fixa per dígit → columnes de preus
+   perfectament alineades i sense salts d'amplada quan el total canvia. */
+.price-tier__price, .price-table__price, .child-price__amount,
+.price-total__amount, .price-total__week-price,
+.pcsum__amount, .pcsum__week-price, .pcsum__total-amount {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================

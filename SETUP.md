@@ -53,7 +53,7 @@ Apps Script (Code.gs) ─► Google Sheet (base de dades)
 
 Les claus `hero_dates`, `hero_horari`, `hero_lloc` i `hero_edats` pinten una fitxa
 de dades sota el text del hero (Dates · Horari · Edats · Lloc). Al mòbil es mostra
-en una sola línia que es desplaça sola en bucle (i es pot arrossegar amb el dit).
+com una línia de text compacta amb icones (sense targeta).
 **Totes són opcionals**: només surten els xips que tinguin valor,
 i si no n'hi ha cap el bloc no apareix. Com qualsevol altra clau, es poden
 personalitzar per formulari amb la columna `form` (p. ex. una fila

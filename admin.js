@@ -1527,6 +1527,8 @@ function printRosters() {
     .optbtn:not(.is-on){opacity:.6;}
     /* Quan està amagat, no es mostren ni les icones per nen ni el resum del bàner */
     body.hide-noswim .ns, body.hide-noswim .kpi--ns{display:none!important;}
+    /* Quan està amagat, no es mostra l'edat dels nens i nenes */
+    body.hide-age .age{display:none!important;}
     /* Setmana */
     .wrap{max-width:1400px;margin:0 auto;padding:10px 18px;}
     .wk{margin:14px 0 26px;}
@@ -1674,6 +1676,16 @@ function printRosters() {
     }
     nsBtn.addEventListener('click', function(){ document.body.classList.toggle('hide-noswim'); renderNs(); fit(); });
     renderNs();
+    // Botó per mostrar/amagar l'edat dels nens i nenes (per defecte, mostrada).
+    var ageBtn = document.getElementById('toggle-age');
+    function renderAge(){
+      var shown = !document.body.classList.contains('hide-age');
+      ageBtn.classList.toggle('is-on', shown);
+      ageBtn.setAttribute('aria-pressed', shown ? 'true' : 'false');
+      ageBtn.title = shown ? "Amaga l'edat dels nens i nenes" : "Mostra l'edat dels nens i nenes";
+    }
+    ageBtn.addEventListener('click', function(){ document.body.classList.toggle('hide-age'); renderAge(); fit(); });
+    renderAge();
     // Refit després de carregar fonts/imatges (poden canviar l'alçada mesurada).
     setTimeout(fit, 350);
     if (document.fonts && document.fonts.ready){ document.fonts.ready.then(fit); }`;
@@ -1695,6 +1707,7 @@ function printRosters() {
         <div class="chips-row">
           <div class="chips">${chips}</div>
           <button class="optbtn is-on" id="toggle-ns" type="button">🐠 Mostrar no nedadors</button>
+          <button class="optbtn is-on" id="toggle-age" type="button">🎂 Mostrar edat</button>
         </div>
       </div>
       <div class="wrap">${body}</div>

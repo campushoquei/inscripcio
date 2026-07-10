@@ -319,62 +319,20 @@ function renderHeroFacts(s) {
   if (!box) return;
   const facts = HERO_FACTS.filter((f) => s[f.key] != null && String(s[f.key]).trim() !== "");
   box.hidden = !facts.length;
-  const chip = (f, i, dup) =>
-    `<span class="hero-fact${dup ? " hero-fact--dup" : ""}"${dup ? ' aria-hidden="true"' : ""}>` +
-      `<span class="hero-fact__icon" aria-hidden="true">` +
-        `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${f.icon}</svg>` +
-      `</span>` +
-      `<span class="hero-fact__body">` +
-        `<span class="hero-fact__label">${escapeHtml(f.label)}</span>` +
-        `<span class="hero-fact__value">${escapeHtml(String(s[f.key]))}</span>` +
-      `</span>` +
-    `</span>`;
-  // Al mòbil la fila és una marquesina en bucle: dupliquem els xips (ocults a PC)
-  // perquè, en tornar a l'inici, el salt de mig recorregut sigui invisible.
   box.innerHTML =
     `<div class="hero-facts__track">` +
-      facts.map((f, i) => chip(f, i, false)).join("") +
-      facts.map((f, i) => chip(f, i, true)).join("") +
+      facts.map((f) =>
+        `<span class="hero-fact">` +
+          `<span class="hero-fact__icon" aria-hidden="true">` +
+            `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${f.icon}</svg>` +
+          `</span>` +
+          `<span class="hero-fact__body">` +
+            `<span class="hero-fact__label">${escapeHtml(f.label)}</span>` +
+            `<span class="hero-fact__value">${escapeHtml(String(s[f.key]))}</span>` +
+          `</span>` +
+        `</span>`
+      ).join("") +
     `</div>`;
-  setupFactsMarquee(box);
-}
-
-// Marquesina interactiva dels xips (només mòbil): el carril és un scroll natiu
-// que avancem sol amb rAF; si l'usuari el toca/arrossega, mana ell i el moviment
-// es reprèn al cap d'uns segons des d'on l'hagi deixat. El contingut duplicat
-// permet el bucle infinit: en passar de la meitat, restem mig recorregut (invisible).
-function setupFactsMarquee(box) {
-  if (box.dataset.marqueeInit) { if (box._marqueeReset) box._marqueeReset(); return; }
-  box.dataset.marqueeInit = "1";
-  const mq = window.matchMedia("(max-width: 520px)");
-  const rm = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const SPEED = 26;           // px/s de creuer
-  const RESUME_AFTER = 500;   // ms sense tocar abans de reprendre
-  let pos = 0, last = null, pausedUntil = 0;
-  box._marqueeReset = () => { pos = 0; last = null; box.scrollLeft = 0; };
-  const half = () => { const t = box.firstElementChild; return t ? t.scrollWidth / 2 : 0; };
-  const pause = () => { pausedUntil = performance.now() + RESUME_AFTER; };
-  box.addEventListener("touchstart", pause, { passive: true });
-  box.addEventListener("touchmove", pause, { passive: true });
-  box.addEventListener("scroll", () => {
-    // Scroll que no ve del nostre tick (dit o inèrcia): pausa i seguim la seva posició
-    if (Math.abs(box.scrollLeft - pos) > 1.5) { pause(); pos = box.scrollLeft; }
-    // Embolcall del bucle també quan el mou l'usuari
-    const h = half();
-    if (h && box.scrollLeft >= h) { box.scrollLeft -= h; pos = box.scrollLeft; }
-  }, { passive: true });
-  requestAnimationFrame(function tick(t) {
-    requestAnimationFrame(tick);
-    if (!mq.matches || rm.matches) { last = t; return; }
-    if (last == null) { last = t; return; }
-    const dt = Math.min(0.1, (t - last) / 1000); last = t;
-    if (performance.now() < pausedUntil) { pos = box.scrollLeft; return; }
-    const h = half();
-    if (!h || h <= box.clientWidth * 0.6) return;   // contingut curt: no cal moure res
-    pos += SPEED * dt;
-    if (pos >= h) pos -= h;
-    box.scrollLeft = pos;
-  });
 }
 
 // Omple les dades de contacte al footer
@@ -478,8 +436,8 @@ function initHeroSlider() {
     hero.dataset.swipeInit = "1";
     let startY = 0;
     hero.addEventListener("touchstart", function(e) {
-      // Si el toc comença dins de la barra de pills o de la fila de xips (totes
-      // dues amb scroll horitzontal propi), ignorem el swipe del hero
+      // Si el toc comença dins de la barra de pills (scroll propi) o de la fitxa
+      // de dades (text pla, sense comportament), ignorem el swipe del hero
       if (e.target.closest("#hero-nav") || e.target.closest("#hero-facts")) { heroTouchStartX = null; return; }
       heroTouchStartX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
@@ -513,6 +471,38 @@ function applyHeroTheme(estacio) {
   ["estiu", "hivern", "primavera", "tardor"].forEach(function(s) { hero.classList.remove("season-" + s); });
   const s = String(estacio || "").toLowerCase().trim();
   if (s) hero.classList.add("season-" + s);
+  applySeasonBrand(s);
+}
+
+// Tenyeix la barra del navegador (meta theme-color) i el favicon amb l'accent de
+// l'estació activa: a Android/Chrome el marc del navegador fa joc amb el hero.
+const SEASON_BRAND = { estiu: "#C28A00", primavera: "#15A349", tardor: "#D97706", hivern: "#1F5AE0" };
+function applySeasonBrand(estacio) {
+  const accent = SEASON_BRAND[estacio] || "#0E2A63";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", accent);
+  // Favicon: el logo amb un punt de l'accent a la cantonada (dibuixat en canvas).
+  // El número de seqüència evita que, canviant ràpid de formulari, una càrrega
+  // antiga que arriba tard pinti el color de l'estació equivocada.
+  const seq = (applySeasonBrand._seq = (applySeasonBrand._seq || 0) + 1);
+  try {
+    const img = new Image();
+    img.onload = () => {
+      if (seq !== applySeasonBrand._seq) return;
+      try {
+        const c = document.createElement("canvas");
+        c.width = c.height = 64;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, 64, 64);
+        ctx.beginPath(); ctx.arc(49, 49, 13, 0, Math.PI * 2);
+        ctx.fillStyle = accent; ctx.fill();
+        ctx.lineWidth = 5; ctx.strokeStyle = "#fff"; ctx.stroke();
+        const link = document.querySelector('link[rel="icon"]');
+        if (link) link.href = c.toDataURL("image/png");
+      } catch {}
+    };
+    img.src = "logo.png";
+  } catch {}
 }
 
 async function switchHeroForm(idx) {
@@ -564,6 +554,31 @@ function renderForm() {
   if (lastSection && consentEl) lastSection.appendChild(consentEl);
 
   initWizard();
+  setupSectionReveal();
+}
+
+// ---- Aparició de seccions amb l'scroll (PC, sense wizard) ----
+// El JS afegeix .sec-reveal (estat ocult) i l'observer la converteix en .sec-inview
+// en entrar al viewport. Com que l'estat ocult només el posa el JS, si alguna cosa
+// falla o l'usuari prefereix menys moviment, les seccions es veuen amb normalitat.
+let sectionRevealIO = null;
+function setupSectionReveal() {
+  if (wizardSteps.length) return;   // al wizard les seccions van per passos
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (!sectionRevealIO) {
+    sectionRevealIO = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting) {
+          en.target.classList.add("sec-inview");
+          sectionRevealIO.unobserve(en.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+  }
+  els.sections.querySelectorAll(".section").forEach((sec) => {
+    sec.classList.add("sec-reveal");
+    sectionRevealIO.observe(sec);
+  });
 }
 
 // ---- Wizard de passos ----
@@ -1702,6 +1717,17 @@ async function onSubmit(e) {
     if (pendingUploads.length) await Promise.allSettled(pendingUploads);
 
     const { shared, children } = collect();
+
+    // Ja es va enviar aquest jugador/a des d'aquest dispositiu? Confirmem abans:
+    // el servidor substituirà la fila anterior (mateixa família), no en crearà una de nova.
+    const dup = findLocalDuplicate(children);
+    if (dup) {
+      const when = new Date(dup.ts).toLocaleDateString("ca-ES", { day: "numeric", month: "long" });
+      const msg = `Ja vas enviar una inscripció de ${dup.name} el ${when}. ` +
+        `Si continues, la nova inscripció substituirà l'anterior. Vols continuar?`;
+      if (!window.confirm(msg)) return;
+    }
+
     // Mida total només dels fitxers que s'envien inline (els ja pujats no compten).
     const totalBytes = children.reduce((sum, ch) =>
       sum + (ch.files || []).reduce((s, f) => s + (f.dataBase64 ? f.dataBase64.length * 0.75 : 0), 0), 0);
@@ -1857,10 +1883,37 @@ function buildLocalEntry(shared, children, campusName, source) {
     email,
     shared,
     campusName,
+    form: activeFormId,   // per detectar reenviaments del mateix formulari
     ts: Date.now(),
     source: source || "saved",
     children: (children || []).map((ch) => ({ data: ch.data, weeks: ch.weeks, weekLabels: ch.weekLabels || [] }))
   };
+}
+
+// Guàrdia anti-duplicats: busca si des d'aquest dispositiu ja es va ENVIAR (source
+// "saved") una inscripció del mateix jugador/a (nom + naixement) per a aquest
+// formulari. Les entrades antigues sense .form no es consideren (no podem saber-ho).
+function findLocalDuplicate(children) {
+  let store;
+  try { store = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return null; }
+  const sent = (store.families || []).filter((f) => f && f.source === "saved" && f.form === activeFormId);
+  if (!sent.length) return null;
+  const idOf = (data) => {
+    const name = normalizeKey(pickName(data || {}));
+    const birthKey = Object.keys(data || {}).find((k) => /naixement|nacimiento|birth/i.test(k));
+    const birth = normalizeKey(birthKey ? data[birthKey] : "");
+    return name && birth ? name + "|" + birth : "";
+  };
+  for (const ch of children) {
+    const id = idOf(ch.data);
+    if (!id) continue;
+    for (const f of sent) {
+      if ((f.children || []).some((c) => idOf(c.data) === id)) {
+        return { name: pickName(ch.data), ts: f.ts };
+      }
+    }
+  }
+  return null;
 }
 function scheduleDraftSave() {
   if (!CONFIG || els.form.hidden) return;
