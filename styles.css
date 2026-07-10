@@ -28,7 +28,7 @@
   --radius:    14px;
   --radius-sm: 10px;
   --maxw:      720px;
-  --shadow:    0 1px 2px rgba(14,42,99,.06), 0 8px 28px rgba(14,42,99,.08);
+  --shadow:    0 1px 2px rgba(14,42,99,.05), 0 12px 24px -14px rgba(14,42,99,.22);
   --fs-display: clamp(2.4rem, 7vw, 4rem);
 }
 
@@ -242,7 +242,7 @@ body {
   border: 1px solid rgba(31,90,224,.18);
   border-radius: 18px;
   padding: 6px 8px 6px 12px; margin-bottom: 24px;
-  box-shadow: 0 10px 30px rgba(14,42,99,.10);
+  box-shadow: 0 14px 28px -18px rgba(14,42,99,.32);
 }
 .returning__toggle {
   display: flex; align-items: center; gap: 13px; width: 100%; min-width: 0;
@@ -346,11 +346,16 @@ body {
 .closed__mark { font-size: 2rem; margin-bottom: 12px; }
 
 /* ================================================================
-   Pantalla sense formularis — pista d'hoquei 3D
+   Pantalla sense formularis — pissarra tàctica de l'entrenador
    ================================================================ */
 
-.page--no-forms { background: #07101e; }
-.page--no-forms .hero { display: none; }
+.page--no-forms {
+  background: #0a0f1a;
+  background-image: linear-gradient(135deg, #080c14 0%, #0f1623 55%, #0d1930 100%);
+  background-attachment: fixed;
+}
+.page--no-forms .hero,
+.page--no-forms .foot { display: none; }
 .page--no-forms .main {
   max-width: 100%;
   padding-inline: 0;
@@ -376,183 +381,121 @@ body {
   pointer-events: none;
 }
 
-/* ---- Perspectiva 3D ---- */
-.nf-ice-wrap {
-  perspective: 680px;
-  perspective-origin: 50% -10%;
-  width: min(540px, 88vw);
-  margin: 0 auto 90px;
+/* ---- Clipboard de l'entrenador ---- */
+.nf-board-wrap {
+  width: min(430px, 86vw);
+  margin: 0 auto 52px;
   flex-shrink: 0;
-  animation: nf-fadein .8s ease both;
+  animation: nf-enter .9s cubic-bezier(.2,.9,.3,1) both, nf-float 7s 1s ease-in-out infinite;
+}
+.nf-board {
+  display: block; width: 100%; height: auto;
+  transform: rotate(-2.5deg);
+  filter: drop-shadow(0 24px 40px rgba(0,0,0,.55)) drop-shadow(0 6px 14px rgba(0,0,0,.4));
+}
+.nf-board__base { fill: #10264F; stroke: rgba(122,162,255,.28); stroke-width: 1.5; }
+.nf-board__paper { fill: #F8FBFF; }
+.nf-board__cliparm { fill: #7E8CA6; }
+.nf-board__clip { fill: #BCC7DA; stroke: #94A1B8; stroke-width: 1.5; }
+.nf-board__cliphole { fill: #0f1623; opacity: .55; }
+
+/* Marques de mitja pista, estil retolador */
+.nf-court { stroke: rgba(31,90,224,.30); stroke-width: 2.5; fill: none; }
+.nf-goal { stroke: rgba(210,53,47,.65); stroke-width: 3; fill: rgba(210,53,47,.10); }
+
+/* Equips: O nostres (blau), X rivals (vermell) */
+.nf-team-o circle { stroke: #1F5AE0; stroke-width: 3.5; fill: rgba(31,90,224,.08); }
+.nf-x {
+  stroke: #D2352F; stroke-width: 3.5; stroke-linecap: round;
+  transform-box: fill-box; transform-origin: center;
+}
+.nf-x--1 { animation: nf-shake 7s linear infinite; }
+
+/* Fletxa de la jugada: es dibuixa sola en bucle */
+.nf-play {
+  stroke: #1F5AE0; stroke-width: 3.5; stroke-linecap: round; fill: none;
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: nf-draw 7s linear infinite;
+}
+.nf-play-head {
+  stroke: #1F5AE0; stroke-width: 3.5; stroke-linecap: round;
+  opacity: 0;
+  animation: nf-head 7s linear infinite;
 }
 
-/* ---- Pista (superfície de gel) ---- */
-.nf-ice {
-  width: 100%;
-  aspect-ratio: 540 / 200;
-  background: radial-gradient(ellipse 70% 60% at 50% 50%, #eaf5ff 0%, #d4eaff 65%, #c0dcf7 100%);
-  border-radius: min(13%, 42px);
-  border: 2.5px solid rgba(31,90,224,.6);
-  position: relative;
-  overflow: hidden;
-  transform: rotateX(52deg);
-  transform-origin: 50% 50%;
-  box-shadow:
-    0 0 0 1px rgba(31,90,224,.15),
-    0 32px 90px rgba(0,0,0,.7),
-    0 64px 140px rgba(0,0,0,.35),
-    inset 0 0 70px rgba(200,230,255,.15);
+/* Pilota negra que segueix la jugada */
+.nf-playball {
+  fill: #111;
+  stroke: rgba(255,255,255,.25); stroke-width: 1.5;
+  offset-path: path("M152 214 C 195 138, 262 120, 322 178 C 358 213, 408 206, 450 172");
+  offset-distance: 0%;
+  animation: nf-run 7s cubic-bezier(.5,0,.4,1) infinite;
 }
-.nf-ice::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 48%;
-  background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, transparent 100%);
-  pointer-events: none;
-  border-radius: inherit;
-}
-.nf-ice::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 82% 88% at 50% 50%, transparent 50%, rgba(31,90,224,.1) 100%);
-  pointer-events: none;
+.nf-goalflash {
+  fill: rgba(31,90,224,.40); opacity: 0;
+  transform-box: fill-box; transform-origin: center;
+  animation: nf-flash 7s linear infinite;
 }
 
-/* ---- Línies de la pista ---- */
-.nf-cl {
-  position: absolute;
-  top: 0; bottom: 0;
-  left: calc(50% - 1px);
-  width: 2px;
-  background: rgba(210,35,35,.5);
+@keyframes nf-draw {
+  0%        { stroke-dashoffset: 1; opacity: 1; }
+  8%        { stroke-dashoffset: 1; }
+  38%       { stroke-dashoffset: 0; }
+  82%       { stroke-dashoffset: 0; opacity: 1; }
+  92%, 100% { stroke-dashoffset: 0; opacity: 0; }
 }
-.nf-cc {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 22%; aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 2px solid rgba(210,35,35,.4);
+@keyframes nf-head {
+  0%, 36%   { opacity: 0; }
+  42%, 82%  { opacity: 1; }
+  92%, 100% { opacity: 0; }
 }
-.nf-cd {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 2.8%; aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: rgba(210,35,35,.5);
+@keyframes nf-run {
+  0%, 40%  { offset-distance: 0%; opacity: 1; }
+  62%      { offset-distance: 100%; }
+  82%      { offset-distance: 100%; opacity: 1; }
+  88%      { offset-distance: 100%; opacity: 0; }
+  100%     { offset-distance: 0%; opacity: 0; }
 }
-
-/* Creases — rectangulars (sense border-radius) */
-.nf-crease {
-  position: absolute;
-  top: 22%; height: 56%; width: 10.5%;
-  border: 2px solid rgba(210,35,35,.4);
-  background: rgba(160,215,255,.14);
+@keyframes nf-flash {
+  0%, 60%   { opacity: 0; transform: scale(.4); }
+  66%       { opacity: .9; transform: scale(1); }
+  78%, 100% { opacity: 0; transform: scale(1.5); }
 }
-.nf-crease--l { left: 4%; border-left: none; }
-.nf-crease--r { right: 4%; border-right: none; }
-
-/* ---- Jugadors ---- */
-.nf-p {
-  position: absolute;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1;
-  width: 3.5%; aspect-ratio: 1;
+@keyframes nf-shake {
+  0%, 44%, 56%, 100% { transform: rotate(0); }
+  47% { transform: rotate(-9deg); }
+  50% { transform: rotate(7deg); }
+  53% { transform: rotate(-4deg); }
 }
-.nf-p--a {
-  background: #2563eb;
-  box-shadow: 0 0 0 1.5px rgba(37,99,235,.5), 0 2px 6px rgba(0,0,0,.35);
-  animation: nf-move-a 15s linear infinite;
+@keyframes nf-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
 }
-.nf-p--b {
-  background: #e5521a;
-  box-shadow: 0 0 0 1.5px rgba(229,82,26,.5), 0 2px 6px rgba(0,0,0,.35);
-  animation: nf-move-b 15s linear infinite;
-}
-/* Jugador A: segueix el puck quan ataca, defensa quan B té la pilota */
-@keyframes nf-move-a {
-  0%   { left: 32%; top: 38%; }   /* centre-esquerra */
-  7%   { left: 60%; top: 22%; }   /* rush cap al fwd-T (amb puck) */
-  13%  { left: 84%; top: 10%; }   /* cantonada dreta-alta */
-  20%  { left: 55%; top: 32%; }   /* replegament al mig */
-  27%  { left: 44%; top: 46%; }   /* pressió central */
-  34%  { left: 30%; top: 52%; }   /* bloqueig B fwd-B */
-  40%  { left: 20%; top: 40%; }   /* defensa porteria pròpia */
-  47%  { left: 26%; top: 22%; }   /* desallotjament del porter */
-  55%  { left: 60%; top: 66%; }   /* creuament ala baixa */
-  61%  { left: 84%; top: 76%; }   /* cantonada dreta-baixa */
-  67%  { left: 60%; top: 60%; }   /* replegament */
-  74%  { left: 35%; top: 28%; }   /* talla B fwd-T */
-  80%  { left: 20%; top: 41%; }   /* defensa porteria (2n tir) */
-  87%  { left: 26%; top: 62%; }   /* segueix desallotjament */
-  93%  { left: 38%; top: 42%; }   /* torna al centre */
-  100% { left: 32%; top: 38%; }
-}
-/* Jugador B: porta la pilota en atac, defensa quan A té la pilota */
-@keyframes nf-move-b {
-  0%   { left: 68%; top: 58%; }   /* centre-dreta */
-  7%   { left: 64%; top: 22%; }   /* contesta A al fwd-T */
-  13%  { left: 80%; top: 12%; }   /* disputa cantonada */
-  20%  { left: 68%; top: 24%; }   /* recupera puck (B def-T) */
-  27%  { left: 50%; top: 50%; }   /* porta al centre */
-  34%  { left: 35%; top: 60%; }   /* entrada a zona (B fwd-B) */
-  40%  { left: 14%; top: 42%; }   /* tir a porteria! */
-  47%  { left: 40%; top: 35%; }   /* recuperació post-tir */
-  55%  { left: 63%; top: 67%; }   /* disputa ala baixa */
-  61%  { left: 82%; top: 76%; }   /* cantonada baixa (porta puck) */
-  67%  { left: 69%; top: 63%; }   /* recupera (B def-B) */
-  74%  { left: 35%; top: 26%; }   /* atac ràpid B fwd-T */
-  80%  { left: 14%; top: 43%; }   /* 2n tir a porteria! */
-  87%  { left: 38%; top: 58%; }   /* torna al mig */
-  93%  { left: 58%; top: 52%; }   /* reposicionament */
-  100% { left: 68%; top: 58%; }
-}
-
-/* ---- Puck (minimalista) ---- */
-.nf-ball {
-  position: absolute;
-  width: 2.6%; aspect-ratio: 1;
-  border-radius: 50%;
-  background: #111;
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.1),
-    0 3px 8px rgba(0,0,0,.6);
-  z-index: 3;
-  animation: nf-bounce 15s linear infinite;
-}
-
-/* Trajectòria: passes entre jugadors, tirs a porteria, rebots (15s loop) */
-@keyframes nf-bounce {
-  0%   { left: 47%; top: 44%; }   /* centre - kickoff */
-  7%   { left: 62%; top: 20%; }   /* A fwd-T (passada) */
-  13%  { left: 88%; top:  6%; }   /* cantonada dreta-alta (rebot) */
-  20%  { left: 70%; top: 22%; }   /* B def-T (recuperació) */
-  27%  { left: 50%; top: 50%; }   /* B centre (passada) */
-  34%  { left: 33%; top: 61%; }   /* B fwd-B (entrada a zona) */
-  40%  { left:  7%; top: 42%; }   /* tir a porteria A */
-  47%  { left: 22%; top: 21%; }   /* A def-T (desallotjament) */
-  55%  { left: 62%; top: 69%; }   /* A fwd-B (creuament) */
-  61%  { left: 88%; top: 78%; }   /* cantonada dreta-baixa (rebot) */
-  67%  { left: 71%; top: 63%; }   /* B def-B (recuperació) */
-  74%  { left: 33%; top: 26%; }   /* B fwd-T (passada ràpida) */
-  80%  { left:  7%; top: 42%; }   /* tir a porteria A (2n) */
-  87%  { left: 23%; top: 64%; }   /* A def-B (desallotjament) */
-  93%  { left: 47%; top: 47%; }   /* A centre (tornada al mig) */
-  100% { left: 47%; top: 44%; }
+@keyframes nf-enter {
+  from { opacity: 0; transform: translateY(22px) scale(.96); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ---- Tipografia ---- */
-.nf-tag {
-  font-family: "Anton", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: .15em;
-  font-size: 1rem;
-  color: rgba(91,142,255,.75);
-  margin: 0 0 14px;
+.nf-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  font-size: .78rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(255,255,255,.72);
+  margin: 0 0 18px;
   animation: nf-fadein .6s .18s ease both;
+}
+.nf-badge__dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
+  background: #FFB020;
+  animation: nf-pulse 2.2s ease-out infinite;
+}
+@keyframes nf-pulse {
+  0%        { box-shadow: 0 0 0 0 rgba(255,176,32,.55); }
+  70%, 100% { box-shadow: 0 0 0 9px rgba(255,176,32,0); }
 }
 .nf-title {
   font-family: "Hanken Grotesk", system-ui, sans-serif;
@@ -580,15 +523,19 @@ body {
 }
 
 @media (max-width: 520px) {
-  .nf-ice-wrap { perspective: 520px; margin-bottom: 64px; }
-  .nf-ice { transform: rotateX(44deg); }
+  .nf-board-wrap { width: min(350px, 88vw); margin-bottom: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .nf-ice-wrap, .nf-tag, .nf-title, .nf-hint { animation: none !important; opacity: 1 !important; }
-  .nf-ball { animation-play-state: paused; left: 47%; top: 44%; }
-  .nf-p--a { animation: none !important; left: 32%; top: 38%; transform: translate(-50%,-50%); }
-  .nf-p--b { animation: none !important; left: 68%; top: 58%; transform: translate(-50%,-50%); }
-  .nf-ice { transform: none; }
+  .nf-board-wrap, .nf-badge, .nf-badge__dot, .nf-title, .nf-hint,
+  .nf-play, .nf-play-head, .nf-playball, .nf-goalflash, .nf-x--1 {
+    animation: none !important;
+  }
+  .nf-board-wrap, .nf-badge, .nf-title, .nf-hint { opacity: 1 !important; }
+  /* Jugada dibuixada de forma estàtica, pilota a punt de gol */
+  .nf-play { stroke-dashoffset: 0; }
+  .nf-play-head { opacity: 1; }
+  .nf-playball { offset-distance: 100%; }
+  .nf-goalflash { opacity: 0; }
 }
 
 .spinner {
@@ -1603,6 +1550,10 @@ body.pc-summary-on .child-price { display: none !important; }
     justify-content: center;
     align-items: start;
   }
+  /* El hero s'alinea amb la graella ampla del formulari i el text respira més */
+  body.pc-summary-on .hero__inner { max-width: 1100px; }
+  body.pc-summary-on .hero__title { max-width: 22ch; }
+  body.pc-summary-on .hero__lead { max-width: 62ch; }
   /* Columna esquerra: formulari. Columna dreta: un sol contenidor (#pc-aside) que
      apila el "ja t'havíem vist" + el resum. En ser un únic element de graella,
      evitem que l'alçada del formulari es reparteixi entre files i empenyi el rail. */

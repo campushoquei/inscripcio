@@ -133,28 +133,52 @@
       <button class="btn btn--ghost" id="retry">Tornar a provar</button>
     </div>
     <div class="state state--no-forms" id="closed" hidden>
-      <!-- Pista d'hoquei 3D -->
-      <div class="nf-ice-wrap" aria-hidden="true">
-        <div class="nf-ice">
-          <!-- Línia vermella del centre -->
-          <span class="nf-cl"></span>
-          <!-- Cercle + punt del centre -->
-          <span class="nf-cc"></span>
-          <span class="nf-cd"></span>
-          <!-- Àrees de porter (rectangulars) -->
-          <span class="nf-crease nf-crease--l"></span>
-          <span class="nf-crease nf-crease--r"></span>
-          <!-- Jugadors (1 per equip) -->
-          <span class="nf-p nf-p--a" style="left:32%;top:38%"></span>
-          <span class="nf-p nf-p--b" style="left:68%;top:58%"></span>
-          <!-- Puck 3D rebotant -->
-          <span class="nf-ball"></span>
-        </div>
+      <!-- Pissarra tàctica de l'entrenador -->
+      <div class="nf-board-wrap" aria-hidden="true">
+        <svg class="nf-board" viewBox="0 0 520 344" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Tauler (clipboard) -->
+          <rect class="nf-board__base" x="10" y="30" width="500" height="304" rx="20"/>
+          <rect class="nf-board__paper" x="26" y="46" width="468" height="272" rx="12"/>
+          <!-- Clip metàl·lic -->
+          <rect class="nf-board__cliparm" x="244" y="8" width="32" height="34" rx="8"/>
+          <rect class="nf-board__clip" x="218" y="22" width="84" height="30" rx="10"/>
+          <circle class="nf-board__cliphole" cx="260" cy="37" r="5"/>
+
+          <!-- Marques de mitja pista -->
+          <g class="nf-court">
+            <rect x="46" y="66" width="428" height="232" rx="22"/>
+            <path d="M46 124 A58 58 0 0 1 46 240"/>
+            <path d="M474 132 A50 50 0 0 0 474 232"/>
+          </g>
+          <rect class="nf-goal" x="474" y="164" width="16" height="36" rx="3"/>
+
+          <!-- El nostre equip (O) -->
+          <g class="nf-team-o">
+            <circle cx="140" cy="222" r="13"/>
+            <circle cx="205" cy="105" r="13"/>
+            <circle cx="290" cy="255" r="13"/>
+          </g>
+          <!-- Rivals (X) -->
+          <g class="nf-team-x">
+            <path class="nf-x nf-x--1" d="M318 128 l22 22 M340 128 l-22 22"/>
+            <path class="nf-x nf-x--2" d="M378 205 l22 22 M400 205 l-22 22"/>
+          </g>
+
+          <!-- Jugada: fletxa que es dibuixa -->
+          <path class="nf-play" pathLength="1" d="M152 214 C 195 138, 262 120, 322 178 C 358 213, 408 206, 450 172"/>
+          <path class="nf-play-head" d="M451 172 l-14 -1 m14 1 l-9 11"/>
+
+          <!-- Pilota (hoquei patins!) -->
+          <circle class="nf-playball" r="7"/>
+
+          <!-- Flaix de gol -->
+          <circle class="nf-goalflash" cx="468" cy="182" r="15"/>
+        </svg>
       </div>
       <!-- Text -->
-      <p class="nf-tag" data-camp-name>Campus Hoquei Riudebitlles</p>
-      <h2 class="nf-title" id="closed-title">A punt per tornar a rodar</h2>
-      <p class="nf-hint" id="closed-text">Cada campus té una història. Nosaltres ja estem preparant la següent. Torna aviat per descobrir-ne tots els detalls.</p>
+      <p class="nf-badge"><span class="nf-badge__dot"></span>Cap formulari disponible ara mateix</p>
+      <h2 class="nf-title" id="closed-title">Estem preparant la propera jugada</h2>
+      <p class="nf-hint" id="closed-text">Les inscripcions estan tancades, però l'equip ja treballa en el proper campus. Torna aviat per descobrir-ne tots els detalls.</p>
     </div>
 
     <!-- Formulari -->
