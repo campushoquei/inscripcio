@@ -1476,7 +1476,6 @@ function printRosters() {
     return `<section class="wk" data-week="${esc(w.id)}">
       <div class="wk__banner">
         <div class="wk__bannerL">
-          <span class="wk__tag">SETMANA</span>
           <h2 class="wk__name">${esc(w.etiqueta || w.id)}</h2>
           ${w.fechas ? `<span class="wk__dates">${esc(w.fechas)}</span>` : ""}
         </div>
@@ -1534,7 +1533,6 @@ function printRosters() {
     .wk{margin:14px 0 26px;}
     .wk__banner{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;
       background:linear-gradient(120deg,var(--blue),#6366F1);border-radius:20px 20px 6px 6px;padding:18px 22px;color:#fff;box-shadow:0 14px 34px rgba(31,90,224,.35);}
-    .wk__tag{font-size:.66rem;font-weight:800;letter-spacing:.22em;opacity:.8;}
     .wk__name{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:.01em;font-size:1.9rem;line-height:.95;margin:2px 0 0;}
     .wk__dates{font-size:.9rem;font-weight:600;opacity:.9;}
     .wk__kpis{display:flex;gap:8px;flex-wrap:wrap;}
