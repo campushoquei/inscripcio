@@ -62,7 +62,11 @@ const DEMO_CONFIG = {
     temporada: "2026",
     lema: "Inscripcions obertes",
     hero_titulo: "Campus d'Hoquei Riudebitlles",
-    intro: "Del 29 de juny al 31 de juliol. Completa la inscripció, tria les setmanes i adjunta la targeta sanitària.",
+    intro: "Completa la inscripció, tria les setmanes i adjunta la targeta sanitària.",
+    hero_dates: "29 juny – 31 juliol",
+    hero_horari: "9 – 13 h",
+    hero_lloc: "Sant Pere de Riudebitlles",
+    hero_edats: "De 4 a 16 anys",
     email_contacto: "coordinaciocpriudebitlles@gmail.com",
     email_asunto: "Inscripció rebuda · Casal Hoquei Estiu 2026",
     email_intro: "Hem rebut la inscripció. Aquí tens el resum:",
@@ -296,7 +300,81 @@ function applySettings(s) {
     link.href = `tel:${CONTACT_PHONE}`;
     link.setAttribute("aria-label", "Trucar al 629 912 840");
   }
+  renderHeroFacts(s);
   applyFooterContact(s);
+}
+
+// ---- Fitxa de convocatòria (xips de dades del hero) ----
+// Cada xip surt d'una clau de Settings (totes opcionals; només es pinten les que
+// tenen valor). Amb la columna `form` es personalitzen per formulari, com la resta:
+//   hero_dates · hero_horari · hero_lloc · hero_edats
+const HERO_FACTS = [
+  { key: "hero_dates", label: "Dates", icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+  { key: "hero_horari", label: "Horari", icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+  { key: "hero_edats", label: "Edats", icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
+  { key: "hero_lloc", label: "Lloc", icon: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>' }
+];
+function renderHeroFacts(s) {
+  const box = document.getElementById("hero-facts");
+  if (!box) return;
+  const facts = HERO_FACTS.filter((f) => s[f.key] != null && String(s[f.key]).trim() !== "");
+  box.hidden = !facts.length;
+  const chip = (f, i, dup) =>
+    `<span class="hero-fact${dup ? " hero-fact--dup" : ""}"${dup ? ' aria-hidden="true"' : ""}>` +
+      `<span class="hero-fact__icon" aria-hidden="true">` +
+        `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${f.icon}</svg>` +
+      `</span>` +
+      `<span class="hero-fact__body">` +
+        `<span class="hero-fact__label">${escapeHtml(f.label)}</span>` +
+        `<span class="hero-fact__value">${escapeHtml(String(s[f.key]))}</span>` +
+      `</span>` +
+    `</span>`;
+  // Al mòbil la fila és una marquesina en bucle: dupliquem els xips (ocults a PC)
+  // perquè, en tornar a l'inici, el salt de mig recorregut sigui invisible.
+  box.innerHTML =
+    `<div class="hero-facts__track">` +
+      facts.map((f, i) => chip(f, i, false)).join("") +
+      facts.map((f, i) => chip(f, i, true)).join("") +
+    `</div>`;
+  setupFactsMarquee(box);
+}
+
+// Marquesina interactiva dels xips (només mòbil): el carril és un scroll natiu
+// que avancem sol amb rAF; si l'usuari el toca/arrossega, mana ell i el moviment
+// es reprèn al cap d'uns segons des d'on l'hagi deixat. El contingut duplicat
+// permet el bucle infinit: en passar de la meitat, restem mig recorregut (invisible).
+function setupFactsMarquee(box) {
+  if (box.dataset.marqueeInit) { if (box._marqueeReset) box._marqueeReset(); return; }
+  box.dataset.marqueeInit = "1";
+  const mq = window.matchMedia("(max-width: 520px)");
+  const rm = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const SPEED = 26;           // px/s de creuer
+  const RESUME_AFTER = 500;   // ms sense tocar abans de reprendre
+  let pos = 0, last = null, pausedUntil = 0;
+  box._marqueeReset = () => { pos = 0; last = null; box.scrollLeft = 0; };
+  const half = () => { const t = box.firstElementChild; return t ? t.scrollWidth / 2 : 0; };
+  const pause = () => { pausedUntil = performance.now() + RESUME_AFTER; };
+  box.addEventListener("touchstart", pause, { passive: true });
+  box.addEventListener("touchmove", pause, { passive: true });
+  box.addEventListener("scroll", () => {
+    // Scroll que no ve del nostre tick (dit o inèrcia): pausa i seguim la seva posició
+    if (Math.abs(box.scrollLeft - pos) > 1.5) { pause(); pos = box.scrollLeft; }
+    // Embolcall del bucle també quan el mou l'usuari
+    const h = half();
+    if (h && box.scrollLeft >= h) { box.scrollLeft -= h; pos = box.scrollLeft; }
+  }, { passive: true });
+  requestAnimationFrame(function tick(t) {
+    requestAnimationFrame(tick);
+    if (!mq.matches || rm.matches) { last = t; return; }
+    if (last == null) { last = t; return; }
+    const dt = Math.min(0.1, (t - last) / 1000); last = t;
+    if (performance.now() < pausedUntil) { pos = box.scrollLeft; return; }
+    const h = half();
+    if (!h || h <= box.clientWidth * 0.6) return;   // contingut curt: no cal moure res
+    pos += SPEED * dt;
+    if (pos >= h) pos -= h;
+    box.scrollLeft = pos;
+  });
 }
 
 // Omple les dades de contacte al footer
@@ -400,8 +478,9 @@ function initHeroSlider() {
     hero.dataset.swipeInit = "1";
     let startY = 0;
     hero.addEventListener("touchstart", function(e) {
-      // Si el toc comença dins de la barra de pills, és per fer-hi scroll: ignorem el swipe del hero
-      if (e.target.closest("#hero-nav")) { heroTouchStartX = null; return; }
+      // Si el toc comença dins de la barra de pills o de la fila de xips (totes
+      // dues amb scroll horitzontal propi), ignorem el swipe del hero
+      if (e.target.closest("#hero-nav") || e.target.closest("#hero-facts")) { heroTouchStartX = null; return; }
       heroTouchStartX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
     }, { passive: true });
@@ -423,7 +502,8 @@ function inferSeason(formId) {
   if (/estiu|verano|summer/.test(id))       return "estiu";
   if (/hivern|invierno|winter|nadal/.test(id)) return "hivern";
   if (/primavera|spring/.test(id))           return "primavera";
-  if (/tardor|otono|autumn|fall/.test(id))   return "tardor";
+  // "posa't les piles" (pretemporada de final d'agost/setembre) és de tardor
+  if (/tardor|otono|autumn|fall|piles|pretemporada|setembre/.test(id)) return "tardor";
   return "estiu"; // per defecte
 }
 

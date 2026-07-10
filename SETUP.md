@@ -41,9 +41,24 @@ Apps Script (Code.gs) ─► Google Sheet (base de dades)
 | carpeta_fitxers | Inscripcions - fitxers |
 | form_defecto | estiu |
 | setmanes_titulo | Setmanes del casal |
+| hero_dates | 29 juny – 31 juliol |
+| hero_horari | 9 – 13 h |
+| hero_lloc | Sant Pere de Riudebitlles |
+| hero_edats | De 4 a 16 anys |
 
 > `form_defecto` = quin formulari es mostra quan s'obre `index.html` sense `?form=`.
 > `setmanes_titulo` = títol de la secció de setmanes/dies (es pot canviar per formulari amb la columna `form`).
+
+#### Fitxa de convocatòria (xips del hero)
+
+Les claus `hero_dates`, `hero_horari`, `hero_lloc` i `hero_edats` pinten una fitxa
+de dades sota el text del hero (Dates · Horari · Edats · Lloc). Al mòbil es mostra
+en una sola línia que es desplaça sola en bucle (i es pot arrossegar amb el dit).
+**Totes són opcionals**: només surten els xips que tinguin valor,
+i si no n'hi ha cap el bloc no apareix. Com qualsevol altra clau, es poden
+personalitzar per formulari amb la columna `form` (p. ex. una fila
+`hero_dates | 22 – 26 desembre | hivern` mostra aquestes dates només al casal
+d'hivern, mentre la fila sense `form` fa de valor per defecte).
 
 ### `Semanas`
 

@@ -133,6 +133,14 @@ body {
 .hero.season-hivern {
   --season-accent: var(--blue);   /* hivern: blau del tema */
 }
+/* 1. A PC el hero acaba com un "full" arrodonit sobre el formulari: suavitza
+   el tall dur entre el bloc fosc i el fons clar (al mòbil ja es fonen). */
+@media (min-width: 521px) {
+  .hero {
+    border-radius: 0 0 28px 28px;
+    box-shadow: 0 20px 44px -30px rgba(8, 12, 20, .6);
+  }
+}
 /* Hero content transition (fade en canviar de formulari) */
 .hero__inner {
   position: relative; z-index: 2; padding-block: 54px 62px;
@@ -179,6 +187,87 @@ body {
   margin: 0 0 16px; max-width: 13ch;
 }
 .hero__lead { font-size: 1.08rem; max-width: 46ch; color: rgba(255,255,255,.85); margin: 0; }
+
+/* ---- Fitxa de convocatòria: barra de dades sota el lead ---- */
+.hero-facts { margin-top: 28px; }
+.hero-facts[hidden] { display: none; }
+/* A PC els xips formen UNA sola fitxa blanca amb separadors fins: destaca del
+   hero fosc i fa de pont amb les targetes blanques del formulari de sota.
+   Colors fixos (no variables de tema): el hero de PC sempre és fosc. */
+.hero-facts__track {
+  display: inline-flex; flex-wrap: wrap;
+  max-width: 100%;
+  background: rgba(255,255,255,.96);
+  border-radius: 16px;
+  box-shadow: 0 14px 36px -16px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.25);
+  animation: rise .6s .55s ease both;   /* entra com un sol bloc, després del lead */
+}
+/* Els duplicats només existeixen per a la marquesina del mòbil.
+   Doble classe: guanya el display:inline-flex de .hero-fact (que va després). */
+.hero-fact.hero-fact--dup { display: none; }
+.hero-fact {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 10px;
+  max-width: 100%;
+  padding: 10px 20px 10px 12px;
+}
+/* Separador fi entre dades, com una fitxa d'estadístiques */
+.hero-fact:not(:first-child)::before {
+  content: "";
+  position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 1px; height: 55%;
+  background: rgba(14,42,99,.14);
+}
+.hero-fact__icon {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: rgba(31,90,224,.1);
+  background: color-mix(in srgb, var(--season-accent, #1F5AE0) 13%, transparent);
+  color: var(--season-accent, #1F5AE0);
+}
+.hero-fact__body { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+.hero-fact__label {
+  font-size: .62rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: #5A6B86;
+}
+.hero-fact__value {
+  font-size: .92rem; font-weight: 700; color: #0E2A63;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Al mòbil: UNA sola línia en marquesina contínua però INTERACTIVA: és un scroll
+   natiu que el JS fa avançar sol (setupFactsMarquee); el dit de l'usuari sempre
+   guanya i el moviment es reprèn després d'uns segons. Esvaïment a les vores.
+   Els xips tornen a ser targetes soltes amb l'estil clar del formulari. */
+@media (max-width: 520px) {
+  .hero-facts {
+    margin-top: 18px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+  }
+  .hero-facts::-webkit-scrollbar { display: none; }
+  .hero-facts__track {
+    flex-wrap: nowrap; width: max-content;
+    background: none; border: none; border-radius: 0;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    animation: none;
+  }
+  .hero-fact.hero-fact--dup { display: inline-flex; }
+  .hero-fact {
+    margin-right: 8px;   /* en lloc de gap: així el bucle de mig recorregut encaixa exacte */
+    padding: 7px 13px 7px 8px; border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--line-ink);
+    box-shadow: 0 1px 3px rgba(14,42,99,.06);
+  }
+  .hero-fact::before { display: none; }   /* targetes soltes: sense separadors */
+  .hero-fact__icon { width: 28px; height: 28px; background: var(--blue-soft); color: var(--blue); }
+  .hero-fact__label { color: var(--ink-soft); }
+  .hero-fact__value { font-size: .84rem; color: var(--navy); }
+}
 
 /* línies de la pista (blaves sobre el parquet de la dreta) */
 .rink { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
@@ -664,11 +753,31 @@ input[type="date"].input {
 }
 input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .textarea { resize: vertical; min-height: 92px; }
+/* Fletxa pròpia del select (la nativa canvia segons el navegador i desentona) */
+.select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A6B86' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 15px;
+  padding-right: 40px;
+  cursor: pointer;
+}
 .input:focus, .select:focus, .textarea:focus {
   outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(31,90,224,.16);
 }
 .field--invalid .input, .field--invalid .select, .field--invalid .textarea { border-color: var(--danger); }
+/* Micro-sacsejada en marcar-se invàlid: guia l'ull cap al camp amb error */
+.field--invalid { animation: field-shake .3s ease; }
+@keyframes field-shake {
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
 .field__error { color: var(--danger); font-size: .82rem; margin: 6px 0 0; display: none; }
+.field__error::before { content: "⚠\FE0E"; margin-right: 5px; }
 .field--invalid .field__error { display: block; }
 /* Suggeriment de correcció d'email (typo de domini): no bloqueja, es pot aplicar amb un clic */
 .field__suggest { display: block; margin: 6px 0 0; padding: 0; background: none; border: 0; font: inherit; font-size: .82rem; font-weight: 700; color: var(--blue); cursor: pointer; text-align: left; }
@@ -682,8 +791,16 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   display: flex; align-items: center; gap: 11px; cursor: pointer;
   border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm);
   padding: 11px 13px; background: #fff;
+  transition: border-color .15s, background .15s, box-shadow .15s, transform .12s;
 }
-.choice:hover { border-color: var(--blue); }
+@media (hover: hover) {
+  .choice:hover {
+    border-color: var(--blue);
+    box-shadow: 0 4px 12px -7px rgba(31,90,224,.45);
+    transform: translateY(-1px);
+  }
+}
+.choice:active { transform: translateY(0); }
 .choice:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
 .choice input { accent-color: var(--blue); width: 18px; height: 18px; }
 
@@ -876,7 +993,7 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   display: block;
   background: var(--card);
   border: 1px solid rgba(31,90,224,.14);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 11px 13px;
   margin-bottom: 9px;
   box-shadow: 0 1px 3px rgba(14,42,99,.05);
@@ -948,7 +1065,7 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
    pastilla. En triar-la s'omple de blau i el text passa a blanc. */
 .child-weeks .weeks { gap: 9px; }
 .child-weeks .week {
-  align-items: center; gap: 14px; padding: 13px 14px; border-radius: 14px;
+  align-items: center; gap: 14px; padding: 13px 14px; border-radius: var(--radius);
   background: var(--card); border-color: var(--line-ink);
   box-shadow: 0 2px 7px -4px rgba(14,42,99,.16);
   transition: border-color .18s, background .18s, transform .12s, box-shadow .22s;
@@ -1284,6 +1401,8 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   }
 
   .btn--primary { width: 100%; justify-content: center; }
+  /* Targetes més fines al mòbil: ~12px extres d'amplada útil per als camps */
+  .section, .skeleton-card { padding: 18px 14px; }
   /* Header comprimit al mòbil: menys alçada per guanyar espai útil de pantalla */
   .topbar__inner { padding-block: 7px; gap: 10px; }
   .emblem { width: 34px; height: 34px; border-radius: 9px; }
@@ -1360,10 +1479,13 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   display: flex; align-items: center; gap: 12px;
   position: sticky; top: 66px; z-index: 20;
   margin: -22px -20px 6px; padding: 11px 20px;
-  background: var(--paper);
+  /* En repòs, sense fons: un rectangle opac tallaria l'ombra difusa que el hero
+     projecta sobre la pàgina. El fons només cal quan la barra queda enganxada. */
+  background: transparent;
   border-bottom: 1px solid transparent;
+  transition: background .2s ease;
 }
-.form-progress.is-stuck { border-bottom-color: var(--line-ink); }
+.form-progress.is-stuck { background: var(--paper); border-bottom-color: var(--line-ink); }
 .form-progress[hidden] { display: none; }
 .form-progress__track {
   flex: 1; height: 6px; border-radius: 999px;
@@ -1550,8 +1672,9 @@ body.pc-summary-on .child-price { display: none !important; }
     justify-content: center;
     align-items: start;
   }
-  /* El hero s'alinea amb la graella ampla del formulari i el text respira més */
+  /* El hero i el footer s'alineen amb la graella ampla del formulari i el text respira més */
   body.pc-summary-on .hero__inner { max-width: 1100px; }
+  body.pc-summary-on .foot .wrap { max-width: 1100px; }
   body.pc-summary-on .hero__title { max-width: 22ch; }
   body.pc-summary-on .hero__lead { max-width: 62ch; }
   /* Columna esquerra: formulari. Columna dreta: un sol contenidor (#pc-aside) que
@@ -1607,7 +1730,7 @@ body.pc-summary-on .child-price { display: none !important; }
 }
 .pcsum__body { display: flex; flex-direction: column; gap: 9px; }
 .pcsum__item {
-  padding: 10px 11px; border-radius: 11px;
+  padding: 10px 11px; border-radius: var(--radius-sm);
   background: rgba(14,42,99,.035); cursor: pointer;
   transition: background .15s, transform .12s;
 }
@@ -1704,6 +1827,13 @@ body.pc-summary-on .child-price { display: none !important; }
 
   /* Inputs */
   .input, .select, .textarea { background: var(--card); color: var(--ink); }
+  /* El shorthand de dalt esborra la fletxa del select: la repintem en to clar */
+  .select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237A90B8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 15px;
+  }
 
   /* Setmanes i opcions */
   .choice, .week { background: var(--card); }
@@ -1744,6 +1874,14 @@ body.pc-summary-on .child-price { display: none !important; }
 
   /* Botó ghost (Inscriure un altre..., Tornar a provar) */
   .btn--ghost { background: var(--card); }
+
+  /* Botó primari: en fosc --blue s'aclareix (#5B8EFF) i el text blanc perdia
+     contrast; text fosc com ja fa .chip--all */
+  .btn--primary { color: #0A1020; }
+  .btn--primary .btn__spinner {
+    border-color: rgba(10,16,32,.35);
+    border-top-color: #0A1020;
+  }
 
   /* Blocs de fill */
   .child-block { background: rgba(255,255,255,.02); }
@@ -2147,6 +2285,40 @@ html { scroll-padding-bottom: 84px; }
   /* Toast d'error: en fosc, --danger és clar i el text blanc hi perdria contrast →
      fem servir un vermell saturat de fons i mantenim el text blanc. */
   .wizard-nav__note { background: #C0392B; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+}
+
+/* ---- Línia de connexió entre seccions (PC, sense wizard) ----
+   Uneix les pastilles 01·02·03 amb un fil vertical que travessa el buit entre
+   targetes: reforça la sensació de recorregut, fent joc amb la barra de progrés. */
+@media (min-width: 521px) {
+  body:not(.has-wizard) #form-sections .section { position: relative; }
+  body:not(.has-wizard) #form-sections .section:not(:last-child)::after {
+    content: "";
+    position: absolute; left: 37px; bottom: -20px;
+    width: 2px; height: 21px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(31,90,224,.35) 0%, rgba(31,90,224,.12) 100%);
+    pointer-events: none;
+  }
+}
+@media (min-width: 521px) and (prefers-color-scheme: dark) {
+  body:not(.has-wizard) #form-sections .section:not(:last-child)::after {
+    background: linear-gradient(180deg, rgba(91,142,255,.4) 0%, rgba(91,142,255,.14) 100%);
+  }
+}
+
+/* ---- Topbar translúcida amb vidre esmerilat ----
+   Mateix truc que la .wizard-nav. Va al final perquè la regla fosca guanyi el
+   .topbar { background: var(--card) } del bloc fosc principal. */
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .topbar {
+    background: rgba(255,255,255,.8);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    backdrop-filter: saturate(180%) blur(14px);
+  }
+  @media (prefers-color-scheme: dark) {
+    .topbar { background: rgba(16,24,40,.78); }
+  }
 }
 
 /* ---- Print ---- */
