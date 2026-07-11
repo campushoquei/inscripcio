@@ -1595,6 +1595,13 @@ function cfgSlugId(name) {
   return base ? base + yy : "";
 }
 
+// Any d'un formulari (del nom, l'id o la pestanya) per ordenar-los cronològicament.
+function cfgYearOf(sheet, row) {
+  const t = cfgRowGet(sheet, row, "nombre") + " " + cfgRowGet(sheet, row, "id") + " " + cfgRowGet(sheet, row, "hoja");
+  const m = t.match(/20(\d{2})/);
+  return m ? Number("20" + m[1]) : 0;
+}
+
 function cfgSeasonOf(sheet, row) {
   const s = cfgRowGet(sheet, row, "estacio").trim().toLowerCase();
   if (CFG_SEASONS[s] && s) return s;
@@ -1757,7 +1764,7 @@ function wireCfgCommon() {
         if (yy && id) cfgRowSet(sheet, r, "hoja", `Inscripcions_${id}${yy}`);
         const hoja = cfgRowGet(sheet, sheet.rows[r], "hoja").trim();
         const line = $("cfg-body").querySelector(`[data-idline="${r}"]`);
-        if (line) line.textContent = (id ? `?form=${id}` : "sense identificador") + (hoja ? ` · ${hoja}` : "");
+        if (line) line.textContent = hoja ? hoja : (id ? `?form=${id}` : "sense identificador");
         const hojaInput = $("cfg-body").querySelector(`[data-sheet="Formularios"][data-r="${r}"][data-col="hoja"]`);
         if (hojaInput) hojaInput.value = hoja;
         const editBtn = $("cfg-body").querySelector(`[data-editrow="${r}"]`);
@@ -1774,7 +1781,14 @@ function renderCfgForms() {
   let html = "";
   if (!sheet.rows.length) html += `<p class="cfg-loading">Cap formulari encara — afegeix-ne un.</p>`;
 
-  html += `<div class="fcards">` + sheet.rows.map((row, r) => {
+  // Ordre cronològic per a la vista: els més recents primer (per any del nom/id).
+  // Conservem l'índex real de cada fila (data-r) perquè editar segueixi apuntant
+  // a la fila correcta encara que es mostrin en un altre ordre.
+  const order = sheet.rows
+    .map((row, r) => ({ row, r }))
+    .sort((a, b) => cfgYearOf(sheet, b.row) - cfgYearOf(sheet, a.row));
+
+  html += `<div class="fcards">` + order.map(({ row, r }) => {
     const id = cfgRowGet(sheet, row, "id").trim();
     const season = cfgSeasonOf(sheet, row);
     const sMeta = CFG_SEASONS[season];
@@ -1787,7 +1801,7 @@ function renderCfgForms() {
         <span class="fcard__emoji" aria-hidden="true">${sMeta.emoji}</span>
         <div class="fcard__names">
           <input type="text" class="fcard__name" data-sheet="Formularios" data-r="${r}" data-col="nombre" value="${esc(cfgRowGet(sheet, row, "nombre"))}" placeholder="Nom del formulari" aria-label="Nom del formulari">
-          <span class="fcard__id" data-idline="${r}">${id ? `?form=${esc(id)}` : "sense identificador"}${hoja ? ` · ${esc(hoja)}` : ""}</span>
+          <span class="fcard__id" data-idline="${r}">${hoja ? esc(hoja) : (id ? `?form=${esc(id)}` : "sense identificador")}</span>
         </div>
         ${r === firstOpen ? `<span class="cfg-chip cfg-chip--default" title="És el que veu la gent que obre el web sense enllaç concret">Per defecte</span>` : ""}
       </div>
@@ -1795,7 +1809,10 @@ function renderCfgForms() {
         ${cfgToggleSheet("Formularios", r, "habilitado", open, "Es veu al web")}
         ${cfgToggleSheet("Formularios", r, "dashboard_activo", dash, "Actiu al panell")}
       </div>
-      <button class="btn btn--primary fcard__editbtn" data-editform="${esc(id)}" data-editname="${esc(cfgRowGet(sheet, row, "nombre") || id)}" data-editseason="${esc(season)}" data-editrow="${r}">Edita el contingut →</button>
+      <div class="fcard__foot">
+        <button class="btn btn--primary fcard__editbtn" data-editform="${esc(id)}" data-editname="${esc(cfgRowGet(sheet, row, "nombre") || id)}" data-editseason="${esc(season)}" data-editrow="${r}">Edita el contingut →</button>
+        <button class="btn btn--ghost btn--sm fcard__dup" data-dupform="${r}" title="Duplicar per a un any nou (còpia amb les mateixes setmanes, preus i textos)">⧉ Duplica</button>
+      </div>
     </div>`;
   }).join("") + `</div>`;
 
@@ -1825,6 +1842,8 @@ function renderCfgForms() {
     renderCfg();
     window.scrollTo({ top: 0 });
   });
+  $("cfg-body").querySelectorAll("[data-dupform]").forEach((b) =>
+    b.addEventListener("click", () => cfgDuplicateForm(Number(b.dataset.dupform))));
   $("cfg-addform").addEventListener("click", () => {
     cfgNewRow(cfgSheet("Formularios"), { habilitado: "TRUE", dashboard_activo: "TRUE" });
     renderCfg();
@@ -1833,6 +1852,75 @@ function renderCfgForms() {
     if (last) { last.scrollIntoView({ behavior: "smooth", block: "center" }); const i = last.querySelector(".fcard__name"); if (i) i.focus(); }
   });
 }
+
+// Duplica un formulari sencer per a un any nou: còpia de la seva fila + de totes
+// les setmanes, ajustos i preguntes que li són pròpies (columna form = id vell).
+// El nou neix TANCAT (draft) i amb l'any incrementat al nom/id/pestanya, de manera
+// que el formulari vell queda intacte amb el seu històric i el nou el pots retocar.
+async function cfgDuplicateForm(r) {
+  const fs = cfgSheet("Formularios");
+  const src = fs.rows[r];
+  if (!src) return;
+  const oldId = cfgRowGet(fs, src, "id").trim();
+  const oldName = cfgRowGet(fs, src, "nombre");
+  // Incrementa l'any al nom (2026 → 2027) si n'hi ha; si no, hi afegeix " (còpia)".
+  const bump = (y) => "20" + String(Number(y) + 1).padStart(2, "0");
+  const newName = /20\d{2}/.test(oldName)
+    ? oldName.replace(/20(\d{2})/, (m, yy) => bump(yy))
+    : (oldName ? oldName + " (còpia)" : "Formulari nou");
+  // Nou identificador únic (estació + any nou, o l'antic amb sufix).
+  const existing = new Set(fs.rows.map((row) => cfgRowGet(fs, row, "id").trim()).filter(Boolean));
+  let newId = cfgSlugId(newName) || (oldId ? oldId + "-2" : "form");
+  let n = 2;
+  while (existing.has(newId)) { newId = (cfgSlugId(newName) || oldId || "form") + "-" + n++; }
+  const yy = (newName.match(/20(\d{2})/) || [])[1] || "";
+
+  const ok = await confirmModal({
+    title: "Duplicar el formulari?",
+    message: `Es crearà «${newName}» com una còpia tancada de «${oldName || oldId}», amb les mateixes setmanes, preus i textos propis. El formulari original i les seves inscripcions no es toquen.`,
+    confirmLabel: "Duplica"
+  });
+  if (!ok) return;
+
+  // 1) Còpia de la fila de Formularios (tancada, com a esborrany).
+  fs.rows.push(src.slice());
+  const ni = fs.rows.length - 1;
+  while (fs.rows[ni].length < fs.header.length) fs.rows[ni].push("");
+  cfgRowSet(fs, ni, "id", newId);
+  cfgRowSet(fs, ni, "nombre", newName);
+  cfgRowSet(fs, ni, "hoja", yy ? `Inscripcions_${newId}${yy}` : (cfgRowGet(fs, src, "hoja") ? cfgRowGet(fs, src, "hoja") + "_copia" : ""));
+  cfgRowSet(fs, ni, "habilitado", "FALSE");
+  cfgRowSet(fs, ni, "dashboard_activo", "FALSE");
+
+  // 2) Còpia de les files pròpies (form = id vell) de Semanas, Ajustes i Campos.
+  let cloned = 0;
+  ["Semanas", "Ajustes", "Campos"].forEach((name) => {
+    const sh = cfgSheet(name);
+    if (!sh) return;
+    const add = [];
+    sh.rows.forEach((row) => {
+      if (cfgRowGet(sh, row, "form").trim() === oldId) {
+        const c = row.slice();
+        while (c.length < sh.header.length) c.push("");
+        add.push(c);
+      }
+    });
+    add.forEach((c) => {
+      sh.rows.push(c);
+      cfgRowSet(sh, sh.rows.length - 1, "form", newId);
+      cloned++;
+    });
+  });
+
+  renderCfg();
+  toast(cloned
+    ? `Formulari duplicat (${cloned} element${cloned === 1 ? "" : "s"} propis copiats). Canvia'l i activa'l quan vulguis.`
+    : "Formulari duplicat. Canvia'l i activa'l quan vulguis.");
+  // Focus al nom del nou (està a dalt de tot per ordre cronològic).
+  const card = $("cfg-body").querySelector(`.fcard__name[data-r="${ni}"]`);
+  if (card) { card.closest(".fcard").scrollIntoView({ behavior: "smooth", block: "center" }); card.focus(); card.select(); }
+}
+
 // Variant de cfgToggle que porta la pestanya al dataset (per a wireCfgCommon).
 function cfgToggleSheet(sheetName, rIdx, col, on, label) {
   return `<label class="tgl">

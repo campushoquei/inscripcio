@@ -518,7 +518,10 @@ select.cfg-in { cursor: pointer; }
   display: flex; gap: 10px 20px; flex-wrap: wrap; margin-bottom: 16px;
   padding: 12px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
 }
-.fcard__editbtn { width: 100%; justify-content: center; }
+.fcard__foot { display: flex; align-items: center; gap: 8px; }
+.fcard__editbtn { flex: 1; justify-content: center; }
+.fcard__dup { flex: none; color: var(--ink-soft); }
+.fcard__dup:hover { color: var(--blue); border-color: var(--blue); }
 
 /* Botó "Contingut compartit" */
 .cfg-generalbtn {
