@@ -46,7 +46,9 @@ const state = {
   groups: DEFAULT_GROUPS.slice(),
   groupWeek: "",
   selected: new Set(),
-  formScope: "active"   // per defecte només dashboard_activo=TRUE · "all" = tots els formularis
+  formScope: "active",  // per defecte només dashboard_activo=TRUE · "all" = tots els formularis
+  config: null,         // pestanyes de l'Excel de control (pàgina Configuració)
+  cfgTab: ""            // pestanya de configuració activa
 };
 
 const $ = (id) => document.getElementById(id);
@@ -67,6 +69,8 @@ function init() {
   $("login-form").addEventListener("submit", onLogin);
   $("logout-btn").addEventListener("click", logout);
   $("refresh-btn").addEventListener("click", () => loadAll(true));
+  $("config-btn").addEventListener("click", () => showConfigView($("config-view").hidden));
+  $("cfg-close").addEventListener("click", () => showConfigView(false));
   $("form-select").addEventListener("change", (e) => { state.form = e.target.value; state.selected.clear(); saveView(); loadAll(); });
   document.querySelectorAll("#form-scope .form-scope__btn").forEach((b) =>
     b.addEventListener("click", () => setFormScope(b.dataset.scope)));
@@ -1314,9 +1318,8 @@ function openDrawer(r) {
 
   html += `<div class="drawer__actions">
     <button class="btn btn--ghost btn--sm" id="dw-resend">Reenviar correu</button>
-    <button class="btn btn--ghost btn--sm" id="dw-edit">Edita contacte</button>
-  </div>
-  <div id="dw-edit-box"></div>`;
+    <button class="btn btn--ghost btn--sm" id="dw-editchild">Edita nen/a</button>
+  </div>`;
 
   $("drawer-body").innerHTML = html;
   const payAll = $("drawer-body").querySelector("[data-payall]");
@@ -1326,7 +1329,7 @@ function openDrawer(r) {
   $("dw-resend").addEventListener("click", () => resend(r.id));
   const dwReceipt = $("dw-receipt");
   if (dwReceipt && !receiptDone) dwReceipt.addEventListener("click", () => sendReceipt(r.id));
-  $("dw-edit").addEventListener("click", () => openEditContact(r));
+  $("dw-editchild").addEventListener("click", () => openEditChild(r));
 
   $("drawer-backdrop").hidden = false;
   $("drawer").hidden = false;
@@ -1337,48 +1340,331 @@ function closeDrawer() {
   $("drawer-backdrop").hidden = true;
 }
 
-// Editor en línia de les dades de contacte (corregir typos de correu/telèfon).
-function openEditContact(r) {
-  const box = $("dw-edit-box");
-  if (!box) return;
-  if (box.dataset.open === "1") { box.innerHTML = ""; box.dataset.open = "0"; return; }
-  box.dataset.open = "1";
-  box.innerHTML = `<form class="edit-form" id="edit-form">
-    <label>Correu electrònic
-      <input type="email" id="edit-email" value="${esc(r.email || "")}" placeholder="correu@exemple.cat">
-    </label>
-    <label>Telèfon
-      <input type="text" id="edit-telefon" value="${esc(r.telefon || "")}" placeholder="6XX XXX XXX">
-    </label>
-    <div class="edit-form__actions">
-      <button type="submit" class="btn btn--primary btn--sm">Desa</button>
-      <button type="button" class="btn btn--ghost btn--sm" id="edit-cancel">Cancel·la</button>
-    </div>
-  </form>`;
-  $("edit-cancel").addEventListener("click", () => { box.innerHTML = ""; box.dataset.open = "0"; });
-  $("edit-form").addEventListener("submit", (e) => { e.preventDefault(); saveContact(r.id); });
-  $("edit-email").focus();
+/* ============================================================
+   Edició completa d'una inscripció ("Edita nen/a")
+   ============================================================ */
+// Converteix un valor de data del full (ISO, dd/mm/aaaa o Date en text) al
+// format que necessita un <input type="date">. Buit si no s'entén.
+function toISODateInput(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (!s) return "";
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return `${m[3]}-${String(m[2]).padStart(2, "0")}-${String(m[1]).padStart(2, "0")}`;
+  const d = new Date(s);
+  if (!isNaN(d)) return d.toISOString().slice(0, 10);
+  return "";
 }
 
-async function saveContact(id) {
-  const row = state.list.find((r) => r.id === id);
+// L'input adequat per a cada camp del detall. Els fitxers (i valors amb URL)
+// no s'editen des d'aquí: es mostren com al mode lectura.
+function editControlFor(d) {
+  const val = String(d.value == null ? "" : d.value);
+  if (!d.id || d.tipo === "file" || /^https?:\/\//.test(val.trim())) return renderDetailValue(d.value);
+  const fid = esc(d.id);
+  if (d.tipo === "select" || d.tipo === "radio") {
+    const opts = (d.opciones || "").split("|").map((s) => s.trim()).filter(Boolean);
+    if (val && !opts.includes(val)) opts.unshift(val);
+    if (opts.length) {
+      return `<select class="dedit" data-fid="${fid}" data-orig="${esc(val)}">` +
+        opts.map((o) => `<option value="${esc(o)}"${o === val ? " selected" : ""}>${esc(o)}</option>`).join("") +
+      `</select>`;
+    }
+  }
+  if (d.tipo === "textarea") return `<textarea class="dedit" data-fid="${fid}" data-orig="${esc(val)}" rows="3">${esc(val)}</textarea>`;
+  if (d.tipo === "date") {
+    const iso = toISODateInput(val);
+    if (iso) return `<input type="date" class="dedit" data-fid="${fid}" value="${iso}" data-orig="${iso}">`;
+  }
+  const t = d.tipo === "email" ? "email" : d.tipo === "tel" ? "tel" : d.tipo === "number" ? "number" : "text";
+  return `<input type="${t}" class="dedit" data-fid="${fid}" value="${esc(val)}" data-orig="${esc(val)}">`;
+}
+
+// Re-pinta el calaix en mode edició: la mateixa plantilla del detall, però amb
+// cada valor convertit en un control. Res no es desa fins a "Desa els canvis".
+function openEditChild(r) {
+  $("drawer-title").textContent = `Editant · ${r.nom || "inscripció"}`;
+  const groups = {};
+  (r.detall || []).forEach((d) => { (groups[d.grup || "Dades"] = groups[d.grup || "Dades"] || []).push(d); });
+  const weeksCfg = (state.overview && state.overview.weeks) || [];
+  const current = new Set(r.weekIds || []);
+  const paidSet = new Set(r.paidWeeks || []);
+
+  let html = `<p class="edit-banner">Mode edició — no es desa res fins que cliquis «Desa els canvis».</p>`;
+
+  html += `<div class="dgroup"><div class="dgroup__title">Preu</div>
+    <div class="dfield"><span class="dfield__k">Preu total (€)</span><span class="dfield__v"><input type="number" class="dedit" id="ec-preu" min="0" step="1" value="${r.preu != null ? esc(String(r.preu)) : ""}" data-orig="${r.preu != null ? esc(String(r.preu)) : ""}"></span></div>
+    <div class="dfield"><span class="dfield__k">Descompte</span><span class="dfield__v"><input type="text" class="dedit" id="ec-descompte" value="${esc(r.descompte && r.descompte !== "-" ? r.descompte : "")}" data-orig="${esc(r.descompte && r.descompte !== "-" ? r.descompte : "")}" placeholder="—"></span></div>
+  </div>`;
+
+  if (weeksCfg.length) {
+    const items = weeksCfg.map((w) => {
+      const occupied = state.list.filter((x) => (x.weekIds || []).includes(w.id)).length;
+      const full = w.plazas != null && w.plazas > 0 && occupied >= w.plazas && !current.has(w.id);
+      const occTxt = w.plazas != null && w.plazas > 0 ? `${occupied}/${w.plazas}` : `${occupied}`;
+      return `<label class="wk-edit${full ? " wk-edit--full" : ""}">
+        <input type="checkbox" data-wk="${esc(w.id)}"${current.has(w.id) ? " checked" : ""}>
+        <span class="wk-edit__lbl"><b>${esc(w.etiqueta || w.id)}</b>${w.fechas ? `<span class="cell-sub"> · ${esc(w.fechas)}</span>` : ""}${paidSet.has(w.id) ? ` <span class="wk-edit__paid">pagada</span>` : ""}</span>
+        <span class="wk-edit__occ${full ? " is-full" : ""}">${full ? "plena · " : ""}${occTxt}</span>
+      </label>`;
+    }).join("");
+    html += `<div class="dgroup"><div class="dgroup__title">Setmanes</div>
+      <div class="wk-edit-list">${items}</div>
+      <p class="wk-edit-hint">El preu no es recalcula sol (descomptes de germans, club…): revisa'l si canvies setmanes. Si es treu una setmana ja pagada, deixarà de comptar com a cobrada.</p>
+    </div>`;
+  }
+
+  Object.keys(groups).forEach((g) => {
+    html += `<div class="dgroup"><div class="dgroup__title">${esc(g)}</div>` +
+      groups[g].map((d) =>
+        `<div class="dfield dfield--edit"><span class="dfield__k">${esc(d.label)}</span><span class="dfield__v">${editControlFor(d)}</span></div>`
+      ).join("") + `</div>`;
+  });
+
+  html += `<div class="drawer__editactions">
+    <button class="btn btn--primary" id="ec-save">Desa els canvis</button>
+    <button class="btn btn--ghost" id="ec-cancel">Cancel·la</button>
+  </div>`;
+
+  $("drawer-body").innerHTML = html;
+  $("ec-cancel").addEventListener("click", () => openDrawer(r));
+  $("ec-save").addEventListener("click", () => saveChildEdit(r.row));
+}
+
+async function saveChildEdit(rowNum) {
+  const row = state.list.find((r) => String(r.row) === String(rowNum));
   if (!row) return;
-  const email = $("edit-email").value.trim();
-  const telefon = $("edit-telefon").value.trim();
+  const body = $("drawer-body");
+
+  // Camps del formulari: només els que han canviat respecte del valor original.
   const patch = {};
-  if (email !== (row.email || "")) patch.email = email;
-  if (telefon !== (row.telefon || "")) patch.telefon = telefon;
-  if (!Object.keys(patch).length) { toast("No hi ha canvis."); return; }
-  const prev = { email: row.email, telefon: row.telefon };
-  Object.assign(row, patch);          // optimista
-  openDrawer(row);
-  applyFilters();
+  body.querySelectorAll(".dedit[data-fid]").forEach((el) => {
+    if (el.value !== el.dataset.orig) patch[el.dataset.fid] = el.value.trim();
+  });
+  const preuEl = $("ec-preu"), descEl = $("ec-descompte");
+  const preuChanged = preuEl && preuEl.value !== preuEl.dataset.orig;
+  const descChanged = descEl && descEl.value !== descEl.dataset.orig;
+  const preu = preuChanged ? Math.max(0, Number(preuEl.value) || 0) : null;
+  const descompte = descChanged ? (descEl.value.trim() || "-") : null;
+
+  // Setmanes: comparem la selecció amb la inscripció actual.
+  const wkBoxes = [...body.querySelectorAll("[data-wk]")];
+  let selected = null;
+  if (wkBoxes.length) {
+    selected = wkBoxes.filter((c) => c.checked).map((c) => c.dataset.wk);
+    if (!selected.length) return toast("Cal deixar almenys una setmana. Per donar de baixa la inscripció, fes servir Anul·la.", true);
+    const same = selected.length === (row.weekIds || []).length && selected.every((w) => (row.weekIds || []).includes(w));
+    if (same) selected = null;   // sense canvis de setmanes
+  }
+
+  if (!Object.keys(patch).length && !preuChanged && !descChanged && !selected) return toast("No hi ha canvis.");
+
+  // Avisa si s'afegeix una setmana plena (l'admin pot forçar-ho igualment).
+  if (selected) {
+    const weeksCfg = (state.overview && state.overview.weeks) || [];
+    const overbooked = selected.filter((wid) => {
+      if ((row.weekIds || []).includes(wid)) return false;
+      const w = weeksCfg.find((x) => x.id === wid);
+      if (!w || w.plazas == null || !(w.plazas > 0)) return false;
+      return state.list.filter((x) => (x.weekIds || []).includes(wid)).length >= w.plazas;
+    });
+    if (overbooked.length) {
+      const names = overbooked.map((wid) => { const w = weeksCfg.find((x) => x.id === wid); return (w && w.etiqueta) || wid; }).join(", ");
+      const ok = await confirmModal({
+        title: "Setmana plena",
+        message: `${names} ja té totes les places ocupades. Vols inscriure-hi el jugador/a igualment?`,
+        confirmLabel: "Sí, afegeix igualment"
+      });
+      if (!ok) return;
+    }
+  }
+
+  const saveBtn = $("ec-save");
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Desant…"; }
   try {
-    await api("admin_update", { id, patch });
-    toast("Dades de contacte desades.");
-  } catch (err) {
-    Object.assign(row, prev);
+    if (Object.keys(patch).length || preuChanged || descChanged) {
+      const out = await api("admin_update_fields", { id: row.id, row: row.row, patch, preu, descompte });
+      // Valors editats → al detall local; derivats (nom, edat…) → del servidor.
+      (row.detall || []).forEach((d) => { if (d.id && patch[d.id] != null) d.value = patch[d.id]; });
+      if (out.nom) row.nom = out.nom;
+      if (out.tutor != null) row.tutor = out.tutor;
+      if (out.email != null) row.email = out.email;
+      if (out.telefon != null) row.telefon = out.telefon;
+      if (out.edat !== "" && out.edat != null) row.edat = out.edat;
+      if (out.preu != null) row.preu = out.preu;
+      if (out.descompte != null) row.descompte = out.descompte;
+    }
+    if (selected) {
+      const out2 = await api("admin_set_weeks", { id: row.id, row: row.row, weeks: selected });
+      row.weekIds = out2.weekIds || selected;
+      if (out2.setmanes) row.setmanes = out2.setmanes;
+      row.paidWeeks = out2.paidWeeks || (row.paidWeeks || []).filter((w) => selected.includes(w));
+      if (out2.estat) row.estat = out2.estat;
+    }
+    recomputePayments();
+    renderOccupancy();
+    renderAges();
     applyFilters();
+    openDrawer(row);
+    toast("Canvis desats.");
+  } catch (err) {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Desa els canvis"; }
+    toast("No s'ha pogut desar: " + err.message, true);
+  }
+}
+
+/* ============================================================
+   Configuració dels formularis (edició de l'Excel de control)
+   ============================================================ */
+const CFG_SHEETS = [
+  { name: "Formularios", hint: "Un formulari per fila. El web obre per defecte el PRIMER amb habilitado = TRUE; dashboard_activo controla quins surten com a actius en aquest panell." },
+  { name: "Semanas", hint: "Les setmanes de cada formulari (id, nom, dates, places…). La columna form buida = compartida per tots els formularis; amb un id de formulari, només per a aquell." },
+  { name: "Ajustes", hint: "Textos i paràmetres del web (clau → valor). Una fila amb la columna form plena només s'aplica a aquell formulari i sobreescriu la general." },
+  { name: "Campos", hint: "Les preguntes del formulari, amb tipus i opcions. Compte en canviar els id: les respostes es guarden en columnes de l'Excel amb aquest nom." }
+];
+// Capçaleres proposades quan una pestanya encara no existeix o és buida.
+const CFG_DEFAULT_HEADERS = {
+  Formularios: ["id", "nombre", "habilitado", "dashboard_activo", "hoja"],
+  Semanas: ["id", "nombre", "fechas", "descripcion", "habilitado", "plazas", "form"],
+  Ajustes: ["Clave", "Valor", "form"],
+  Campos: ["id", "etiqueta", "tipo", "opciones", "obligatorio", "placeholder", "ayuda", "grupo", "orden", "form"]
+};
+const CFG_BOOL_COLS = /^(habilitado|dashboard_activo|obligatorio)$/i;
+const CFG_WIDE_COLS = /valor|ayuda|descripcion|opciones|etiqueta|nombre/i;
+
+function showConfigView(show) {
+  $("dash").hidden = show;
+  $("config-view").hidden = !show;
+  $("tabbar").classList.toggle("is-hidden", show);
+  $("config-btn").classList.toggle("is-active", show);
+  if (show && !state.config) loadConfig();
+  window.scrollTo({ top: 0 });
+}
+
+async function loadConfig() {
+  $("cfg-body").innerHTML = `<p class="cfg-loading">Carregant la configuració…</p>`;
+  try {
+    const out = await api("admin_config_get");
+    state.config = out.sheets || {};
+    if (!state.cfgTab) state.cfgTab = CFG_SHEETS[0].name;
+    renderCfgTabs();
+    renderCfgSheet();
+  } catch (err) {
+    if (err.message === "unauthorized") return logout();
+    $("cfg-body").innerHTML = `<p class="cfg-loading">No s'ha pogut carregar: ${esc(err.message)}</p>`;
+  }
+}
+
+function renderCfgTabs() {
+  $("cfg-tabs").innerHTML = CFG_SHEETS.map((s) => {
+    const dirty = state.config && state.config[s.name] && state.config[s.name]._dirty;
+    return `<button class="week-tab${state.cfgTab === s.name ? " is-active" : ""}" data-cfgtab="${esc(s.name)}">${esc(s.name)}${dirty ? ' <span class="cfg-dot">●</span>' : ""}</button>`;
+  }).join("");
+  $("cfg-tabs").querySelectorAll("[data-cfgtab]").forEach((b) =>
+    b.addEventListener("click", () => { state.cfgTab = b.dataset.cfgtab; renderCfgTabs(); renderCfgSheet(); }));
+}
+
+// L'input adequat per a una cel·la: desplegable (buit)/TRUE/FALSE per a les columnes
+// booleanes conegudes (només si el valor actual ja és un d'aquests, per no perdre res),
+// text per a la resta. data-r/data-c enllacen l'input amb la cel·la del model.
+function cfgCellInput(col, val, r, c) {
+  const v = String(val == null ? "" : val);
+  const cur = v.trim().toUpperCase();
+  if (CFG_BOOL_COLS.test(String(col).trim()) && (cur === "" || cur === "TRUE" || cur === "FALSE")) {
+    return `<select class="cfg-in" data-r="${r}" data-c="${c}">` +
+      ["", "TRUE", "FALSE"].map((o) => `<option value="${o}"${o === cur ? " selected" : ""}>${o || "(buit)"}</option>`).join("") +
+    `</select>`;
+  }
+  const wide = CFG_WIDE_COLS.test(String(col));
+  return `<input type="text" class="cfg-in${wide ? " cfg-in--wide" : ""}" data-r="${r}" data-c="${c}" value="${esc(v)}">`;
+}
+
+function renderCfgSheet() {
+  const meta = CFG_SHEETS.find((s) => s.name === state.cfgTab) || CFG_SHEETS[0];
+  const sheet = (state.config || {})[meta.name];
+  if (!sheet) { $("cfg-body").innerHTML = `<p class="cfg-loading">Aquesta pestanya no existeix al full.</p>`; return; }
+  if (!sheet.header || !sheet.header.length) sheet.header = (CFG_DEFAULT_HEADERS[meta.name] || ["id"]).slice();
+  const h = sheet.header;
+
+  let html = `<p class="cfg-hint cfg-hint--tab">${esc(meta.hint)}</p>`;
+  html += `<div class="table-scroll cfg-scroll"><table class="dtable cfg-table"><thead><tr>` +
+    h.map((c) => `<th>${esc(c || "—")}</th>`).join("") + `<th class="cfg-del-th"></th></tr></thead><tbody>` +
+    sheet.rows.map((row, ri) =>
+      `<tr>` + h.map((c, ci) => `<td>${cfgCellInput(c, row[ci], ri, ci)}</td>`).join("") +
+      `<td class="cfg-del-td"><button class="iconbtn cfg-del" data-delrow="${ri}" title="Esborra la fila" aria-label="Esborra la fila">✕</button></td></tr>`
+    ).join("") +
+    `</tbody></table></div>`;
+  if (!sheet.rows.length) html += `<p class="cfg-loading">Cap fila encara — afegeix-ne una.</p>`;
+  html += `<div class="cfg-actions">
+    <button class="btn btn--ghost btn--sm" id="cfg-add">+ Afegeix una fila</button>
+    <span class="cfg-spacer"></span>
+    <button class="btn btn--ghost btn--sm" id="cfg-reload">Descarta i recarrega</button>
+    <button class="btn btn--primary btn--sm" id="cfg-save">Desa «${esc(meta.name)}»</button>
+  </div>`;
+  $("cfg-body").innerHTML = html;
+
+  // Cada tecleig actualitza el model en memòria; res no viatja fins a "Desa".
+  $("cfg-body").querySelectorAll(".cfg-in").forEach((el) =>
+    el.addEventListener("input", () => {
+      const r = Number(el.dataset.r), c = Number(el.dataset.c);
+      while (sheet.rows[r].length < h.length) sheet.rows[r].push("");
+      sheet.rows[r][c] = el.value;
+      if (!sheet._dirty) { sheet._dirty = true; renderCfgTabs(); }
+    }));
+  $("cfg-body").querySelectorAll("[data-delrow]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const ri = Number(b.dataset.delrow);
+      const hasContent = (sheet.rows[ri] || []).some((v) => String(v).trim() !== "");
+      if (hasContent) {
+        const ok = await confirmModal({ title: "Esborrar la fila?", message: "S'esborrarà aquesta fila quan desis la pestanya.", confirmLabel: "Esborra" });
+        if (!ok) return;
+      }
+      sheet.rows.splice(ri, 1);
+      sheet._dirty = true;
+      renderCfgTabs(); renderCfgSheet();
+    }));
+  $("cfg-add").addEventListener("click", () => {
+    sheet.rows.push(Array(h.length).fill(""));
+    sheet._dirty = true;
+    renderCfgTabs(); renderCfgSheet();
+    const inputs = $("cfg-body").querySelectorAll(`[data-r="${sheet.rows.length - 1}"]`);
+    if (inputs[0]) inputs[0].focus();
+  });
+  $("cfg-reload").addEventListener("click", async () => {
+    const anyDirty = CFG_SHEETS.some((s) => state.config[s.name] && state.config[s.name]._dirty);
+    if (anyDirty) {
+      const ok = await confirmModal({ title: "Descartar els canvis?", message: "Es recarregarà la configuració de l'Excel i es perdran els canvis no desats (de totes les pestanyes).", confirmLabel: "Descarta" });
+      if (!ok) return;
+    }
+    state.config = null;
+    loadConfig();
+  });
+  $("cfg-save").addEventListener("click", saveCfgSheet);
+}
+
+async function saveCfgSheet() {
+  const name = state.cfgTab;
+  const sheet = state.config && state.config[name];
+  if (!sheet) return;
+  const ok = await confirmModal({
+    title: `Desar «${name}»?`,
+    message: `Es reescriurà la pestanya ${name} de l'Excel amb el que veus aquí (les files totalment buides s'eliminen). Els canvis s'apliquen al formulari públic a l'instant.`,
+    confirmLabel: "Desa"
+  });
+  if (!ok) return;
+  const btn = $("cfg-save");
+  if (btn) { btn.disabled = true; btn.textContent = "Desant…"; }
+  try {
+    await api("admin_config_save", { sheet: name, header: sheet.header, rows: sheet.rows });
+    sheet.rows = sheet.rows.filter((r) => (r || []).some((v) => String(v).trim() !== ""));
+    sheet._dirty = false;
+    toast(`Pestanya ${name} desada.`);
+    renderCfgTabs();
+    renderCfgSheet();
+    loadAll();   // refresca el panell (selector de formularis, setmanes, places…)
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = `Desa «${name}»`; }
     toast("No s'ha pogut desar: " + err.message, true);
   }
 }
@@ -1897,12 +2183,12 @@ function demoData(form) {
       grups: {}, sapNedar: swim,
       fitxers: card ? [card] : [],
       detall: [
-        { label: "Nom i cognoms", value: nom, grup: "Dades del jugador/a", esJugador: true },
-        { label: "Data de naixement", value: `1${i % 9}/0${1 + i % 8}/20${10 + i % 9}`, grup: "Dades del jugador/a", esJugador: true },
-        { label: "Sap nedar?", value: swim, grup: "Dades del jugador/a", esJugador: true },
-        ...(card ? [{ label: "Còpia de la targeta sanitària", value: card, grup: "Documentació", esJugador: true }] : []),
-        { label: "Nom del tutor/a", value: tutors[i % tutors.length], grup: "Dades del tutor/a", esJugador: false },
-        { label: "Telèfon", value: "6" + (10000000 + Math.floor(Math.random() * 8999999)), grup: "Dades del tutor/a", esJugador: false }
+        { id: "nom_jugador", tipo: "text", label: "Nom i cognoms", value: nom, grup: "Dades del jugador/a", esJugador: true },
+        { id: "data_naixement", tipo: "date", label: "Data de naixement", value: `1${i % 9}/0${1 + i % 8}/20${10 + i % 9}`, grup: "Dades del jugador/a", esJugador: true },
+        { id: "sap_nedar", tipo: "radio", opciones: "Sí|No", label: "Sap nedar?", value: swim, grup: "Dades del jugador/a", esJugador: true },
+        ...(card ? [{ id: "targeta_sanitaria", tipo: "file", label: "Còpia de la targeta sanitària", value: card, grup: "Documentació", esJugador: true }] : []),
+        { id: "nom_tutor", tipo: "text", label: "Nom del tutor/a", value: tutors[i % tutors.length], grup: "Dades del tutor/a", esJugador: false },
+        { id: "telefon", tipo: "tel", label: "Telèfon", value: "6" + (10000000 + Math.floor(Math.random() * 8999999)), grup: "Dades del tutor/a", esJugador: false }
       ]
     });
   }
@@ -1910,6 +2196,47 @@ function demoData(form) {
   const ages = {}; rows.forEach((r) => (ages[r.edat] = (ages[r.edat] || 0) + 1));
   _demo[form] = { weeks, occ, rows, perDay, ages };
   return _demo[form];
+}
+
+// Configuració d'exemple per a la pàgina "Configuració" en mode demo.
+let _demoConfig = null;
+function demoConfig() {
+  if (_demoConfig) return _demoConfig;
+  _demoConfig = {
+    Formularios: {
+      header: ["id", "nombre", "habilitado", "dashboard_activo", "hoja"],
+      rows: [
+        ["estiu", "Casal d'Estiu 2026", "TRUE", "TRUE", ""],
+        ["primavera", "Casal de Primavera 2027", "TRUE", "FALSE", ""],
+        ["hivern", "Casal de Nadal 2026", "FALSE", "FALSE", ""]
+      ]
+    },
+    Semanas: {
+      header: ["id", "nombre", "fechas", "descripcion", "habilitado", "plazas", "form"],
+      rows: [
+        ["S1", "Setmana 1", "29 juny – 3 juliol", "", "TRUE", "20", ""],
+        ["S2", "Setmana 2", "6 – 10 juliol", "", "TRUE", "20", ""],
+        ["S3", "Setmana 3", "13 – 17 juliol", "", "TRUE", "20", ""]
+      ]
+    },
+    Ajustes: {
+      header: ["Clave", "Valor", "form"],
+      rows: [
+        ["hero_titulo", "Casal d'Hoquei d'Estiu", ""],
+        ["lema", "Inscripcions obertes", ""],
+        ["hero_horari", "9 – 13 h", ""]
+      ]
+    },
+    Campos: {
+      header: ["id", "etiqueta", "tipo", "opciones", "obligatorio", "placeholder", "ayuda", "grupo", "orden", "form"],
+      rows: [
+        ["nom_jugador", "Nom i cognoms", "text", "", "TRUE", "", "", "Dades del jugador/a", "1", ""],
+        ["data_naixement", "Data de naixement", "date", "", "TRUE", "", "", "Dades del jugador/a", "2", ""],
+        ["sap_nedar", "Sap nedar?", "radio", "Sí|No", "TRUE", "", "", "Dades del jugador/a", "3", ""]
+      ]
+    }
+  };
+  return _demoConfig;
 }
 
 let _demoGroups = DEFAULT_GROUPS.slice();
@@ -1980,6 +2307,43 @@ async function demoApi(action, extra) {
       return { ok: true, id: extra.id, estat: r.estat, paidWeeks: paid };
     }
     return { ok: false, error: "row not found" };
+  }
+  if (action === "admin_set_weeks") {
+    const r = (extra.row != null && d.rows.find((x) => String(x.row) === String(extra.row)))
+      || d.rows.find((x) => x.id === extra.id);
+    if (!r) return { ok: false, error: "row not found" };
+    const ids = d.weeks.map((w) => w.id);
+    const selected = (extra.weeks || []).filter((w) => ids.includes(w));
+    if (!selected.length) return { ok: false, error: "Cal deixar almenys una setmana." };
+    r.weekIds = selected;
+    r.setmanes = selected.map((wid) => { const w = d.weeks.find((x) => x.id === wid); return (w && w.etiqueta) || wid; }).join(", ");
+    r.paidWeeks = (r.paidWeeks || []).filter((w) => selected.includes(w));
+    r.estat = r.paidWeeks.length === 0 ? "Pendent" : r.paidWeeks.length >= selected.length ? "Pagat" : "Parcial";
+    if (extra.preu != null && String(extra.preu) !== "") r.preu = Number(extra.preu) || 0;
+    return { ok: true, id: extra.id, weekIds: selected, setmanes: r.setmanes, paidWeeks: r.paidWeeks, estat: r.estat, preu: r.preu };
+  }
+  if (action === "admin_config_get") {
+    return { ok: true, sheets: JSON.parse(JSON.stringify(demoConfig())) };
+  }
+  if (action === "admin_config_save") {
+    const cfg = demoConfig();
+    const body = (extra.rows || []).filter((r) => (r || []).some((v) => String(v).trim() !== ""));
+    cfg[extra.sheet] = { header: extra.header || [], rows: body };
+    return { ok: true, sheet: extra.sheet, rows: body.length };
+  }
+  if (action === "admin_update_fields") {
+    const r = (extra.row != null && d.rows.find((x) => String(x.row) === String(extra.row)))
+      || d.rows.find((x) => x.id === extra.id);
+    if (!r) return { ok: false, error: "row not found" };
+    const patch = extra.patch || {};
+    (r.detall || []).forEach((it) => { if (it.id && patch[it.id] != null) it.value = String(patch[it.id]); });
+    if (patch.nom_jugador) r.nom = patch.nom_jugador;
+    if (patch.nom_tutor) r.tutor = patch.nom_tutor;
+    if (patch.telefon) r.telefon = patch.telefon;
+    if (patch.data_naixement) { const y = Number(String(patch.data_naixement).slice(0, 4)); if (y) r.edat = Math.max(0, new Date().getFullYear() - y); }
+    if (extra.preu != null && String(extra.preu) !== "") r.preu = Number(extra.preu) || 0;
+    if (extra.descompte != null) r.descompte = String(extra.descompte) || "-";
+    return { ok: true, id: r.id, updated: patch, nom: r.nom, tutor: r.tutor, email: r.email, telefon: r.telefon, edat: r.edat, preu: r.preu, descompte: r.descompte };
   }
   if (action === "admin_set_status") {
     const r = d.rows.find((x) => x.id === extra.id);

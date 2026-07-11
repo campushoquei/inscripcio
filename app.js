@@ -24,6 +24,128 @@ const MAX_TOTAL_MB = 12;
 const FORM_OPENED_AT = Date.now();
 const MIN_SUBMIT_MS = 5000;
 
+// ---- Codi postal → població (llista local, sense APIs) ----
+// En escriure un CP conegut, el camp "poblacio" s'omple sol. MAI trepitja res
+// escrit a mà per l'usuari (només omple si és buit o si el valor anterior també
+// el vam posar nosaltres). La llista no és exhaustiva: cobreix la zona del club
+// (Penedès/Anoia) i les poblacions grans de Catalunya. Si un CP no hi és, no
+// passa res: la família escriu la població com sempre. Afegir-ne més = una línia.
+const CP_RANGES = [
+  [8001, 8042, "Barcelona"],
+  [8901, 8906, "L'Hospitalet de Llobregat"],
+  [8910, 8918, "Badalona"],
+  [8921, 8924, "Santa Coloma de Gramenet"],
+  [8201, 8208, "Sabadell"],
+  [8221, 8228, "Terrassa"],
+  [8240, 8243, "Manresa"],
+  [8301, 8304, "Mataró"],
+  [8401, 8403, "Granollers"],
+  [8172, 8174, "Sant Cugat del Vallès"],
+  [8195, 8198, "Sant Cugat del Vallès"],
+  [17001, 17007, "Girona"],
+  [25001, 25008, "Lleida"],
+  [43001, 43008, "Tarragona"],
+  [43201, 43206, "Reus"],
+];
+const CP_POBLACIONS = {
+  // Alt Penedès i rodalies (la zona del club)
+  "08776": "Sant Pere de Riudebitlles",
+  "08777": "Sant Quintí de Mediona",
+  "08775": "Torrelavit",
+  "08773": "Mediona",
+  "08720": "Vilafranca del Penedès",
+  "08770": "Sant Sadurní d'Anoia",
+  "08730": "Santa Margarida i els Monjos",
+  "08731": "Sant Martí Sarroca",
+  "08733": "El Pla del Penedès",
+  "08736": "Font-rubí",
+  "08737": "Torrelles de Foix",
+  "08739": "Subirats",
+  "08790": "Gelida",
+  "08791": "Sant Llorenç d'Hortons",
+  "08792": "La Granada",
+  // Anoia
+  "08700": "Igualada",
+  "08710": "Santa Margarida de Montbui",
+  "08711": "Òdena",
+  "08788": "Vilanova del Camí",
+  "08786": "Capellades",
+  "08784": "Piera",
+  "08783": "Masquefa",
+  // Baix Llobregat / Garraf
+  "08760": "Martorell",
+  "08740": "Sant Andreu de la Barca",
+  "08750": "Molins de Rei",
+  "08620": "Sant Vicenç dels Horts",
+  "08630": "Abrera",
+  "08640": "Olesa de Montserrat",
+  "08800": "Vilanova i la Geltrú",
+  "08810": "Sant Pere de Ribes",
+  "08870": "Sitges",
+  "08880": "Cubelles",
+  "08820": "El Prat de Llobregat",
+  "08830": "Sant Boi de Llobregat",
+  "08840": "Viladecans",
+  "08850": "Gavà",
+  "08860": "Castelldefels",
+  "08940": "Cornellà de Llobregat",
+  "08950": "Esplugues de Llobregat",
+  "08960": "Sant Just Desvern",
+  "08970": "Sant Joan Despí",
+  "08980": "Sant Feliu de Llobregat",
+  // Vallès i Maresme
+  "08100": "Mollet del Vallès",
+  "08110": "Montcada i Reixac",
+  "08130": "Santa Perpètua de Mogoda",
+  "08150": "Parets del Vallès",
+  "08160": "Montmeló",
+  "08191": "Rubí",
+  "08210": "Barberà del Vallès",
+  "08290": "Cerdanyola del Vallès",
+  "08440": "Cardedeu",
+  "08450": "Llinars del Vallès",
+  "08470": "Sant Celoni",
+  "08340": "Vilassar de Mar",
+  "08350": "Arenys de Mar",
+  "08360": "Canet de Mar",
+  "08370": "Calella",
+  "08380": "Malgrat de Mar",
+  // Resta de Catalunya (poblacions grans)
+  "08930": "Sant Adrià de Besòs",
+  "08500": "Vic",
+  "08600": "Berga",
+  "17190": "Salt",
+  "17200": "Palafrugell",
+  "17220": "Sant Feliu de Guíxols",
+  "17230": "Palamós",
+  "17300": "Blanes",
+  "17310": "Lloret de Mar",
+  "17500": "Ripoll",
+  "17600": "Figueres",
+  "17800": "Olot",
+  "17820": "Banyoles",
+  "25200": "Cervera",
+  "25230": "Mollerussa",
+  "25300": "Tàrrega",
+  "25600": "Balaguer",
+  "25700": "La Seu d'Urgell",
+  "43700": "El Vendrell",
+  "43800": "Valls",
+  "43500": "Tortosa",
+  "43820": "Calafell",
+  "43830": "Torredembarra",
+  "43840": "Salou",
+  "43850": "Cambrils",
+  "43870": "Amposta",
+};
+function cpToTown(cp) {
+  if (!/^\d{5}$/.test(cp)) return "";
+  if (CP_POBLACIONS[cp]) return CP_POBLACIONS[cp];
+  const n = parseInt(cp, 10);
+  for (const [a, b, town] of CP_RANGES) { if (n >= a && n <= b) return town; }
+  return "";
+}
+
 const LOAD_HINTS = [
   "📋 Preparant la teva inscripció",
   "🏑 Buscant la millor línia de passada",
@@ -284,6 +406,12 @@ async function load() {
   try {
     CONFIG = await fetchConfig();
     if (CONFIG.settings && CONFIG.settings.SCRIPT_URL) SCRIPT_URL = CONFIG.settings.SCRIPT_URL.trim();
+    // Sense ?form= a la URL, el backend resol el formulari per defecte (el primer
+    // habilitat): adoptem el seu id perquè pujades i enviament el portin explícit.
+    if (!activeFormId && CONFIG.form && CONFIG.form.id) {
+      activeFormId = CONFIG.form.id;
+      if (!CONFIG_CACHE[activeFormId]) CONFIG_CACHE[activeFormId] = structuredClone(CONFIG);
+    }
     applySettings(CONFIG.settings || {});
     initHeroSlider();
     if (CONFIG.form && CONFIG.form.habilitado === false) {
@@ -621,7 +749,7 @@ function initWizard() {
   // Elimina wizard anterior (re-render)
   const oldNav = document.getElementById("wizard-nav");
   if (oldNav) oldNav.remove();
-  document.body.classList.remove("has-wizard");
+  document.body.classList.remove("has-wizard", "wizard-inner");
   // El xip de resum del topbar és exclusiu del wizard: amagat fins que
   // renderWizardNav decideixi mostrar-lo (passos ≥ 2)
   const topChip = document.getElementById("topbar-price");
@@ -718,6 +846,10 @@ function renderWizardStep(scrollTop, dir) {
 
   // Mostra només el pas actiu
   wizardSteps.forEach((s, i) => { s.hidden = i !== wizardStep; });
+
+  // El hero només acompanya el primer pas: als següents s'amaga (via CSS) i el
+  // formulari ocupa tota la pantalla sota el topbar.
+  document.body.classList.toggle("wizard-inner", wizardSteps.length > 0 && wizardStep > 0);
 
   // La targeta "Preu final" NO es mostra al wizard: el total viu ja és a la
   // barra inferior (o al xip del topbar) i el desglossament surt al pas de
@@ -1366,6 +1498,30 @@ function fieldEl(f, scope) {
         const formatted = (m[1] ? "+34 " : "") + m[2].replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
         if (formatted !== control.value) { control.value = formatted; control.dispatchEvent(new Event("input", { bubbles: true })); }
       });
+    }
+    // CP → població: en tenir 5 dígits d'un CP conegut, omple la població del
+    // mateix àmbit si és buida (o si el valor anterior també era autocompletat).
+    if (f.id === "codi_postal") {
+      const fillTown = () => {
+        const town = cpToTown(control.value.trim());
+        if (!town) return;
+        const sel = scoped
+          ? `[data-field="poblacio"][data-scope="${scope}"]`
+          : `[data-field="poblacio"]:not([data-scope])`;
+        const pobl = els.form.querySelector(sel);
+        if (!pobl || pobl.value === town) return;
+        if (pobl.value.trim() && pobl.dataset.cpAutofill !== "1") return;   // escrit a mà: no es toca
+        pobl.value = town;
+        pobl.dataset.cpAutofill = "1";
+        pobl.dispatchEvent(new Event("input", { bubbles: true }));   // marca vàlid + esborrany + progrés
+      };
+      control.addEventListener("input", fillTown);
+      control.addEventListener("blur", fillTown);
+    }
+    // Si l'usuari corregeix la població a mà, deixa de ser "nostra": el CP ja
+    // no la tornarà a canviar encara que es reescrigui.
+    if (f.id === "poblacio") {
+      control.addEventListener("input", (e) => { if (e.isTrusted) delete control.dataset.cpAutofill; });
     }
   }
 
@@ -2208,6 +2364,7 @@ function showDone(shared, children, campusName, result) {
   if (topChip) topChip.hidden = true;
   els.form.hidden = true; els.returning.hidden = true; els.done.hidden = false;
   document.body.classList.add("page--done");
+  document.body.classList.remove("wizard-inner");   // a l'èxit el hero torna a veure's
   haptic([14, 60, 14, 60, 26]); // petita celebració tàctil
   launchConfetti();
   const s = CONFIG.settings || {};

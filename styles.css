@@ -1226,6 +1226,11 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   body.page--no-forms .main,
   body.page--done .main { margin-top: 0; }
 
+  /* Al wizard, el hero només acompanya el primer pas: als passos següents
+     s'amaga del tot i el formulari comença just sota el topbar. */
+  body.wizard-inner .hero { display: none; }
+  body.wizard-inner .main { margin-top: 0; padding-top: 14px; }
+
   /* La pantalla d'èxit es converteix en una targeta flotant, com les seccions.
      .done.done: guanya les regles de .done que venen més avall al fitxer
      (degradat celebratori i la seva variant fosca), de mateixa especificitat. */

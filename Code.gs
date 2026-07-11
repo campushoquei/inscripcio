@@ -104,7 +104,7 @@ function doPost(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
     var form = String(payload.form || "").trim();
-    if (!form) { var g = readSettings(""); form = String(g.form_defecto || "").trim(); }
+    if (!form) form = defaultFormId();
     payload.form = form;
 
     // Anti-duplicats: un doble clic o un reintent de xarxa envien la mateixa inscripció
@@ -206,9 +206,18 @@ function submissionSignature(payload) {
 }
 
 /* ---------- Config ---------- */
+// Formulari per defecte quan no se n'indica cap (obrir index.html sense ?form=):
+// el primer de la pestanya "Formularios" amb "habilitado" = TRUE. Si no n'hi ha
+// cap d'habilitat, el primer de la llista (mostrarà "inscripcions tancades").
+function defaultFormId() {
+  var forms = readForms();
+  for (var i = 0; i < forms.length; i++) { if (forms[i].habilitado !== false) return forms[i].id; }
+  return forms.length ? forms[0].id : "";
+}
+
 function buildConfig(form) {
   form = String(form || "").trim();
-  if (!form) { var g = readSettings(""); form = String(g.form_defecto || "").trim(); }
+  if (!form) form = defaultFormId();
   var forms = readForms();
   var info = { id: form, nombre: "", habilitado: true };
   forms.forEach(function (f) { if (f.id === form) info = f; });
@@ -1186,14 +1195,56 @@ function adminAuth(pin) {
   return { ok: false, locked: isAdminLocked() };
 }
 
-// Llista de formularis per al selector del panell (sempre amb el per defecte).
+/* ---------- Configuració des del panell ----------
+   La pàgina "Configuració" del panell llegeix i reescriu les 4 pestanyes de
+   configuració de l'Excel (Formularios, Semanas, Ajustes, Campos) perquè no
+   calgui obrir el full. MAI toca les pestanyes d'inscripcions. */
+function configSheetNames() { return [SHEETS.forms, SHEETS.weeks, SHEETS.settings, SHEETS.fields]; }
+
+// Retorna les pestanyes tal com es veuen al full (matriu de textos), per editar-les.
+function adminConfigGet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var out = {};
+  configSheetNames().forEach(function (name) {
+    var sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < 1) { out[name] = { header: [], rows: [] }; return; }
+    // getDisplayValues: dates i números com es veuen al full → round-trip segur en text.
+    var values = sheet.getDataRange().getDisplayValues();
+    out[name] = { header: values[0].map(function (h) { return String(h).trim(); }), rows: values.slice(1) };
+  });
+  return { ok: true, sheets: out };
+}
+
+// Reescriu una pestanya de configuració sencera amb el que envia el panell
+// (cobreix afegir, editar i esborrar files d'un sol cop; són fulls petits).
+function adminConfigSave(name, header, rows) {
+  name = str(name);
+  if (configSheetNames().indexOf(name) === -1) return { ok: false, error: "sheet not allowed" };
+  header = (header || []).map(function (h) { return str(h); });
+  if (!header.length || !header.some(function (h) { return h; })) return { ok: false, error: "capçalera buida" };
+  var width = header.length;
+  var body = (rows || []).map(function (r) {
+    var row = [];
+    for (var c = 0; c < width; c++) row.push(r && r[c] != null ? String(r[c]) : "");
+    return row;
+  }).filter(function (r) { return r.some(function (v) { return String(v).trim() !== ""; }); });
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  sheet.clearContents();
+  var values = [header].concat(body);
+  sheet.getRange(1, 1, values.length, width).setValues(values);
+  clearConfigCache();   // el formulari públic veu els canvis a l'instant
+  return { ok: true, sheet: name, rows: body.length };
+}
+
+// Llista de formularis per al selector del panell (la pestanya "Formularios" tal qual).
 function adminForms() {
-  var g = readSettings("");
-  var def = str(g.form_defecto);
   var forms = readForms().map(function (f) { return { id: f.id, nombre: f.nombre || f.id, estacio: f.estacio, habilitado: f.habilitado, dashboardActiu: f.dashboardActiu }; });
-  if (!forms.length) forms = [{ id: def, nombre: str(g.nombre_campus) || "Formulari", estacio: "", habilitado: true, dashboardActiu: true }];
-  else if (def && !forms.some(function (f) { return f.id === def; })) {
-    forms.unshift({ id: def, nombre: str(g.nombre_campus) || def, estacio: "", habilitado: true, dashboardActiu: true });
+  if (!forms.length) {
+    var g = readSettings("");
+    forms = [{ id: "", nombre: str(g.nombre_campus) || "Formulari", estacio: "", habilitado: true, dashboardActiu: true }];
   }
   return forms;
 }
@@ -1224,7 +1275,7 @@ function handleAdmin(p) {
     if (!validateAdminToken(p.token)) return { ok: false, error: "unauthorized" };
 
     var form = str(p.form);
-    if (!form) { var g = readSettings(""); form = str(g.form_defecto); }
+    if (!form) form = defaultFormId();
     switch (p.action) {
       case "admin_session": {    // restaura la sessió sense enviar el PIN de nou
         var sc = readSettings("");
@@ -1239,12 +1290,16 @@ function handleAdmin(p) {
       case "admin_list":        return adminList(form);
       case "admin_set_status":  return adminSetStatus(form, p.id, p.estat);
       case "admin_set_payment": return adminSetPayment(form, p.id, p.weeks, p.row);
+      case "admin_set_weeks":   return adminSetWeeks(form, p.id, p.weeks, p.row, p.preu);
       case "admin_set_group":   return adminSetGroup(form, p.id, p.week, p.color, p.row);
       case "admin_set_groups_config": return adminSetGroupsConfig(p.config);
       case "admin_resend":      return adminResend(form, p.id);
       case "admin_reminder":    return adminReminder(form, p.ids || (p.id ? [p.id] : []));
       case "admin_receipt":     return adminReceipt(form, p.ids || (p.id ? [p.id] : []));
       case "admin_update":      return adminUpdate(form, p.id, p.patch);
+      case "admin_update_fields": return adminUpdateFields(form, p.id, p.row, p.patch, p.preu, p.descompte);
+      case "admin_config_get":  return adminConfigGet();
+      case "admin_config_save": return adminConfigSave(p.sheet, p.header, p.rows);
       case "admin_cancel":      return adminCancel(form, p.id);
       default:                 return { ok: false, error: "unknown action" };
     }
@@ -1488,7 +1543,8 @@ function adminList(form) {
     fields.forEach(function (f) {
       var v = row[f.id];
       if (v == null || v === "") return;
-      detail.push({ label: labels[f.id] || f.id, value: String(v), grup: groups[f.id] || "", esJugador: groups[f.id] === childGroup });
+      // id/tipo/opciones: el panell els fa servir per al mode edició (quin input pinta).
+      detail.push({ id: f.id, tipo: f.tipo, opciones: f.opciones || "", label: labels[f.id] || f.id, value: String(v), grup: groups[f.id] || "", esJugador: groups[f.id] === childGroup });
     });
     var registered = rowRegisteredWeeks(row, weekIds);
     var paid = rowPaidWeeks(row, registered);
@@ -1554,6 +1610,52 @@ function adminSetPayment(form, id, weeks, rowNum) {
   sheet.getRange(target.__row, paidCol, 1, 1).setValue(paid.join(", "));
   sheet.getRange(target.__row, estatCol, 1, 1).setValue(estat);
   return { ok: true, id: id, estat: estat, paidWeeks: paid };
+}
+
+// Canvia les setmanes d'una inscripció (altes/baixes d'última hora des del panell).
+// Reescriu les columnes 1/0 de cada setmana i el text "Setmanes", poda de "Setmanes
+// pagades" les que ja no estiguin inscrites i recalcula l'Estat. El preu NO es
+// recalcula sol (els descomptes depenen de coses que el backend no sap): l'edita
+// l'admin al mateix diàleg i, si arriba, s'escriu a la columna Preu.
+function adminSetWeeks(form, id, weeks, rowNum, preu) {
+  var data = readSubmissionRows(form);
+  var sheet = data.sheet;
+  if (!sheet) return { ok: false, error: "sheet not found" };
+  var weeksCfg = readWeeks(form);
+  if (!weeksCfg.length) return { ok: false, error: "no weeks" };
+  var weekIds = weeksCfg.map(function (w) { return w.id; });
+  var target = findRowByNumberOrId(data, rowNum, id);
+  if (!target) return { ok: false, error: "row not found" };
+
+  var selected = (weeks || []).map(String).filter(function (w) { return weekIds.indexOf(w) !== -1; });
+  if (!selected.length) return { ok: false, error: "Cal deixar almenys una setmana. Per donar de baixa la inscripció sencera, fes servir Anul·la." };
+
+  // Columnes 1/0 per setmana (es creen si falten) + text llegible "Setmanes".
+  weekIds.forEach(function (wid) {
+    var col = ensureColumn(sheet, data.header, wid);
+    sheet.getRange(target.__row, col, 1, 1).setValue(selected.indexOf(wid) !== -1 ? 1 : 0);
+  });
+  var labels = weeksCfg
+    .filter(function (w) { return selected.indexOf(w.id) !== -1; })
+    .map(function (w) { return w.nombre || w.id; });
+  var setCol = ensureColumn(sheet, data.header, "Setmanes");
+  sheet.getRange(target.__row, setCol, 1, 1).setValue(labels.join(", "));
+
+  // Poda els pagaments de setmanes tretes i recalcula l'estat amb la nova llista.
+  var paid = rowPaidWeeks(target, selected);
+  var estat = computeEstat(paid, selected);
+  var paidCol = ensureColumn(sheet, data.header, "Setmanes pagades");
+  var estatCol = ensureColumn(sheet, data.header, "Estat");
+  sheet.getRange(target.__row, paidCol, 1, 1).setValue(paid.join(", "));
+  sheet.getRange(target.__row, estatCol, 1, 1).setValue(estat);
+
+  var preuOut = num(target.Preu) || 0;
+  if (preu != null && String(preu) !== "") {
+    preuOut = Number(preu) || 0;
+    var preuCol = ensureColumn(sheet, data.header, "Preu");
+    sheet.getRange(target.__row, preuCol, 1, 1).setValue(preuOut);
+  }
+  return { ok: true, id: id, weekIds: selected, setmanes: labels.join(", "), paidWeeks: paid, estat: estat, preu: preuOut };
 }
 
 // Compat: marcar com a Pagat = totes les setmanes; Pendent = cap.
@@ -1896,6 +1998,62 @@ function adminUpdate(form, id, patch) {
   if (patch.email != null && writeFirst(/email|correu|correo/i, patch.email)) updated.email = patch.email;
   if (patch.telefon != null && writeFirst(/telefon|telefono|mobil|movil|phone/i, patch.telefon)) updated.telefon = patch.telefon;
   return { ok: true, id: id, updated: updated };
+}
+
+// Edició completa d'una inscripció des del panell ("Edita nen/a"): rep un patch
+// {campId: valor} amb NOMÉS camps definits al formulari (mai columnes internes ni
+// fitxers), i opcionalment preu i descompte. Si canvia la data de naixement,
+// recalcula la columna Edat (de la qual depenen els grups per edat).
+function adminUpdateFields(form, id, rowNum, patch, preu, descompte) {
+  patch = patch || {};
+  var data = readSubmissionRows(form);
+  var sheet = data.sheet;
+  if (!sheet) return { ok: false, error: "sheet not found" };
+  var target = findRowByNumberOrId(data, rowNum, id);
+  if (!target) return { ok: false, error: "row not found" };
+
+  var editable = {};
+  readFields(form).forEach(function (f) { if (f.tipo !== "nota" && f.tipo !== "file") editable[f.id] = true; });
+
+  var updated = {};
+  Object.keys(patch).forEach(function (k) {
+    if (!editable[k]) return;
+    var v = patch[k] == null ? "" : String(patch[k]);
+    var col = ensureColumn(sheet, data.header, k);
+    sheet.getRange(target.__row, col, 1, 1).setValue(v);
+    target[k] = v;
+    updated[k] = v;
+  });
+
+  var edat = num(target.Edat);
+  var touchedBirth = Object.keys(updated).some(function (k) { return /naix|nacim|birth/i.test(k); });
+  if (touchedBirth) {
+    edat = computeAge(findBirthdate(target));
+    var ecol = ensureColumn(sheet, data.header, "Edat");
+    sheet.getRange(target.__row, ecol, 1, 1).setValue(edat != null ? edat : "");
+  }
+  if (preu != null && String(preu) !== "") {
+    target.Preu = Number(preu) || 0;
+    var pcol = ensureColumn(sheet, data.header, "Preu");
+    sheet.getRange(target.__row, pcol, 1, 1).setValue(target.Preu);
+  }
+  if (descompte != null) {
+    target.Descompte = String(descompte);
+    var dcol = ensureColumn(sheet, data.header, "Descompte");
+    sheet.getRange(target.__row, dcol, 1, 1).setValue(target.Descompte);
+  }
+
+  // Retornem els camps derivats perquè el panell refresqui la taula sense recarregar.
+  return {
+    ok: true, id: id, updated: updated,
+    nom: adminRowName(target, form),
+    tutor: pickFirstValue(target, [/nom_tutor/i, /tutor/i]),
+    email: findEmail(target),
+    telefon: pickFirstValue(target, [/telefon|telefono|mobil|movil/i]),
+    edat: edat != null ? edat : "",
+    preu: num(target.Preu) || 0,
+    descompte: str(target.Descompte)
+  };
 }
 
 /* ---------- Anul·lació d'inscripció ----------

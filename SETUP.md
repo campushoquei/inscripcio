@@ -40,14 +40,12 @@ Apps Script (Code.gs) ─► Google Sheet (base de dades)
 | setmanes_info | Preu: 1a setmana 80 € · 2a setmana / fam. nombrosa / 2n germà 70 € · jugadors C.P. Riudebitlles 70 € (2a setmana o 2n germà 60 €). |
 | semanas_obligatorias | TRUE |
 | carpeta_fitxers | Inscripcions - fitxers |
-| form_defecto | estiu |
 | setmanes_titulo | Setmanes del casal |
 | hero_dates | 29 juny – 31 juliol |
 | hero_horari | 9 – 13 h |
 | hero_lloc | Sant Pere de Riudebitlles |
 | hero_edats | De 4 a 16 anys |
 
-> `form_defecto` = quin formulari es mostra quan s'obre `index.html` sense `?form=`.
 > `setmanes_titulo` = títol de la secció de setmanes/dies (es pot canviar per formulari amb la columna `form`).
 > `instruccions_pagament` = si té valor, la pantalla d'èxit mostra un bloc "Com fer el pagament"
 > amb aquest text (sota el resum amb els imports). Opcional i personalitzable per formulari
@@ -163,9 +161,10 @@ formulari té la seva pròpia URL (`?form=...`) i la seva pestanya de respostes.
 - **habilitado**: `FALSE` = el formulari mostra "inscripcions tancades". `TRUE`/buit = obert.
 - **hoja**: deixa-ho buit i el script crea sol la pestanya de respostes `Inscripciones_<id>`.
 
-El **formulari per defecte** (obrir `index.html` sense `?form=`) fa servir les files
-sense `form` i guarda a la pestanya `Inscripciones` de sempre. No cal tocar res perquè
-segueixi funcionant com fins ara.
+El **formulari per defecte** (obrir `index.html` sense `?form=`) és **el primer de la
+llista amb `habilitado = TRUE`**: per triar quin s'obre, mou-lo a la primera fila de
+`Formularios` o desactiva els de sobre. La web només ofereix (al selector del hero)
+els formularis habilitats.
 
 ### La columna `form` a `Ajustes`, `Campos` i `Semanas`
 

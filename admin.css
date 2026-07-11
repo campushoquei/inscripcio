@@ -396,6 +396,71 @@ span.estat { cursor: default; }
 .edit-form input { border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 11px; font-family: inherit; font-size: .9rem; color: var(--ink); }
 .edit-form input:focus { outline: 0; border-color: var(--blue); }
 .edit-form__actions { display: flex; gap: 8px; margin-top: 4px; }
+
+/* ---------- Pàgina de configuració (edició de l'Excel de control) ---------- */
+.iconbtn.is-active { background: var(--navy); border-color: var(--navy); color: #fff; }
+.tabbar.is-hidden { display: none !important; }
+.cfg-hint { margin: -6px 0 16px; font-size: .82rem; color: var(--ink-soft); line-height: 1.5; }
+.cfg-hint--tab { margin: 0 0 12px; }
+.cfg-loading { padding: 18px 4px; font-size: .88rem; color: var(--ink-soft); }
+.cfg-dot { color: #D97706; font-size: .6rem; vertical-align: middle; }
+.cfg-scroll { margin-bottom: 14px; }
+.cfg-table th { white-space: nowrap; }
+.cfg-table td { padding: 4px 6px; }
+.cfg-in {
+  width: 100%; min-width: 110px; box-sizing: border-box;
+  border: 1.5px solid var(--line); border-radius: 7px; padding: 6px 8px;
+  font-family: inherit; font-size: .84rem; color: var(--ink); background: var(--card);
+}
+.cfg-in:focus { outline: 0; border-color: var(--blue); }
+.cfg-in--wide { min-width: 260px; }
+select.cfg-in { cursor: pointer; }
+.cfg-del-th, .cfg-del-td { width: 34px; }
+.cfg-del { color: var(--ink-soft); }
+.cfg-del:hover { color: var(--danger); border-color: var(--danger); }
+.cfg-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cfg-spacer { flex: 1; }
+
+/* ---------- Mode edició del calaix ("Edita nen/a") ---------- */
+.edit-banner {
+  margin: 0 0 16px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: #FEF3C7; color: #92400E; font-size: .8rem; font-weight: 600; line-height: 1.4;
+}
+.dfield--edit { align-items: center; }
+.dedit {
+  width: 100%; box-sizing: border-box;
+  border: 1.5px solid var(--line); border-radius: 8px; padding: 7px 10px;
+  font-family: inherit; font-size: .88rem; color: var(--ink); background: var(--card);
+}
+.dedit:focus { outline: 0; border-color: var(--blue); }
+select.dedit { cursor: pointer; }
+textarea.dedit { resize: vertical; min-height: 60px; }
+.drawer__editactions {
+  position: sticky; bottom: 0; display: flex; gap: 10px;
+  padding: 14px 0 4px; margin-top: 18px;
+  background: linear-gradient(to top, var(--card) 75%, transparent);
+}
+.drawer__editactions .btn { flex: 1; }
+
+/* ---------- Editor de setmanes (calaix de detall) ---------- */
+.wk-edit-list { display: flex; flex-direction: column; gap: 6px; }
+.wk-edit {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1.5px solid var(--line);
+  border-radius: 9px; padding: 8px 11px; cursor: pointer;
+  font-size: .88rem; font-weight: 600; color: var(--ink);
+}
+.wk-edit:hover { border-color: var(--blue); }
+.wk-edit input { accent-color: var(--blue); width: 16px; height: 16px; flex: none; cursor: pointer; }
+.wk-edit__lbl { flex: 1; min-width: 0; }
+.wk-edit__paid {
+  font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: #16A34A; background: #DCFCE7; border-radius: 99px; padding: 2px 7px; vertical-align: middle;
+}
+.wk-edit__occ { flex: none; font-size: .74rem; font-weight: 700; color: var(--ink-soft); }
+.wk-edit__occ.is-full { color: var(--danger); }
+.wk-edit--full { border-style: dashed; }
+.wk-edit-hint { font-size: .74rem; color: var(--ink-soft); margin: 0; line-height: 1.45; }
 .btn--danger { background: var(--danger); color: #fff; }
 .btn--danger:hover { background: #a93226; }
 .drawer__actions .btn--danger-ghost { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
