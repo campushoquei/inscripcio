@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# ⚠️ Canvia el domini pel teu domini real
+Sitemap: https://campushoqueiriudebitlles.cat/sitemap.xml
