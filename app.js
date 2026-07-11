@@ -20,6 +20,11 @@ const RETURNING_DISMISSED_KEY = "casal_hoquei_returning_dismissed";
 const MAX_FILE_MB = 5;
 const MAX_TOTAL_MB = 12;
 
+// Anti-spam: moment de càrrega de la pàgina. Un enviament abans de MIN_SUBMIT_MS
+// és impossible per a una persona (el formulari demana minuts): només un bot.
+const FORM_OPENED_AT = Date.now();
+const MIN_SUBMIT_MS = 5000;
+
 const LOAD_HINTS = [
   "📋 Preparant la teva inscripció",
   "🏑 Buscant la millor línia de passada",
@@ -145,6 +150,21 @@ async function init() {
   });
   els.form.addEventListener("input", () => { scheduleDraftSave(); scheduleUiUpdate(); });
   els.form.addEventListener("change", () => { scheduleDraftSave(); scheduleUiUpdate(); });
+  // Intro als camps de text = saltar al següent camp visible (no enviar el
+  // formulari per accident). Al mòbil, amb enterkeyhint, la tecla diu "Següent".
+  els.form.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const t = e.target;
+    if (!t.matches("input") || ["checkbox", "radio", "file", "hidden"].includes(t.type)) return;
+    e.preventDefault();
+    const focusables = [...els.form.querySelectorAll("input, select, textarea")].filter((el) =>
+      !el.disabled && el.type !== "hidden" && el.type !== "file" &&
+      el.offsetParent !== null && !el.closest(".hp-field")
+    );
+    const next = focusables[focusables.indexOf(t) + 1];
+    if (next) next.focus();
+    else t.blur();   // últim camp: tanca el teclat
+  });
   els.another.addEventListener("click", resetForNew);
   els.returningClose.addEventListener("click", dismissReturning);
   if (els.returningToggle) els.returningToggle.addEventListener("click", toggleReturning);
@@ -950,12 +970,80 @@ function childrenSectionEl(num, group, fileFields) {
       `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>` +
     `</span>` +
     `<span class="add-child__text">Afegir un germà o germana</span>`;
-  add.addEventListener("click", () => addChildBlock(wrap, group, fileFields));
+  add.addEventListener("click", () => {
+    // No es pot afegir un germà mentre els jugadors ja creats tinguin camps
+    // obligatoris pendents: validem (marcant els errors) i portem al primer.
+    let firstBad = null;
+    wrap.querySelectorAll(".child-block").forEach((b) => {
+      const res = validateChildBlock(b);
+      if (!res.ok && !firstBad) firstBad = res.firstBad;
+    });
+    if (firstBad) {
+      haptic([10, 45, 10]);
+      revealField(firstBad);
+      flashNote("Completa les dades d'aquest jugador/a abans d'afegir-ne un altre.");
+      return;
+    }
+    addChildBlock(wrap, group, fileFields);
+  });
   sec.appendChild(add);
   for (let i = 0; i < childCount; i++) wrap.appendChild(childBlockEl(group, i, fileFields));
   renumberChildren(wrap);
   return sec;
 }
+// Validació d'un bloc de jugador/a concret: camps obligatoris + setmanes (si en
+// calen). Marca els errors com onSubmit i retorna el primer camp que falla.
+function validateChildBlock(block) {
+  let ok = true, firstBad = null;
+  block.querySelectorAll(".field[data-required='1']").forEach((wrap) => {
+    if (!validateSingleField(wrap)) { ok = false; if (!firstBad) firstBad = wrap; }
+  });
+  if (CONFIG && CONFIG.settings && CONFIG.settings.semanas_obligatorias && weeksForCampus().length) {
+    block.querySelectorAll("[data-weeks]").forEach((wrap) => {
+      const none = !wrap.querySelector('input[type="checkbox"]:checked');
+      wrap.classList.toggle("field--invalid", none);
+      if (none) { ok = false; if (!firstBad) firstBad = wrap; }
+    });
+  }
+  return { ok, firstBad };
+}
+
+// Versió silenciosa (sense marcar errors): un bloc té tot l'obligatori omplert?
+// S'usa per pintar l'estat del botó "Afegir un germà" mentre l'usuari escriu.
+function childBlockComplete(block) {
+  let ok = true;
+  block.querySelectorAll(".field[data-required='1']").forEach((wrap) => {
+    const c = wrap.querySelector("[data-field]");
+    if (!c || !ok) return;
+    if (c.dataset.type === "file") {
+      const key = (c.dataset.scope != null && c.dataset.scope !== "")
+        ? `c${c.dataset.scope}__${c.dataset.field}` : c.dataset.field;
+      if (!(fileStore[key] && fileStore[key].length)) ok = false;
+    } else if (c.dataset.type === "checkbox" || c.dataset.type === "radio") {
+      if (!wrap.querySelector("input:checked")) ok = false;
+    } else if (!c.value.trim()) {
+      ok = false;
+    }
+  });
+  if (ok && CONFIG && CONFIG.settings && CONFIG.settings.semanas_obligatorias && weeksForCampus().length) {
+    block.querySelectorAll("[data-weeks]").forEach((wrap) => {
+      if (!wrap.querySelector('input[type="checkbox"]:checked')) ok = false;
+    });
+  }
+  return ok;
+}
+
+// Esmorteeix el botó "Afegir un germà" mentre algun jugador/a té camps pendents
+// (segueix sent clicable: en clicar-lo s'expliquen els camps que falten).
+function updateAddChildState() {
+  const btn = document.querySelector(".add-child");
+  if (!btn) return;
+  const blocks = [...document.querySelectorAll(".child-block")];
+  const ready = blocks.every(childBlockComplete);
+  btn.classList.toggle("is-blocked", !ready);
+  btn.setAttribute("aria-disabled", ready ? "false" : "true");
+}
+
 function childBlockEl(group, i, fileFields) {
   const block = document.createElement("div"); block.className = "child-block"; block.dataset.child = String(i);
   const head = document.createElement("div"); head.className = "child-block__head";
@@ -1097,6 +1185,16 @@ function campusPickerEl(open) {
   return wrap;
 }
 
+// Rang d'edats del campus, llegit de la clau hero_edats de Settings (la mateixa
+// que pinta la fitxa del hero: "De 4 a 16 anys" → { min: 4, max: 16 }).
+function campusAgeRange() {
+  const s = (CONFIG && CONFIG.settings && CONFIG.settings.hero_edats) || "";
+  const m = String(s).match(/(\d+)\D+(\d+)/);
+  if (!m) return null;
+  const min = Number(m[1]), max = Number(m[2]);
+  return min < max ? { min, max } : null;
+}
+
 function fieldEl(f, scope) {
   // nota: bloc de text sense input
   if (f.tipo === "nota") {
@@ -1197,12 +1295,37 @@ function fieldEl(f, scope) {
     if (f.id === "codi_postal") control.inputMode = "numeric";
     if (new Set(["nom_jugador", "nom_tutor", "adreca", "poblacio"]).has(f.id)) control.setAttribute("autocapitalize", "words");
     if (f.id === "nif") control.setAttribute("autocapitalize", "characters");
+    // Al teclat del mòbil, la tecla Intro diu "Següent" (el salt el gestiona el form)
+    control.enterKeyHint = "next";
+    // Endreça automàtica en sortir del camp: NIF compacte en majúscules i telèfon
+    // amb espais (612 345 678). La validació ja ignora espais: això és estètic.
+    if (f.id === "nif") {
+      control.addEventListener("blur", () => {
+        const v = control.value.trim().toUpperCase().replace(/[\s.\-]/g, "");
+        if (v && v !== control.value) { control.value = v; control.dispatchEvent(new Event("input", { bubbles: true })); }
+      });
+    }
+    if (f.tipo === "tel" || f.id === "telefon") {
+      control.addEventListener("blur", () => {
+        const raw = control.value.replace(/[\s.\-()]/g, "");
+        const m = raw.match(/^(\+34|0034)?([6789]\d{8})$/);
+        if (!m) return;
+        const formatted = (m[1] ? "+34 " : "") + m[2].replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+        if (formatted !== control.value) { control.value = formatted; control.dispatchEvent(new Event("input", { bubbles: true })); }
+      });
+    }
   }
 
   wrap.appendChild(control);
 
   if (!choiceLike) {
-    control.addEventListener("blur", () => { if (wrap.dataset.required === "1") validateSingleField(wrap); });
+    control.addEventListener("blur", () => {
+      if (wrap.dataset.required !== "1") return;
+      const ok = validateSingleField(wrap);
+      // Marca suau de "tot bé": només si hi ha valor i valida (mai en camps buits)
+      wrap.classList.toggle("field--valid", ok && !!control.value.trim());
+    });
+    control.addEventListener("input", () => wrap.classList.remove("field--valid"));
   }
 
   if (f.ayuda && !choiceLike) {
@@ -1210,6 +1333,38 @@ function fieldEl(f, scope) {
   }
   const err = document.createElement("p"); err.className = "field__error"; err.textContent = "Aquest camp és obligatori.";
   wrap.appendChild(err);
+
+  // Data de naixement: mostra l'edat calculada en viu ("7 anys") i avisa —sense
+  // bloquejar— si cau fora del rang del campus (llegit de hero_edats a Settings).
+  // El typo d'any als selectors de data del mòbil és l'error més comú i així es veu.
+  if (control.type === "date" && /naix|nacim|birth/i.test(f.id)) {
+    const ageEl = document.createElement("p");
+    ageEl.className = "field__age"; ageEl.hidden = true;
+    wrap.appendChild(ageEl);
+    const refresh = () => {
+      const v = control.value;
+      const d = v ? new Date(v + "T00:00:00") : null;
+      if (!d || isNaN(d)) { ageEl.hidden = true; return; }
+      const now = new Date();
+      if (d > now) {
+        ageEl.textContent = "La data és en el futur: revisa l'any.";
+        ageEl.classList.add("is-warn"); ageEl.hidden = false;
+        return;
+      }
+      let age = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+      let txt = age === 1 ? "1 any" : `${age} anys`;
+      const range = campusAgeRange();
+      const off = range && (age < range.min || age > range.max);
+      if (off) txt += ` — el campus és de ${range.min} a ${range.max} anys`;
+      ageEl.classList.toggle("is-warn", !!off);
+      ageEl.textContent = txt; ageEl.hidden = false;
+    };
+    control.addEventListener("input", refresh);
+    control.addEventListener("change", refresh);
+  }
+
   if (f.id === "email") {
     // Suggeriment de typo de domini (gmal.com → gmail.com). No bloqueja; es pot aplicar amb un clic.
     const sug = document.createElement("button");
@@ -1350,8 +1505,13 @@ function childWeeksEl(i) {
     const input = document.createElement("input");
     input.type = "checkbox"; input.value = w.id; input.name = `c${i}__weeks`; input.disabled = full;
     input.addEventListener("change", () => { lab.classList.toggle("is-selected", input.checked); if (navigator.vibrate) navigator.vibrate(10); });
+    // Poques places (≤5) → pastilla àmbar d'urgència en lloc de la verda
+    const nLeft = Number(w.plazas_restantes);
+    const low = !full && w.plazas_restantes != null && nLeft <= 5;
     const placesPill = (!full && w.plazas_restantes != null && showPlacesLeft(w))
-      ? `<span class="week__places">${w.plazas_restantes} places</span>` : "";
+      ? `<span class="week__places${low ? " week__places--low" : ""}">${
+          low ? (nLeft === 1 ? "Última plaça!" : `Últimes ${nLeft} places!`) : `${nLeft} places`
+        }</span>` : "";
     const fullTag = full ? `<span class="week__tag">Complet</span>` : "";
     lab.innerHTML =
       `<span class="week__body">` +
@@ -1485,10 +1645,15 @@ function buildEmailConfirmField(scope, sfx) {
   const input = document.createElement("input");
   input.type = "email"; input.id = labId; input.className = "input";
   input.autocomplete = "off";
+  input.enterKeyHint = "next";
   input.dataset.field = "email_confirm"; input.dataset.type = "email_confirm";
   input.dataset.name = nm;
   if (scoped) input.dataset.scope = String(scope);
-  input.addEventListener("blur", () => validateSingleField(wrap));
+  input.addEventListener("blur", () => {
+    const ok = validateSingleField(wrap);
+    wrap.classList.toggle("field--valid", ok && !!input.value.trim());
+  });
+  input.addEventListener("input", () => wrap.classList.remove("field--valid"));
   wrap.appendChild(input);
   const err = document.createElement("p"); err.className = "field__error"; err.textContent = "Els correus no coincideixen.";
   wrap.appendChild(err);
@@ -1658,10 +1823,28 @@ function showSendError() {
       `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>` +
       `<span>Torna-ho a provar</span>` +
     `</button>`;
-  box.querySelector(".send-error__retry").addEventListener("click", () => {
+  const resubmit = () => {
     if (els.form.requestSubmit) els.form.requestSubmit();
     else els.form.dispatchEvent(new Event("submit", { cancelable: true }));
-  });
+  };
+  box.querySelector(".send-error__retry").addEventListener("click", resubmit);
+  // Si l'error era per manca de connexió, en recuperar-la reintenta sol: al mòbil
+  // perdre cobertura un moment és habitual i així l'usuari no ha de fer res.
+  if (offline) {
+    const onOnline = () => {
+      window.removeEventListener("online", onOnline);
+      const b = document.getElementById("send-error");
+      if (!b || b !== box) return;   // l'avís ja no hi és (reintent manual, èxit…)
+      box._onOnline = null;
+      const title = box.querySelector(".send-error__title");
+      const bodyEl = box.querySelector(".send-error__body");
+      if (title) title.textContent = "Connexió recuperada";
+      if (bodyEl) bodyEl.textContent = "Tornant a enviar la inscripció…";
+      setTimeout(resubmit, 900);   // petit marge perquè la xarxa s'estabilitzi
+    };
+    box._onOnline = onOnline;
+    window.addEventListener("online", onOnline);
+  }
   const submitRow = els.form.querySelector(".submit-row");
   if (submitRow) submitRow.insertAdjacentElement("beforebegin", box);
   else els.form.appendChild(box);
@@ -1669,7 +1852,9 @@ function showSendError() {
 }
 function hideSendError() {
   const box = document.getElementById("send-error");
-  if (box) box.remove();
+  if (!box) return;
+  if (box._onOnline) window.removeEventListener("online", box._onOnline);
+  box.remove();
 }
 
 // ---- Enviament ----
@@ -1691,6 +1876,11 @@ async function onSubmit(e) {
     revealField(firstBad);
     return flashNote(`Falta un camp: ${fieldLabel(firstBad)}.`);
   }
+  // Anti-spam: el honeypot (camp invisible) ple o un enviament impossiblement
+  // ràpid delaten un bot. Cap dels dos casos pot passar a una persona real.
+  const hp = document.getElementById("hp-extra");
+  if (hp && hp.value.trim()) { console.warn("Enviament descartat (honeypot)."); return flashNote("No s'ha pogut enviar. Torna-ho a provar."); }
+  if (Date.now() - FORM_OPENED_AT < MIN_SUBMIT_MS) return flashNote("Espera uns segons i torna-ho a provar.");
   // Guàrdia anti-duplicats: ho preguntem ABANS d'engegar l'enviament (així el botó
   // no queda girant mentre el modal està obert). El servidor substituirà la fila
   // anterior de la mateixa família, no en crearà una de nova.
@@ -2482,6 +2672,7 @@ function updateProgress() {
   }
   // El botó d'enviar NO es bloqueja: així clicar sempre dona resposta. onSubmit valida,
   // marca els camps que falten i salta al pas del wizard corresponent.
+  updateAddChildState();
 }
 
 // ---- 2. Preus en temps real ----

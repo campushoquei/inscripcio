@@ -185,6 +185,10 @@
 
     <!-- Formulari -->
     <form class="form" id="form" hidden novalidate>
+      <!-- Anti-spam: camp invisible que cap persona real no omple (els bots automàtics sí) -->
+      <div class="hp-field" aria-hidden="true">
+        <label>No omplis aquest camp<input type="text" id="hp-extra" name="camp_extra" tabindex="-1" autocomplete="off" /></label>
+      </div>
       <div class="form-progress" id="form-progress" hidden>
         <div class="form-progress__track">
           <div class="form-progress__bar" id="form-progress-bar"></div>

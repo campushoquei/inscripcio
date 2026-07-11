@@ -862,30 +862,56 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .child-block__remove:active { transform: scale(.96); }
 /* La secció de setmanes (.child-weeks) es defineix com a panell més avall,
    després de la taula de preus, i ara s'aplica a totes les mides (PC + mòbil). */
-/* ---------- Botó "Afegir un altre nen/a" ----------
-   Minimalista: pla i sense ombres, text blau amb un "+" en cercle fi.
+/* ---------- Botó "Afegir un germà o germana" ----------
+   Targeta d'acció d'amplada completa amb vora discontínua: el mateix llenguatge
+   que la zona de fitxers, que al formulari vol dir "aquí s'hi pot afegir una
+   cosa". El "+" va en un token blau ple, com les icones de capçalera de secció.
    Amb .btn.add-child guanyem a .btn--ghost. */
 .btn.add-child {
-  margin-top: 14px; width: 100%; justify-content: center;
-  gap: 9px; padding: 12px 18px; font-size: .92rem; font-weight: 600;
+  margin-top: 16px; width: 100%; justify-content: center;
+  gap: 10px; padding: 14px 18px; font-size: .95rem; font-weight: 700;
   color: var(--blue);
-  background: none;
-  border: none;
+  background: color-mix(in srgb, var(--blue-soft) 45%, transparent);
+  border: 1.5px dashed var(--rink-line);
   border-radius: var(--radius-sm);
-  transition: background .15s, transform .12s;
+  transition: background .15s, border-color .15s, box-shadow .15s, transform .12s;
 }
 .add-child__icon {
   display: grid; place-items: center; flex: 0 0 auto;
-  width: 22px; height: 22px; border-radius: 50%;
-  border: 1.5px solid currentColor; color: var(--blue);
+  width: 24px; height: 24px; border-radius: 8px;
+  background: var(--blue); color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(31,90,224,.55);
   transition: transform .25s ease;
 }
 .add-child__icon svg { width: 13px; height: 13px; }
 @media (hover: hover) {
-  .btn.add-child:hover { background: var(--blue-soft); }
+  .btn.add-child:hover {
+    background: var(--blue-soft);
+    border-color: var(--blue);
+    box-shadow: 0 8px 18px -11px rgba(31,90,224,.55);
+  }
   .btn.add-child:hover .add-child__icon { transform: rotate(90deg); }
 }
 .btn.add-child:active { transform: scale(.99); }
+/* Bloquejat mentre el jugador/a anterior té camps obligatoris pendents. Continua
+   sent clicable: el clic marca i porta al primer camp que falta (millor que un
+   disabled mut). El to gris avisa que encara no toca. */
+.btn.add-child.is-blocked,
+.btn.add-child.is-blocked:hover {
+  color: var(--ink-soft);
+  background: transparent;
+  border-color: var(--line-ink);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.btn.add-child.is-blocked .add-child__icon,
+.btn.add-child.is-blocked:hover .add-child__icon {
+  background: var(--ink-soft); transform: none; box-shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  /* En fosc --blue s'aclareix: el "+" fosc hi contrasta millor (com .btn--primary) */
+  .add-child__icon { color: #0A1020; box-shadow: none; }
+}
 
 /* ============================================================
    Secció de setmanes com a panell (PC + mòbil, idèntic)
@@ -2255,4 +2281,67 @@ html { scroll-padding-bottom: 84px; }
 }
 @media print {
   .done__pay { border: 1px solid #ccc; background: none; }
+}
+
+/* ============================================================
+   Robustesa i micro-UX: honeypot, edat, camp vàlid, places
+   ============================================================ */
+
+/* ---- Honeypot anti-spam: fora de pantalla (no display:none, que els bots
+   espavilats ho detecten), invisible i infocusable per a persones ---- */
+.hp-field {
+  position: absolute !important;
+  left: -9999px; top: 0;
+  width: 1px; height: 1px; overflow: hidden;
+}
+
+/* ---- Edat calculada sota la data de naixement ---- */
+.field__age {
+  margin: 6px 0 0; font-size: .82rem; font-weight: 600; color: #157a4a;
+  display: flex; align-items: center; gap: 7px;
+}
+.field__age::before {
+  content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
+  background: #22a05a;
+}
+.field__age[hidden] { display: none; }
+.field__age.is-warn { color: #B45309; }
+.field__age.is-warn::before { background: #D97706; }
+
+/* ---- Marca suau de camp vàlid: la vora es calma en un verd suau i un tic fi
+   apareix dins del camp. Sense animacions ni colors cridaners. Els camps de
+   data no porten tic (xocaria amb la icona nativa del calendari); allà el
+   feedback positiu ja el dona la línia d'edat. ---- */
+.field--valid .input,
+.field--valid .textarea {
+  border-color: #A9D3BC;
+}
+.field--valid .input:not([type="date"]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2352b788' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 14px;
+  padding-right: 40px;
+}
+
+/* ---- Urgència de places: la pastilla verda passa a àmbar quan en queden poques ---- */
+.week__places--low { color: #B45309; background: rgba(217,119,6,.14); }
+.week__places--low::before { background: #D97706; }
+
+@media (prefers-color-scheme: dark) {
+  .field__age { color: #5fd99a; }
+  .field__age::before { background: #4fce8a; }
+  .field__age.is-warn { color: #fbbf24; }
+  .field__age.is-warn::before { background: #f59e0b; }
+  .field--valid .input,
+  .field--valid .textarea { border-color: rgba(74,222,128,.35); }
+  .field--valid .input:not([type="date"]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234ade80' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 14px;
+  }
+  /* Ha de guanyar la regla verda del bloc fosc anterior (va més tard al fitxer) */
+  .child-weeks .week__places--low { color: #fbbf24; background: rgba(217,119,6,.2); }
+  .child-weeks .week__places--low::before { background: #f59e0b; }
 }
