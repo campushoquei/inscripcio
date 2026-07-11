@@ -13,7 +13,6 @@ let SCRIPT_URL = "https://script.google.com/macros/s/AKfycby3CJLYZTGaKFrjpS4zRnf
 // Buit = formulari per defecte (les files del full sense columna "form").
 const FORM_ID = (new URLSearchParams(location.search).get("form") || "").trim();
 
-const CONTACT_PHONE = "+34629912840";
 const STORAGE_KEY = "casal_hoquei_v1";
 const DRAFT_KEY = "casal_hoquei_draft_v1";
 const RETURNING_DISMISSED_KEY = "casal_hoquei_returning_dismissed";
@@ -169,10 +168,35 @@ async function init() {
   els.returningClose.addEventListener("click", dismissReturning);
   if (els.returningToggle) els.returningToggle.addEventListener("click", toggleReturning);
   if (els.printBtn) els.printBtn.addEventListener("click", () => window.print());
-  const shareBtn = document.getElementById("share-pass");
-  if (shareBtn) shareBtn.addEventListener("click", sharePass);
+  const topPrice = document.getElementById("topbar-price");
+  if (topPrice) topPrice.addEventListener("click", toggleChildrenPopup);
   setupIOSBarFix();
+  setupHeroParallax();
   await load();
+}
+
+// Parallax del hero (mòbil): en fer scroll, el hero baixa a mitja velocitat i
+// el formulari (z-index per sobre) llisca per damunt seu, com un full que el
+// va tapant. Fora del mòbil o amb reduced-motion, el transform es neteja.
+function setupHeroParallax() {
+  const hero = document.getElementById("hero");
+  if (!hero) return;
+  const mq = window.matchMedia("(max-width: 520px)");
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let ticking = false;
+  const update = () => {
+    ticking = false;
+    if (!mq.matches || reduce.matches) { hero.style.transform = ""; return; }
+    const y = Math.max(0, window.scrollY);
+    // Factor baix = el hero marxa més de pressa (a 0.3, surt al 70% de la
+    // velocitat de l'scroll) mantenint la sensació de full que el tapa.
+    hero.style.transform = `translate3d(0, ${Math.round(y * 0.3)}px, 0)`;
+  };
+  window.addEventListener("scroll", () => {
+    if (!ticking) { ticking = true; requestAnimationFrame(update); }
+  }, { passive: true });
+  try { mq.addEventListener("change", update); } catch {}
+  update();
 }
 
 // iOS Safari minimitza la seva barra inferior en fer scroll i reserva la franja del fons
@@ -326,11 +350,6 @@ function applySettings(s) {
     const ogDesc = document.getElementById("og-desc");
     if (ogDesc) ogDesc.setAttribute("content", s.intro);
   }
-  const link = document.querySelector("[data-contact-link]");
-  if (link) {
-    link.href = `tel:${CONTACT_PHONE}`;
-    link.setAttribute("aria-label", "Trucar al 629 912 840");
-  }
   renderHeroFacts(s);
 }
 
@@ -464,12 +483,10 @@ function inferSeason(formId) {
   return "estiu"; // per defecte
 }
 
-let currentSeason = "";   // estació activa (per al passi compartible)
 function applyHeroTheme(estacio) {
   const hero = document.getElementById("hero");
   if (!hero) return;
   const s = String(estacio || "").toLowerCase().trim();
-  currentSeason = s;
   ["estiu", "hivern", "primavera", "tardor"].forEach(function(x) { hero.classList.remove("season-" + x); });
   if (s) hero.classList.add("season-" + s);
   applySeasonBrand(s);
@@ -605,6 +622,10 @@ function initWizard() {
   const oldNav = document.getElementById("wizard-nav");
   if (oldNav) oldNav.remove();
   document.body.classList.remove("has-wizard");
+  // El xip de resum del topbar és exclusiu del wizard: amagat fins que
+  // renderWizardNav decideixi mostrar-lo (passos ≥ 2)
+  const topChip = document.getElementById("topbar-price");
+  if (topChip) topChip.hidden = true;
 
   // Restaura visibilitat per defecte
   const priceCard  = document.getElementById("price-total-card");
@@ -638,14 +659,6 @@ function initWizard() {
   const submitLabel = (CONFIG && CONFIG.settings && CONFIG.settings.texto_boton)
     || (els.submitBtn && els.submitBtn.querySelector(".btn__label") && els.submitBtn.querySelector(".btn__label").textContent)
     || "Enviar inscripció";
-  const PEOPLE_SVG =
-    `<svg class="wc__people" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">` +
-      `<path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>` +
-    `</svg>`;
-  const CHEVRON_UP =
-    `<svg class="wc__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
-      `<polyline points="18 15 12 9 6 15"/>` +
-    `</svg>`;
   const CHEV_LEFT =
     `<svg class="wz-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>`;
   const CHEV_RIGHT =
@@ -669,12 +682,6 @@ function initWizard() {
           HIST_SVG +
           `<span class="wizard-nav__recover-text">Historial</span>` +
         `</button>` +
-        `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
-          PEOPLE_SVG +
-          `<span id="wizard-children-label"></span>` +
-          `<span class="wc__price" id="wizard-children-price" aria-live="polite" hidden></span>` +
-          CHEVRON_UP +
-        `</button>` +
       `</div>` +
       `<span class="wizard-nav__indicator" id="wizard-indicator"></span>` +
       `<div class="wizard-nav__action">` +
@@ -693,7 +700,6 @@ function initWizard() {
 
   document.getElementById("wizard-back").addEventListener("click", wizardBack);
   document.getElementById("wizard-next").addEventListener("click", wizardNext);
-  document.getElementById("wizard-children-info").addEventListener("click", toggleChildrenPopup);
   document.getElementById("wizard-recover").addEventListener("click", toggleRecoverPopup);
 
   // Actualitza el comptador de fills en temps real quan l'usuari escriu el nom
@@ -713,9 +719,11 @@ function renderWizardStep(scrollTop, dir) {
   // Mostra només el pas actiu
   wizardSteps.forEach((s, i) => { s.hidden = i !== wizardStep; });
 
-  // Targeta de preus i botó d'enviament: només a l'últim pas
+  // La targeta "Preu final" NO es mostra al wizard: el total viu ja és a la
+  // barra inferior (o al xip del topbar) i el desglossament surt al pas de
+  // revisió abans d'enviar. Al PC (sense wizard) es continua mostrant.
   const priceCard = document.getElementById("price-total-card");
-  if (priceCard) priceCard.hidden = !isLast;
+  if (priceCard) priceCard.hidden = true;
 
   // Animació d'entrada direccional del pas actiu (endavant → des de la dreta, enrere → des de l'esquerra)
   const active = wizardSteps[wizardStep];
@@ -736,21 +744,15 @@ function renderWizardStep(scrollTop, dir) {
   if (scrollTop) scrollToFormTop();
 }
 
-// Posiciona la vista just després del hero, amagant-lo del tot darrere el topbar sticky
-// (sense deixar cap franja visible de la seva vora inferior).
+// Posiciona la vista amb el capdamunt del formulari just sota el topbar sticky.
+// S'ancora al #form (no al hero): el hero es mou amb el parallax i la seva
+// posició aparent no serveix de referència.
 function scrollToFormTop() {
   const topbar = document.querySelector(".topbar");
   const tbH = topbar ? topbar.offsetHeight : 66;
-  const hero = document.getElementById("hero");
-  let y;
-  if (hero) {
-    // Scroll fins que la base del hero coincideixi amb la base del topbar → hero tapat del tot.
-    y = hero.getBoundingClientRect().bottom + window.scrollY - tbH;
-  } else {
-    const anchor = els.form || els.sections;
-    y = anchor ? anchor.getBoundingClientRect().top + window.scrollY - tbH : 0;
-  }
-  // Math.ceil evita deixar un píxel subpíxel del hero per sota del topbar.
+  const anchor = els.form || els.sections;
+  const y = anchor ? anchor.getBoundingClientRect().top + window.scrollY - tbH : 0;
+  // Math.ceil evita deixar un píxel subpíxel per sota del topbar.
   window.scrollTo({ top: Math.max(0, Math.ceil(y)), behavior: "smooth" });
 }
 
@@ -760,55 +762,50 @@ function renderWizardNav() {
   const nextBtn   = document.getElementById("wizard-next");
   const submitBtn = document.getElementById("wizard-submit");
   const indicator = document.getElementById("wizard-indicator");
-  // Zona esquerra: resum de fills (pas 1) o botó enrere (resta de passos)
-  const isChildrenStep  = wizardSteps[wizardStep] && wizardSteps[wizardStep].id === "children-section";
   const nChildren       = document.querySelectorAll(".child-block").length;
   // Comptador: només fills amb el nom omplert
   const nFilled         = [...document.querySelectorAll(".child-block")].filter(getChildName).length;
-  // Preu total viu (mòbil: el mostrem aquí en comptes de la targeta del final)
+  // Preu total viu (es mostra al xip del topbar)
   const priceSummary    = computePriceSummary();
   const grandTotal      = priceSummary ? priceSummary.grandTotal : 0;
-  // El resum de fills apareix tan aviat com el primer nen té nom (indicador "1"),
-  // o si ja hi ha un preu calculat. A dins hi mostrem el total quan n'hi ha.
-  const showChildrenInfo = isChildrenStep && (nFilled >= 1 || grandTotal > 0);
-  const childrenInfo    = document.getElementById("wizard-children-info");
-  const childrenLabel   = document.getElementById("wizard-children-label");
   const recoverBtn      = document.getElementById("wizard-recover");
 
-  // Botó de recuperació de dades: només al pas 1, si hi ha dades desades i no s'ha descartat,
-  // i sense xocar amb el resum de fills. Ocupa el lloc del botó "Enrere" (invisible al pas 1).
-  const showRecover = !!recoverBtn && recoverAvailable && wizardStep === 0
-    && !returningDismissed && !showChildrenInfo;
+  // Botó de recuperació de dades: només al pas 1, si hi ha dades desades i no
+  // s'ha descartat. Ocupa el lloc del botó "Enrere" (invisible al pas 1).
+  const showRecover = !!recoverBtn && recoverAvailable && wizardStep === 0 && !returningDismissed;
   if (recoverBtn) recoverBtn.hidden = !showRecover;
 
   if (backBtn) {
-    // Al pas 1 el botó "Enrere" no cal: deixem el lloc al resum de fills o a la
-    // recuperació. A partir del pas 2 sí que cal, i pot conviure amb el resum de fills.
-    if ((showChildrenInfo || showRecover) && wizardStep === 0) {
+    if (showRecover && wizardStep === 0) {
       backBtn.hidden = true;
     } else {
       backBtn.hidden = false;
       backBtn.style.visibility = wizardStep === 0 ? "hidden" : "visible";
     }
   }
-  if (childrenInfo) {
-    childrenInfo.hidden = !showChildrenInfo;
-    childrenInfo.classList.toggle("has-price", showChildrenInfo && grandTotal > 0);
-    if (showChildrenInfo) {
-      if (childrenLabel) childrenLabel.textContent = String(nFilled || nChildren);
-      const priceEl = document.getElementById("wizard-children-price");
-      if (priceEl) {
+
+  // Xip de resum al topbar (jugadors + total): sempre visible durant el wizard
+  // tan aviat com hi ha alguna cosa a ensenyar, a qualsevol pas.
+  const topChip = document.getElementById("topbar-price");
+  if (topChip) {
+    const showTop = wizardSteps.length > 0 && (nFilled >= 1 || grandTotal > 0);
+    topChip.hidden = !showTop;
+    if (showTop) {
+      const countEl = document.getElementById("topbar-price-count");
+      const amtEl   = document.getElementById("topbar-price-amount");
+      if (countEl) countEl.textContent = String(nFilled || nChildren);
+      if (amtEl) {
         if (grandTotal > 0) {
-          const prev = parseInt(priceEl.dataset.value || "", 10);
-          priceEl.hidden = false;
-          priceEl.dataset.value = String(grandTotal);
+          const prev = parseInt(amtEl.dataset.value || "", 10);
+          amtEl.hidden = false;
+          amtEl.dataset.value = String(grandTotal);
           const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          if (!reduce && Number.isFinite(prev) && prev !== grandTotal) animateCount(priceEl, prev, grandTotal);
-          else priceEl.textContent = `${grandTotal} €`;
+          if (!reduce && Number.isFinite(prev) && prev !== grandTotal) animateCount(amtEl, prev, grandTotal);
+          else amtEl.textContent = `${grandTotal} €`;
         } else {
-          priceEl.hidden = true;
-          priceEl.textContent = "";
-          delete priceEl.dataset.value;
+          amtEl.hidden = true;
+          amtEl.textContent = "";
+          delete amtEl.dataset.value;
         }
       }
     }
@@ -878,6 +875,19 @@ function renderChildrenPopup() {
       (amount > 0 ? `<span class="wcp__amount">${amount} €</span>` : "");
     scrollBtn.addEventListener("click", () => {
       closeChildrenPopup();
+      // Al wizard, els blocs de jugador viuen al pas "Dades del jugador/a": si
+      // som en un altre pas (p. ex. obert des del xip del topbar), hi saltem
+      // primer perquè el bloc sigui visible i editable.
+      if (wizardSteps.length) {
+        const section = block.closest(".section");
+        const stepIdx = section ? wizardSteps.indexOf(section) : -1;
+        if (stepIdx >= 0 && stepIdx !== wizardStep) {
+          wizardStep = stepIdx;
+          renderWizardStep(false);
+          if (wizardStep === 0) maybeShowReturning();   // com fer "Enrere" fins aquí
+          updateProgress();
+        }
+      }
       expandChild(block);
       block.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -916,40 +926,42 @@ function renderChildrenPopup() {
   }
 }
 
+// El popup del desglossament s'obre sempre des del xip del topbar i es
+// desplega sota la capçalera (classe is-top).
 function openChildrenPopup() {
-  const popup   = document.getElementById("wizard-children-popup");
-  const trigger = document.getElementById("wizard-children-info");
+  const popup = document.getElementById("wizard-children-popup");
   if (!popup) return;
   closeRecoverPopup();   // mai dos popups oberts alhora
   renderChildrenPopup();
+  popup.classList.add("is-top");
   popup.hidden = false;
-  trigger && trigger.classList.add("is-open");
+  document.getElementById("topbar-price")?.classList.add("is-open");
   // pointerdown (no click): a iOS Safari un toc en una zona no interactiva no dispara
   // "click" cap al document, i el popup no es tancava. pointerdown sí que es dispara.
   document.addEventListener("pointerdown", onOutsidePopupClick);
 }
 
 function closeChildrenPopup() {
-  const popup   = document.getElementById("wizard-children-popup");
-  const trigger = document.getElementById("wizard-children-info");
+  const popup = document.getElementById("wizard-children-popup");
   if (!popup || popup.hidden) return;
   popup.hidden = true;
-  trigger && trigger.classList.remove("is-open");
+  document.getElementById("topbar-price")?.classList.remove("is-open");
   document.removeEventListener("pointerdown", onOutsidePopupClick);
 }
 
 function onOutsidePopupClick(e) {
-  const popup   = document.getElementById("wizard-children-popup");
-  const trigger = document.getElementById("wizard-children-info");
-  if (popup && trigger && !popup.contains(e.target) && !trigger.contains(e.target)) {
-    closeChildrenPopup();
-  }
+  const popup      = document.getElementById("wizard-children-popup");
+  const topTrigger = document.getElementById("topbar-price");
+  if (!popup || popup.contains(e.target)) return;
+  if (topTrigger && topTrigger.contains(e.target)) return;
+  closeChildrenPopup();
 }
 
 function toggleChildrenPopup() {
   const popup = document.getElementById("wizard-children-popup");
-  if (!popup || popup.hidden) openChildrenPopup();
-  else closeChildrenPopup();
+  if (!popup) return;
+  if (!popup.hidden) closeChildrenPopup();
+  else openChildrenPopup();
 }
 
 function validateWizardStep() {
@@ -2188,179 +2200,17 @@ function haptic(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
 }
 
-// ---- Passi de confirmació compartible ----
-// Imatge 1080×1350 (4:5, ideal per a WhatsApp/Instagram) generada amb canvas:
-// marca del club + estació + jugadors + setmanes + total + referència.
-let lastPassData = null;
-let passCanvasPromise = null;   // canvas pre-generat en mostrar l'èxit (vegeu showDone)
-
-async function buildPassCanvas(skipLogo) {
-  const d = lastPassData;
-  if (!d) return null;
-  const s = (CONFIG && CONFIG.settings) || {};
-  const accent = SEASON_BRAND[currentSeason] || "#1F5AE0";
-  const W = 1080, H = 1350;
-  const c = document.createElement("canvas");
-  c.width = W; c.height = H;
-  const x = c.getContext("2d");
-  // Fonts web carregades abans de dibuixar (best-effort)
-  try {
-    await Promise.all([
-      document.fonts.load('400 60px "Anton"'),
-      document.fonts.load('600 30px "Hanken Grotesk"'),
-      document.fonts.ready
-    ]);
-  } catch {}
-
-  // Fons navy amb degradat + línies de pista decoratives
-  const g = x.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#0E2A63"); g.addColorStop(1, "#081638");
-  x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.strokeStyle = "rgba(255,255,255,.07)"; x.lineWidth = 3;
-  x.beginPath(); x.arc(W, 40, 420, 0, Math.PI * 2); x.stroke();
-  x.beginPath(); x.arc(0, H, 520, 0, Math.PI * 2); x.stroke();
-  x.beginPath(); x.arc(0, H, 340, 0, Math.PI * 2); x.stroke();
-  // Barra d'accent de l'estació
-  x.fillStyle = accent; x.fillRect(0, 0, W, 14);
-
-  // Logo en cercle
-  if (!skipLogo) {
-    try {
-      const img = await new Promise((res, rej) => {
-        const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = "logo.png";
-      });
-      x.save();
-      x.beginPath(); x.arc(124, 152, 56, 0, Math.PI * 2); x.closePath(); x.clip();
-      x.drawImage(img, 68, 96, 112, 112);
-      x.restore();
-    } catch {}
-  }
-
-  // Capçalera
-  x.textBaseline = "middle";
-  x.fillStyle = "#fff"; x.font = '400 50px "Anton", sans-serif';
-  x.fillText(String(s.nombre_campus || "Campus Hoquei").toUpperCase(), 210, 134);
-  x.fillStyle = "rgba(255,255,255,.55)"; x.font = '600 30px "Hanken Grotesk", sans-serif';
-  x.fillText(d.formName || "", 212, 184);
-
-  // Segell de confirmació
-  x.fillStyle = accent; x.font = '400 42px "Anton", sans-serif';
-  x.fillText("INSCRIPCIÓ CONFIRMADA", 72, 300);
-  x.strokeStyle = accent; x.lineWidth = 5; x.lineCap = "round";
-  x.beginPath(); x.moveTo(72, 340); x.lineTo(240, 340); x.stroke();
-
-  // Jugadors i setmanes (limitat perquè càpiga amb marge)
-  let y = 425;
-  const maxY = H - 260;
-  for (const ch of d.children.slice(0, 4)) {
-    if (y > maxY) break;
-    const name = ch.data.nom_jugador || pickName(ch.data) || "Jugador/a";
-    x.fillStyle = "#fff"; x.font = '400 56px "Anton", sans-serif';
-    x.fillText(name.toUpperCase(), 72, y);
-    y += 58;
-    x.fillStyle = "rgba(255,255,255,.75)"; x.font = '600 30px "Hanken Grotesk", sans-serif';
-    for (const wl of (ch.weekLabels || []).slice(0, 6)) {
-      if (y > maxY) break;
-      x.fillText("•  " + wl, 84, y);
-      y += 44;
-    }
-    if (ch.preu != null) {
-      x.fillStyle = accent; x.font = '700 32px "Hanken Grotesk", sans-serif';
-      x.fillText(`${ch.preu} €`, 84, y);
-      y += 46;
-    }
-    y += 34;
-  }
-
-  // Peu: total + referència + lema del club
-  x.strokeStyle = "rgba(255,255,255,.18)"; x.lineWidth = 2;
-  x.beginPath(); x.moveTo(72, H - 200); x.lineTo(W - 72, H - 200); x.stroke();
-  const totalPreu = d.children.reduce((sum, ch) => sum + (ch.preu || 0), 0);
-  if (totalPreu > 0) {
-    x.fillStyle = "#fff"; x.font = '400 54px "Anton", sans-serif';
-    x.fillText(`TOTAL  ${totalPreu} €`, 72, H - 128);
-  }
-  if (d.refId) {
-    x.textAlign = "right";
-    x.fillStyle = "rgba(255,255,255,.5)"; x.font = '600 26px "Hanken Grotesk", sans-serif';
-    x.fillText(`Ref. ${d.refId}`, W - 72, H - 128);
-    x.textAlign = "left";
-  }
-  x.fillStyle = "rgba(255,255,255,.45)"; x.font = '600 26px "Hanken Grotesk", sans-serif';
-  x.fillText(String(s.club || ""), 72, H - 62);
-
-  // Canvas "contaminat"? Passa en obrir el web en local (file://): el logo es
-  // tracta com d'origen creuat i el canvas no es pot exportar (SecurityError a
-  // toBlob/toDataURL). El refem un cop sense logo, que sí que és exportable.
-  if (!skipLogo) {
-    try { x.getImageData(0, 0, 1, 1); }
-    catch { return buildPassCanvas(true); }
-  }
-  return c;
-}
-
-async function sharePass() {
-  const btn = document.getElementById("share-pass");
-  const note = document.getElementById("done-note");
-  // El feedback ha de ser VISIBLE a la pantalla d'èxit: flashNote escriu dins
-  // del formulari, que aquí està ocult, i semblaria que el botó no fa res.
-  const say = (msg) => { if (note) { note.textContent = msg; note.hidden = false; } };
-  if (note) note.hidden = true;
-  if (btn) btn.disabled = true;
-  try {
-    // Canvas pre-generat a showDone: el clic gairebé no espera i l'activació
-    // d'usuari segueix viva quan arriba navigator.share (si no, alguns
-    // navegadors el rebutgen en silenci).
-    const c = (passCanvasPromise ? await passCanvasPromise : null) || await buildPassCanvas();
-    if (!c) { say("No s'ha pogut generar el passi."); return; }
-    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
-    if (blob && navigator.canShare) {
-      const file = new File([blob], "inscripcio-campus.png", { type: "image/png" });
-      if (navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: "Inscripció confirmada" });
-          return;
-        } catch (e) {
-          if (e && e.name === "AbortError") return;   // l'usuari ha tancat el diàleg
-          // Qualsevol altre error (p. ex. activació caducada) → passem a descàrrega
-        }
-      }
-    }
-    // Sense API de compartir (PC) o share fallit: descàrrega directa
-    const a = document.createElement("a");
-    a.href = c.toDataURL("image/png");
-    a.download = "inscripcio-campus.png";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    say("Passi desat a les descàrregues com a imatge.");
-  } catch (err) {
-    console.error(err);
-    say("No s'ha pogut generar el passi.");
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
 // ---- Èxit ----
 function showDone(shared, children, campusName, result) {
   hideSendError();
+  closeChildrenPopup();
+  const topChip = document.getElementById("topbar-price");
+  if (topChip) topChip.hidden = true;
   els.form.hidden = true; els.returning.hidden = true; els.done.hidden = false;
   document.body.classList.add("page--done");
   haptic([14, 60, 14, 60, 26]); // petita celebració tàctil
   launchConfetti();
   const s = CONFIG.settings || {};
-  // Dades per al passi compartible (botó "Compartir el passi")
-  lastPassData = {
-    children,
-    refId: result && result.id && !result.demo ? result.id : "",
-    formName: (CONFIG.form && CONFIG.form.nombre) || s.hero_titulo || ""
-  };
-  // Pre-generem el passi ara (fonts + logo + dibuix): quan l'usuari cliqui
-  // "Compartir" el canvas ja serà a punt i el diàleg s'obrirà a l'instant.
-  passCanvasPromise = buildPassCanvas().catch(() => null);
-  const doneNote = document.getElementById("done-note");
-  if (doneNote) doneNote.hidden = true;
   els.doneText.textContent = (s.mensaje_exito || "Inscripció rebuda correctament.") + (result && result.demo ? "  (mode demo: encara no s'ha guardat enlloc)" : "");
   const refEl = document.getElementById("done-ref");
   if (refEl) {

@@ -64,13 +64,24 @@ body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .topbar__club { font-size: .76rem; color: var(--ink-soft); }
-.topbar__contact {
-  margin-left: auto; color: var(--blue); text-decoration: none;
-  font-weight: 700; font-size: .9rem; white-space: nowrap;
-  padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--blue-soft);
+/* Xip de resum del wizard mòbil (jugadors + total), sempre al topbar: fons blau
+   suau sense vora, text navy, icona de persones plena i el total en pastilla
+   blava (reutilitza .wc__people i .wc__price). Obre el desglossament per sota. */
+.topbar__price {
+  margin-left: auto;
   display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 13px; border-radius: 999px;
+  background: var(--blue-soft); border: none;
+  font-family: inherit; font-size: .82rem; font-weight: 700; color: var(--navy);
+  cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+  transition: background .15s;
+  animation: rise .25s ease both;
 }
-.topbar__contact:hover { background: var(--blue-soft); }
+.topbar__price:active { background: #d0dcf8; }
+.topbar__price[hidden] { display: none; }
+#topbar-price-count { min-width: 8px; text-align: center; }
+/* Fletxa cap avall (el popup es desplega per sota); girada quan és obert */
+.topbar__price.is-open .wc__chevron { transform: rotate(180deg); }
 
 /* ---------- Hero (antracita modern) ---------- */
 .hero {
@@ -133,13 +144,12 @@ body {
 .hero.season-hivern {
   --season-accent: var(--blue);   /* hivern: blau del tema */
 }
-/* 1. A PC el hero acaba com un "full" arrodonit sobre el formulari: suavitza
-   el tall dur entre el bloc fosc i el fons clar (al mòbil ja es fonen). */
-@media (min-width: 521px) {
-  .hero {
-    border-radius: 0 0 28px 28px;
-    box-shadow: 0 20px 44px -30px rgba(8, 12, 20, .6);
-  }
+/* El hero acaba com un "full" arrodonit sobre el formulari: suavitza el tall
+   entre el bloc fosc i el fons clar (a totes les mides, ara que el mòbil
+   comparteix el fons fosc del PC). */
+.hero {
+  border-radius: 0 0 28px 28px;
+  box-shadow: 0 20px 44px -30px rgba(8, 12, 20, .6);
 }
 /* Hero content transition (fade en canviar de formulari) */
 .hero__inner {
@@ -185,6 +195,8 @@ body {
   font-family: "Anton", sans-serif; font-weight: 400; font-size: var(--fs-display);
   line-height: .98; letter-spacing: .005em; text-transform: uppercase;
   margin: 0 0 16px; max-width: 13ch;
+  /* Un salt de línia (Alt+Retorn) al hero_titulo del full es respecta tal qual */
+  white-space: pre-line;
 }
 .hero__lead { font-size: 1.08rem; max-width: 46ch; color: rgba(255,255,255,.85); margin: 0; }
 
@@ -232,9 +244,9 @@ body {
   font-size: .92rem; font-weight: 700; color: #0E2A63;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* Al mòbil: res de caixes — el hero mòbil és tipogràfic i clar, així que les
-   dades van com una fitxa editorial de text (icona + valor) en DUES línies
-   estables: les dades curtes a dalt i el lloc sempre a la seva pròpia línia. */
+/* Al mòbil: res de caixes — les dades van com una fitxa editorial de text
+   (icona + valor) en DUES línies estables sobre el fons fosc del hero: les
+   dades curtes a dalt i el lloc sempre a la seva pròpia línia. */
 @media (max-width: 520px) {
   .hero-facts { margin-top: 16px; }
   .hero-facts__track {
@@ -248,12 +260,12 @@ body {
   .hero-fact:last-child { flex-basis: 100%; }
   .hero-fact__icon {
     width: 15px; height: 15px; border-radius: 0;
-    background: none; color: var(--blue);
+    background: none; color: var(--rink-line);   /* accent de l'estació, com l'eyebrow */
   }
   .hero-fact__icon svg { width: 14px; height: 14px; }
   .hero-fact__label { display: none; }
   .hero-fact__value {
-    font-size: .85rem; font-weight: 600; color: var(--navy);
+    font-size: .85rem; font-weight: 600; color: rgba(255,255,255,.92);
     white-space: normal; line-height: 1.35;
   }
 }
@@ -1163,17 +1175,6 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   from { transform: translate(0, 0) scale(1); }
   to   { transform: translate(-30px, -18px) scale(1.12); }
 }
-/* Deriva suau dels glows navy del mòbil (amplitud petita, en %: mai toca la vora) */
-/* Glow superior dreta: deriva cap a dins (avall-esquerra), lluny de la cantonada. */
-@keyframes hero-mglow-a {
-  from { transform: translate3d(2%, -1%, 0) scale(1.05); }
-  to   { transform: translate3d(-5%, 5%, 0) scale(1); }
-}
-/* Glow inferior esquerra: deriva suau dins els límits. */
-@keyframes hero-mglow-b {
-  from { transform: translate3d(4%, 2%, 0) scale(1.06); }
-  to   { transform: translate3d(-3%, -3%, 0) scale(1); }
-}
 
 /* ---- Setmana: micro-resposta al clic + halo si seleccionada ---- */
 
@@ -1207,62 +1208,43 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .chip:not(.chip--delete):hover { transform: scale(1.04); }
 
 @media (max-width: 520px) {
-  /* ----- Hero minimalista amb les tonalitats del formulari (només mòbil) ----- */
-  /* .hero.hero iguala l'especificitat de .hero.season-* per guanyar la cascada sense !important.
-     Tot amb variables del tema → s'adapta sol al mode fosc. */
-  /* El degradat acaba en --paper (fons del formulari) perquè les dues seccions
-     es fonguin sense cap línia ni transició visible. */
-  .hero.hero {
-    background: linear-gradient(168deg, var(--blue-soft) 0%, var(--paper) 100%);
-    color: var(--ink);
-  }
-  .rink { display: none; }                                 /* fora la pista decorativa del PC */
-  /* Glows navy del mòbil: blobs cap al centre que s'esvaeixen BEN abans de la vora,
-     amb una deriva suau pròpia (en %, amplitud petita). Així, encara que el hero
-     tingui overflow:hidden, el color mai arriba al límit → no es veu cap tall/línia.
-     pointer-events:none perquè no interceptin els tocs de les pills. */
-  /* Glows navy difusos: filter:blur + caiguda gradual (multi-stop) perquè semblin
-     un resplendor, no boles. El blur també esvaeix qualsevol vora → cap línia. */
-  .hero.hero::before, .hero.hero::after {
-    display: block; pointer-events: none;
-    filter: blur(22px); will-change: transform;
-  }
-  /* Glow protagonista a la cantonada superior dreta (zona sense text) */
-  .hero.hero::before {
-    background: radial-gradient(ellipse 42% 48% at 74% 26%, rgba(14,42,99,.22) 0%, rgba(14,42,99,.08) 42%, transparent 70%);
-    animation: hero-mglow-a 18s ease-in-out infinite alternate;
-  }
-  /* Glow secundari, suau, a la part inferior esquerra */
-  .hero.hero::after {
-    background: radial-gradient(ellipse 44% 50% at 26% 70%, rgba(14,42,99,.15) 0%, rgba(14,42,99,.05) 42%, transparent 70%);
-    animation: hero-mglow-b 22s ease-in-out infinite alternate;
+  /* ----- Hero mòbil: mateix fons fosc i glows d'estació que al PC -----
+     El hero conserva el fons antracita i els ::before/::after animats amb el
+     color de la temporada (hero-glow-pulse / hero-drift). Al mòbil només
+     s'amaga la pista decorativa, que no hi cap. */
+  .rink { display: none; }
+
+  /* El hero torna a ser la targeta fosca (com al PC) sobre el fons clar, i el
+     formulari hi queda encavalcat. En fer scroll, el JS (setupHeroParallax)
+     mou el hero avall a mitja velocitat: el formulari LLISCA per sobre seu,
+     com un full que el va tapant. El hero guanya una franja fosca extra a
+     baix perquè l'encavalcament inicial tingui lloc. */
+  .hero { padding-bottom: 30px; }
+  .main { position: relative; z-index: 5; margin-top: -38px; }
+  /* Sense hero visible (pissarra "no hi ha formularis") o a la pantalla
+     d'èxit, el solapament no té sentit: es desfà. */
+  body.page--no-forms .main,
+  body.page--done .main { margin-top: 0; }
+
+  /* La pantalla d'èxit es converteix en una targeta flotant, com les seccions.
+     .done.done: guanya les regles de .done que venen més avall al fitxer
+     (degradat celebratori i la seva variant fosca), de mateixa especificitat. */
+  .done.done {
+    background: var(--card); border: 1px solid var(--line-ink);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 34px 18px; margin-top: 6px;
   }
 
-  .hero__inner { padding-block: 20px 16px; }
+  .hero__inner { padding-block: 24px 18px; }
   /* El selector ja no és absolut al mòbil (vegeu .hero-nav avall): no cal reservar espai. */
   .hero.has-slider .hero__inner { padding-bottom: 16px; }
 
-  /* Eyebrow net en blau, sense temporada (hero tot en tons del formulari) */
-  .eyebrow {
-    font-size: .92rem; letter-spacing: .16em; margin: 0 0 14px; color: var(--blue);
-  }
+  .eyebrow { font-size: .92rem; letter-spacing: .16em; margin: 0 0 14px; }
   .hero__title {
     font-size: clamp(2rem, 9.2vw, 2.8rem);
-    line-height: 1.04; letter-spacing: .01em; max-width: 15ch; margin: 0 0 13px;
-    color: var(--navy);
+    line-height: 1.04; letter-spacing: .01em; max-width: 18ch; margin: 0 0 13px;
   }
-  .hero__lead {
-    font-size: 1rem; line-height: 1.5; max-width: 40ch; color: var(--ink-soft);
-  }
-
-  /* Pills del selector amb l'estil del formulari (clares, actiu blau) */
-  .hero-pill {
-    background: var(--card); border-color: var(--line-ink); color: var(--ink-soft);
-    -webkit-backdrop-filter: none; backdrop-filter: none;
-  }
-  .hero-pill.is-active {
-    background: var(--season-accent); border-color: var(--season-accent); color: #fff;
-  }
+  .hero__lead { font-size: 1rem; line-height: 1.5; max-width: 40ch; }
 
   .btn--primary { width: 100%; justify-content: center; }
   /* Targetes més fines al mòbil: ~12px extres d'amplada útil per als camps */
@@ -1272,26 +1254,17 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   .emblem { width: 34px; height: 34px; border-radius: 9px; }
   .topbar__camp { font-size: .9rem; }
   .topbar__club { font-size: .72rem; }
-  /* Col·lapsa el botó de contacte a icona sola per alliberar espai al títol */
-  .topbar__contact { font-size: 0; padding: 8px; gap: 0; }
-  .topbar__contact svg { width: 17px; height: 17px; }
 
-  /* Pills del slider: en FLUX (no absolutes) sota el text del hero, en una fila
-     amb scroll horitzontal. Així no se solapen amb el contingut ni queden cramades
-     ara que el hero té menys alçada. */
+  /* Pills del slider: en FLUX (no absolutes) sota el text del hero. Salten de
+     línia quan no hi caben (res de scroll horitzontal: una pill tallada per la
+     vora de la pantalla quedava lletja en carregar la pàgina). */
   .hero-nav {
-    position: relative; z-index: 2;   /* en flux però per damunt dels núvols → tocables */
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    position: relative; z-index: 2;   /* en flux però per damunt dels glows → tocables */
+    flex-wrap: wrap;
     justify-content: flex-start;
     gap: 8px;
     padding: 2px 16px 18px;
   }
-  .hero-nav::-webkit-scrollbar { display: none; }
-  /* Espai al final perquè l'últim pill no quedi retallat */
-  .hero-nav::after { content: ""; display: block; min-width: 16px; flex-shrink: 0; }
 
   /* Toggles "C.P. Riudebitlles" i "família nombrosa": més fins al mòbil */
   .rdb-field { margin-bottom: 10px; }
@@ -1545,7 +1518,8 @@ body.pc-summary-on .child-price { display: none !important; }
     justify-content: center;
     align-items: start;
   }
-  /* El hero s'alinea amb la graella ampla del formulari i el text respira més */
+  /* La topbar i el hero s'alineen amb la graella ampla del formulari */
+  body.pc-summary-on .topbar__inner { max-width: 1100px; }
   body.pc-summary-on .hero__inner { max-width: 1100px; }
   body.pc-summary-on .hero__title { max-width: 22ch; }
   body.pc-summary-on .hero__lead { max-width: 62ch; }
@@ -1695,7 +1669,6 @@ body.pc-summary-on .child-price { display: none !important; }
 
   /* Capçalera */
   .topbar { background: var(--card); }
-  .topbar__contact { border-color: rgba(91,142,255,.28); }
 
   /* Inputs */
   .input, .select, .textarea { background: var(--card); color: var(--ink); }
@@ -1804,9 +1777,6 @@ body.pc-summary-on .child-price { display: none !important; }
 .done__actions {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 4px;
 }
-/* Feedback del botó Compartir (descarregat / error), visible sota les accions */
-.done__note { margin: 12px 0 0; font-size: .82rem; color: var(--ink-soft); }
-.done__note[hidden] { display: none; }
 
 /* ---------- Filebox versió mòbil (2 botons) ---------- */
 /* Compacta: sense caixa exterior (vora/fons/padding), només els dos botons en horitzontal.
@@ -1930,25 +1900,12 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
   padding-inline: 16px;
 }
 .wizard-nav__back .wz-chev { stroke: var(--navy); }
-/* Botó trigger de fills */
-.wizard-nav__children {
-  display: flex; align-items: center; gap: 6px;
-  padding: 9px 14px; border-radius: 999px;
-  background: var(--blue-soft); border: none; min-height: 44px;
-  font-family: inherit; font-size: .82rem; font-weight: 700; color: var(--navy);
-  cursor: pointer; white-space: nowrap;
-  transition: background .15s;
-}
-.wizard-nav__children:active { background: #d0dcf8; }
-.wizard-nav__children[hidden] { display: none !important; }
-.wizard-nav__children svg { flex-shrink: 0; stroke: var(--blue); }
+/* Peces compartides del xip de resum (ara viu al topbar) */
 /* Icona de persones plena (sòlida, sense contorn) */
 .wc__people { fill: var(--blue); stroke: none; }
 .wc__chevron { stroke: var(--ink-soft); transition: transform .2s ease; }
-.wizard-nav__children.is-open .wc__chevron { transform: rotate(180deg); }
-#wizard-children-label { min-width: 8px; text-align: center; }
-/* Badge del preu total dins del trigger de fills: ressalta el total en una píndola blava
-   que conviu amb el comptador de nens. S'anima en canviar (animateCount). */
+/* Badge del preu total: píndola blava que conviu amb el comptador de nens.
+   S'anima en canviar (animateCount). */
 .wc__price {
   display: inline-flex; align-items: center;
   margin-left: 2px; padding: 3px 9px; border-radius: 999px;
@@ -1958,8 +1915,6 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
   box-shadow: 0 1px 5px rgba(31,90,224,.32);
 }
 .wc__price[hidden] { display: none !important; }
-/* Amb preu, el trigger guanya una mica d'aire al voltant del badge */
-.wizard-nav__children.has-price { padding-right: 9px; }
 
 /* Pastilla de recuperació de dades (mòbil): icona + text. Només la icona batega. */
 .wizard-nav__recover {
@@ -2011,6 +1966,14 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
   border-radius: 14px 14px 0 0;
   padding: 8px 14px 4px;
   max-height: 55vh; overflow-y: auto;
+}
+/* Variant "des de dalt": obert amb el xip del topbar, es desplega sota la capçalera */
+.wizard-children-popup.is-top {
+  position: fixed; top: 58px; bottom: auto; left: 10px; right: 10px;
+  border: 1px solid var(--line-ink);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgba(14,42,99,.24);
+  max-height: 60vh;
 }
 .wcp__list { display: flex; flex-direction: column; gap: 2px; }
 .wcp__item {
@@ -2070,12 +2033,21 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
 /* Indicador de progrés: nom del pas + punts (el pas actiu s'allarga en píndola) */
 .wizard-nav__indicator {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; min-width: 0;
+  gap: 4px; min-width: 0; overflow: hidden;
 }
+/* El títol del pas mai ha d'envair les cel·les dels botons: amplada acotada amb
+   ellipsi, i més estreta com més petita és la pantalla (els botons, el resum de
+   fills i el preu de les cel·les laterals necessiten el seu espai). */
 .wzstep {
   font-size: .64rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--ink-soft); max-width: 128px;
+  color: var(--ink-soft); max-width: 96px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@media (max-width: 420px) {
+  .wzstep { max-width: 72px; }
+}
+@media (max-width: 360px) {
+  .wzstep { display: none; }   /* sense lloc: els puntets ja indiquen el progrés */
 }
 .wzdots { display: flex; align-items: center; gap: 6px; }
 .wzdot {
@@ -2141,7 +2113,6 @@ html { scroll-padding-bottom: 84px; }
   @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
     .wizard-nav::before { background: var(--card); }
   }
-  .wizard-nav__children:active { background: rgba(91,142,255,.18); }
   /* blue-deep és més CLAR que blue en fosc → el text blanc hi perdria contrast.
      Igualem el "Següent" al blau estàndard, com la resta de botons primaris. */
   .wizard-nav__next,
@@ -2391,4 +2362,20 @@ html { scroll-padding-bottom: 84px; }
 ::view-transition-new(root) {
   animation-duration: .28s;
   animation-timing-function: ease;
+}
+
+/* ---- Mòbil: barres sòlides, sense vidre translúcid ----
+   Al final del fitxer expressament: ha de guanyar els blocs de vidre
+   (@supports + backdrop-filter) de la topbar i la .wizard-nav de més amunt. */
+@media (max-width: 520px) {
+  .topbar {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .wizard-nav::before {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
