@@ -232,6 +232,7 @@ async function load() {
   document.body.classList.remove("page--no-forms");
   els.loading.hidden = false; els.loadError.hidden = true; els.closed.hidden = true;
   els.form.hidden = true; els.done.hidden = true;
+  hideSendError();
   hideReturning();
   startHintCycle();
   try {
@@ -301,7 +302,6 @@ function applySettings(s) {
     link.setAttribute("aria-label", "Trucar al 629 912 840");
   }
   renderHeroFacts(s);
-  applyFooterContact(s);
 }
 
 // ---- Fitxa de convocatòria (xips de dades del hero) ----
@@ -333,37 +333,6 @@ function renderHeroFacts(s) {
         `</span>`
       ).join("") +
     `</div>`;
-}
-
-// Omple les dades de contacte al footer
-function applyFooterContact(s) {
-  const footContact = document.getElementById("foot-contact");
-  const footPhone = document.getElementById("foot-phone");
-  const footEmail = document.getElementById("foot-email");
-  let hasAny = false;
-  if (footPhone && CONTACT_PHONE) {
-    const display = CONTACT_PHONE.replace(/^\+34/, "").replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
-    footPhone.href = `tel:${CONTACT_PHONE}`; footPhone.textContent = `Tel. ${display}`;
-    hasAny = true;
-  }
-  if (footContact && CONTACT_PHONE) {
-    let waLink = document.getElementById("foot-whatsapp");
-    if (!waLink) {
-      waLink = document.createElement("a");
-      waLink.id = "foot-whatsapp";
-      waLink.className = "foot__contact-item";
-      waLink.target = "_blank"; waLink.rel = "noopener noreferrer";
-      footContact.appendChild(waLink);
-    }
-    waLink.href = `https://wa.me/${CONTACT_PHONE.replace(/\D/g, "")}`;
-    waLink.textContent = "WhatsApp";
-    hasAny = true;
-  }
-  if (footEmail && s.email_contacto) {
-    footEmail.href = `mailto:${s.email_contacto}`; footEmail.textContent = s.email_contacto;
-    footEmail.hidden = false; hasAny = true;
-  } else if (footEmail) { footEmail.hidden = true; }
-  if (footContact) footContact.hidden = !hasAny;
 }
 
 // ---- Hero Slider ----
@@ -1120,6 +1089,7 @@ function campusPickerEl(open) {
       currentCampus = c.id;
       wrap.querySelectorAll(".campus-card").forEach((x) => x.classList.toggle("is-selected", x.dataset.campus === c.id));
       refreshChildWeeks();
+      updateAllPrices();   // repinta els preus a les targetes de les noves setmanes
       scheduleDraftSave();
     });
     wrap.appendChild(card);
@@ -1356,70 +1326,6 @@ function weeksForCampus() {
   if (!all.some((w) => w.campus)) return all;
   return all.filter((w) => w.campus === currentCampus);
 }
-function buildPriceTableFromConfig() {
-  const refWeek = (CONFIG.weeks || []).find(function(w) { return w.p1 != null; });
-  if (!refWeek) return null;
-  const p1  = refWeek.p1;
-  const p2  = refWeek.p2  != null ? refWeek.p2  : p1;
-  const p1r = refWeek.p1_rdb != null ? refWeek.p1_rdb : p1;
-  const p2r = refWeek.p2_rdb != null ? refWeek.p2_rdb : p2;
-
-  const isMulti = (CONFIG.weeks || []).length > 1 && p1 !== p2;
-  const hasRDB   = p1r !== p1 || p2r !== p2;
-
-  // Files de la taula: (label, preu general, preu RDB)
-  const rows = [];
-  rows.push({ label: isMulti ? "1a setmana" : "General", gen: p1, rdb: p1r });
-  if (isMulti) {
-    rows.push({ label: "2a setmana · 2n germà/na · família nombrosa", gen: p2, rdb: p2r });
-  } else if (p2 !== p1) {
-    rows.push({ label: "Germà/na · família nombrosa",  gen: p2, rdb: p2r });
-  }
-
-  // data-label permet que al mòbil cada preu mostri a quina columna pertany
-  // (la capçalera de la taula s'amaga i cada fila es converteix en una targeta).
-  const priceCell = function(val, isRdb, head) {
-    return `<td data-label="${escapeHtml(head)}"><span class="price-table__price${isRdb ? " price-table__price--rdb" : ""}">${val}&thinsp;€</span></td>`;
-  };
-
-  const rowsHtml = rows.map(function(r) {
-    return `<tr>
-      <td class="price-table__label">${escapeHtml(r.label)}</td>
-      ${priceCell(r.gen, false, "General")}
-      ${hasRDB ? priceCell(r.rdb, true, "C.P. Riudebitlles") : ""}
-    </tr>`;
-  }).join("");
-
-  const card = document.createElement("div");
-  card.className = "price-info";
-  card.innerHTML = `<button type="button" class="price-info__header" aria-expanded="false" aria-controls="price-info-body">
-    <span class="price-info__icon" aria-hidden="true">€</span>
-    <span class="price-info__title">Preus</span>
-    <span class="price-info__hint">Veure tarifes</span>
-    <svg class="price-info__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-  </button>
-  <div class="price-info__body" id="price-info-body">
-    <div class="price-info__body-inner">
-      <table class="price-table">
-        <thead><tr>
-          <th></th>
-          <th>General</th>
-          ${hasRDB ? "<th>C.P. Riudebitlles</th>" : ""}
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
-  </div>`;
-  const toggle = card.querySelector(".price-info__header");
-  const hint   = card.querySelector(".price-info__hint");
-  toggle.addEventListener("click", function() {
-    const open = card.classList.toggle("is-open");
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    if (hint) hint.textContent = open ? "Amaga" : "Veure tarifes";
-  });
-  return card;
-}
-
 function childWeeksEl(i) {
   const wrap = document.createElement("div"); wrap.className = "field child-weeks"; wrap.dataset.weeks = "1"; wrap.dataset.child = String(i);
   const head = document.createElement("div"); head.className = "child-weeks__head";
@@ -1438,12 +1344,7 @@ function childWeeksEl(i) {
   const weeks = weeksForCampus();
   if (!weeks.length) { const p = document.createElement("p"); p.className = "field__help"; p.textContent = "Aquest casal encara no té setmanes definides."; wrap.appendChild(p); return wrap; }
 
-  if (i === 0) {
-    const priceTableEl = buildPriceTableFromConfig();
-    if (priceTableEl) wrap.appendChild(priceTableEl);
-  }
-
-  weeks.forEach((w, idx) => {
+  weeks.forEach((w) => {
     const full = w.plazas_restantes != null && Number(w.plazas_restantes) <= 0;
     const lab = document.createElement("label"); lab.className = "week" + (full ? " is-full" : ""); lab.dataset.week = w.id;
     const input = document.createElement("input");
@@ -1452,12 +1353,13 @@ function childWeeksEl(i) {
     const placesPill = (!full && w.plazas_restantes != null && showPlacesLeft(w))
       ? `<span class="week__places">${w.plazas_restantes} places</span>` : "";
     const fullTag = full ? `<span class="week__tag">Complet</span>` : "";
-    lab.innerHTML = `<span class="week__num">${idx + 1}</span>` +
+    lab.innerHTML =
       `<span class="week__body">` +
         `<span class="week__label">${escapeHtml(w.etiqueta)}</span>` +
-        `<span class="week__meta">${escapeHtml(w.fechas || "")}</span>` +
+        (w.fechas ? `<span class="week__meta">${escapeHtml(w.fechas)}</span>` : "") +
         placesPill +
       `</span>` +
+      `<span class="week__price" hidden></span>` +
       fullTag +
       `<span class="week__check">✓</span>`;
     lab.prepend(input); list.appendChild(lab);
@@ -1688,10 +1590,93 @@ function revealField(wrap) {
   if (focusable && focusable.focus) { try { focusable.focus({ preventScroll: true }); } catch {} }
 }
 
+// ---- Modal de confirmació (substitueix window.confirm, que trenca el disseny) ----
+// Retorna una promesa amb true (confirmar) o false (cancel·lar). Es tanca amb els
+// botons, la tecla Escape o clicant fora de la targeta.
+function showConfirmModal({ title, body, confirmLabel, cancelLabel }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML =
+      `<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-body">` +
+        `<div class="modal__icon" aria-hidden="true">` +
+          `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>` +
+        `</div>` +
+        `<h3 class="modal__title" id="modal-title"></h3>` +
+        `<p class="modal__body" id="modal-body"></p>` +
+        `<div class="modal__actions">` +
+          `<button type="button" class="btn btn--ghost modal__cancel"></button>` +
+          `<button type="button" class="btn btn--primary modal__confirm"></button>` +
+        `</div>` +
+      `</div>`;
+    overlay.querySelector(".modal__title").textContent = title;
+    overlay.querySelector(".modal__body").textContent = body;
+    const confirmBtn = overlay.querySelector(".modal__confirm");
+    const cancelBtn  = overlay.querySelector(".modal__cancel");
+    confirmBtn.textContent = confirmLabel || "Continuar";
+    cancelBtn.textContent  = cancelLabel || "Cancel·lar";
+
+    let done = false;
+    const close = (val) => {
+      if (done) return; done = true;
+      document.removeEventListener("keydown", onKey);
+      overlay.classList.add("is-closing");
+      setTimeout(() => overlay.remove(), 180);
+      resolve(val);
+    };
+    const onKey = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); close(false); } };
+    confirmBtn.addEventListener("click", () => close(true));
+    cancelBtn.addEventListener("click", () => close(false));
+    overlay.addEventListener("pointerdown", (ev) => { if (ev.target === overlay) close(false); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(overlay);
+    cancelBtn.focus();   // per defecte, la sortida segura
+  });
+}
+
+// ---- Avís d'error d'enviament (persistent, amb reintent) ----
+// A diferència del toast (3 s), aquest avís es queda fins que l'usuari reintenta o
+// l'enviament acaba bé: en el moment més crític no pot passar desapercebut.
+function showSendError() {
+  hideSendError();
+  const offline = navigator.onLine === false;
+  const box = document.createElement("div");
+  box.id = "send-error"; box.className = "send-error";
+  box.setAttribute("role", "alert");
+  box.innerHTML =
+    `<div class="send-error__head">` +
+      `<span class="send-error__icon" aria-hidden="true">` +
+        `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>` +
+      `</span>` +
+      `<span class="send-error__title">${offline ? "Sembla que no tens connexió" : "No s'ha pogut enviar la inscripció"}</span>` +
+    `</div>` +
+    `<p class="send-error__body">${offline
+      ? "Comprova la connexió a internet i torna-ho a provar."
+      : "El servidor no ha respost. Espera uns segons i torna-ho a provar."} ` +
+      `Tranquil·litat: tot el que has escrit queda desat en aquest dispositiu i no es perdrà.</p>` +
+    `<button type="button" class="btn btn--ghost send-error__retry">` +
+      `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>` +
+      `<span>Torna-ho a provar</span>` +
+    `</button>`;
+  box.querySelector(".send-error__retry").addEventListener("click", () => {
+    if (els.form.requestSubmit) els.form.requestSubmit();
+    else els.form.dispatchEvent(new Event("submit", { cancelable: true }));
+  });
+  const submitRow = els.form.querySelector(".submit-row");
+  if (submitRow) submitRow.insertAdjacentElement("beforebegin", box);
+  else els.form.appendChild(box);
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function hideSendError() {
+  const box = document.getElementById("send-error");
+  if (box) box.remove();
+}
+
 // ---- Enviament ----
 async function onSubmit(e) {
   e.preventDefault();
   clearNote();
+  hideSendError();
   const consentInput = document.getElementById("consent");
   if (consentInput && !consentInput.checked) {
     haptic([10, 45, 10]);
@@ -1706,6 +1691,20 @@ async function onSubmit(e) {
     revealField(firstBad);
     return flashNote(`Falta un camp: ${fieldLabel(firstBad)}.`);
   }
+  // Guàrdia anti-duplicats: ho preguntem ABANS d'engegar l'enviament (així el botó
+  // no queda girant mentre el modal està obert). El servidor substituirà la fila
+  // anterior de la mateixa família, no en crearà una de nova.
+  const dup = findLocalDuplicate(collect().children);
+  if (dup) {
+    const when = new Date(dup.ts).toLocaleDateString("ca-ES", { day: "numeric", month: "long" });
+    const proceed = await showConfirmModal({
+      title: "Ja tenim aquesta inscripció",
+      body: `Ja vas enviar una inscripció de ${dup.name} el ${when}. Si continues, la nova inscripció substituirà l'anterior.`,
+      confirmLabel: "Substituir l'anterior",
+      cancelLabel: "Cancel·lar"
+    });
+    if (!proceed) return;
+  }
   setLoading(true);
   try {
     // Espera les pujades en segon pla que encara estiguin en curs (normalment ja fetes,
@@ -1717,16 +1716,6 @@ async function onSubmit(e) {
     if (pendingUploads.length) await Promise.allSettled(pendingUploads);
 
     const { shared, children } = collect();
-
-    // Ja es va enviar aquest jugador/a des d'aquest dispositiu? Confirmem abans:
-    // el servidor substituirà la fila anterior (mateixa família), no en crearà una de nova.
-    const dup = findLocalDuplicate(children);
-    if (dup) {
-      const when = new Date(dup.ts).toLocaleDateString("ca-ES", { day: "numeric", month: "long" });
-      const msg = `Ja vas enviar una inscripció de ${dup.name} el ${when}. ` +
-        `Si continues, la nova inscripció substituirà l'anterior. Vols continuar?`;
-      if (!window.confirm(msg)) return;
-    }
 
     // Mida total només dels fitxers que s'envien inline (els ja pujats no compten).
     const totalBytes = children.reduce((sum, ch) =>
@@ -1766,7 +1755,7 @@ async function onSubmit(e) {
     submissionDone = true;   // ja no esborrarem les fotos pujades en abandonar
     saveLocal(shared, childrenPayload, campusName);
     showDone(shared, childrenPayload, campusName, result);
-  } catch (err) { console.error(err); flashNote("No s'ha pogut enviar. Torna-ho a provar en uns segons."); }
+  } catch (err) { console.error(err); haptic([10, 45, 10]); showSendError(); }
   finally { setLoading(false); }
 }
 async function send(payload) {
@@ -1803,6 +1792,7 @@ function haptic(pattern) {
 
 // ---- Èxit ----
 function showDone(shared, children, campusName, result) {
+  hideSendError();
   els.form.hidden = true; els.returning.hidden = true; els.done.hidden = false;
   document.body.classList.add("page--done");
   haptic([14, 60, 14, 60, 26]); // petita celebració tàctil
@@ -1824,16 +1814,49 @@ function showDone(shared, children, campusName, result) {
     const name = ch.data.nom_jugador || pickName(ch.data);
     if (!name && !(ch.weekLabels || []).length) return;
     const key = children.length > 1 ? `Jugador/a ${i + 1}` : "Jugador/a";
-    const val = [name, (ch.weekLabels || []).join(", ")].filter(Boolean).join(" · ");
-    items.push([key, val]);
+    const parts = [name, (ch.weekLabels || []).join(", ")];
+    // Import del jugador/a (el mateix que s'envia al servidor i surt al correu)
+    if (ch.preu != null) parts.push(`${ch.preu} €`);
+    items.push([key, parts.filter(Boolean).join(" · ")]);
   });
   const email = findEmail(shared);
   if (email) items.push(["Correu", email]);
-  els.doneSummary.innerHTML = "<dl>" + items.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("") + "</dl>";
+  // Total de la inscripció, destacat al final del resum
+  const hasPreu = children.some((ch) => ch.preu != null);
+  const totalPreu = children.reduce((sum, ch) => sum + (ch.preu || 0), 0);
+  const totalHtml = hasPreu
+    ? `<div class="done__grand"><span>Total</span><span class="done__grand-amount">${totalPreu} €</span></div>`
+    : "";
+  els.doneSummary.innerHTML = "<dl>" + items.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("") + "</dl>" + totalHtml;
+  renderDonePayment(s);
   window.scrollTo({ top: 0, behavior: "smooth" });
   updateAllPrices();
   updateProgress();
 }
+// Instruccions de pagament a la pantalla d'èxit. Surten de la clau de Settings
+// `instruccions_pagament` (personalitzable per formulari amb la columna `form`);
+// si és buida, el bloc no apareix.
+function renderDonePayment(s) {
+  let pay = document.getElementById("done-pay");
+  const txt = String(s.instruccions_pagament || "").trim();
+  if (!txt) { if (pay) pay.hidden = true; return; }
+  if (!pay) {
+    pay = document.createElement("div");
+    pay.id = "done-pay"; pay.className = "done__pay";
+    els.doneSummary.insertAdjacentElement("afterend", pay);
+  }
+  pay.hidden = false;
+  pay.innerHTML =
+    `<span class="done__pay-icon" aria-hidden="true">` +
+      `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>` +
+    `</span>` +
+    `<span class="done__pay-body">` +
+      `<span class="done__pay-title">Com fer el pagament</span>` +
+      `<span class="done__pay-text"></span>` +
+    `</span>`;
+  pay.querySelector(".done__pay-text").textContent = txt;
+}
+
 function resetForNew() {
   els.done.hidden = true; els.form.hidden = false; els.form.reset();
   document.body.classList.remove("page--done");
@@ -2584,6 +2607,35 @@ function updateChildPriceDisplay(childIdx) {
     breakdown.length > 1 ? `(${breakdown.map((p) => p + " €").join(" + ")})` : "";
 }
 
+// Preu orientatiu a cada targeta de setmana. La tarifa d'una setmana depèn de la
+// posició dins de la selecció (1a setmana = preu base, la resta = reduït), així que
+// per a les no marcades mostrem el que costaria AFEGIR-LA a la selecció actual, i
+// per a les marcades el preu real que ja tenen al desglossament. S'actualitza en
+// cada canvi (setmanes, RDB, família nombrosa) via updateAllPrices.
+function updateWeekCardPrices(childIdx) {
+  const block = document.querySelector(`.child-block[data-child="${childIdx}"]`);
+  if (!block) return;
+  const cards = [...block.querySelectorAll(".weeks .week")];
+  if (!cards.length) return;
+  const priced = hasPriceConfig();
+  const isRDB = isChildRDB(childIdx);
+  const isFN = isChildFamiliaNombrosa(childIdx);
+  cards.forEach((lab) => {
+    const el = lab.querySelector(".week__price");
+    const input = lab.querySelector("input");
+    if (!el || !input) return;
+    const prices = priced ? getWeekPrices(input.value) : null;
+    if (!prices || lab.classList.contains("is-full")) { el.hidden = true; return; }
+    // Selecció hipotètica: les marcades + aquesta, en ordre del DOM (com collect()).
+    const hyp = cards
+      .filter((l) => l === lab || (l.querySelector("input") && l.querySelector("input").checked))
+      .map((l) => l.querySelector("input").value);
+    const weekIdx = hyp.indexOf(input.value);
+    el.hidden = false;
+    el.textContent = `${calcWeekPrice(childIdx, weekIdx, isRDB, isFN, prices)} €`;
+  });
+}
+
 // Calcula el resum de preus de tots els fills una sola vegada (reutilitzat per la
 // targeta del final, el resum de la barra del wizard i el popup de fills).
 // Retorna null si no hi ha configuració de preus. `children` inclou tots els blocs
@@ -2699,7 +2751,7 @@ function animateCount(el, from, to) {
 
 function updateAllPrices() {
   const blocks = [...document.querySelectorAll(".child-block")];
-  blocks.forEach((_, idx) => updateChildPriceDisplay(idx));
+  blocks.forEach((_, idx) => { updateChildPriceDisplay(idx); updateWeekCardPrices(idx); });
   updateTotalPriceCard();
   renderPcSummary();
 }

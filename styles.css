@@ -432,8 +432,7 @@ body {
   background-image: linear-gradient(135deg, #080c14 0%, #0f1623 55%, #0d1930 100%);
   background-attachment: fixed;
 }
-.page--no-forms .hero,
-.page--no-forms .foot { display: none; }
+.page--no-forms .hero { display: none; }
 .page--no-forms .main {
   max-width: 100%;
   padding-inline: 0;
@@ -888,130 +887,6 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 }
 .btn.add-child:active { transform: scale(.99); }
 
-/* ---------- Targeta de preus ---------- */
-.price-info {
-  background: linear-gradient(135deg, rgba(31,90,224,.06) 0%, rgba(31,90,224,.02) 100%);
-  border: 1px solid rgba(31,90,224,.14);
-  border-left: 3px solid var(--blue);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  margin-bottom: 16px;
-}
-/* Capçalera = botó per desplegar/plegar la taula de tarifes */
-.price-info__header {
-  display: flex; align-items: center; gap: 9px;
-  width: 100%; padding: 0; margin: 0;
-  background: none; border: none; cursor: pointer;
-  font-family: inherit; text-align: left; color: inherit;
-}
-.price-info__icon {
-  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
-  background: var(--blue); color: #fff;
-  font-family: "Anton", sans-serif; font-size: .88rem;
-  display: grid; place-items: center;
-}
-.price-info__title {
-  font-family: "Anton", sans-serif; text-transform: uppercase;
-  letter-spacing: .05em; font-size: .82rem; color: var(--navy);
-}
-/* Pista discreta a la dreta ("Veure tarifes" → "Amaga") */
-.price-info__hint {
-  margin-left: auto; font-size: .76rem; font-weight: 600; color: var(--ink-soft);
-  white-space: nowrap;
-}
-.price-info.is-open .price-info__hint { color: var(--blue); }
-.price-info__chevron {
-  flex-shrink: 0; stroke: var(--ink-soft);
-  transition: transform .3s cubic-bezier(.4,0,.2,1), stroke .2s ease;
-}
-.price-info.is-open .price-info__chevron { transform: rotate(180deg); stroke: var(--blue); }
-.price-info__header:active .price-info__chevron { transform: scale(.9); }
-.price-info.is-open .price-info__header:active .price-info__chevron { transform: rotate(180deg) scale(.9); }
-/* Cos col·lapsable (truc grid 0fr → 1fr per animar l'alçada automàtica) */
-.price-info__body {
-  display: grid; grid-template-rows: 0fr;
-  transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1);
-}
-.price-info.is-open .price-info__body { grid-template-rows: 1fr; }
-.price-info__body-inner { overflow: hidden; min-height: 0; padding-top: 13px; }
-/* Al PC (punter fi) la taula sempre surt desplegada i sense afordança de plegat:
-   el desplegable només té sentit a mòbil/tàctil. */
-@media (pointer: fine) {
-  .price-info__body { grid-template-rows: 1fr !important; }
-  .price-info__chevron, .price-info__hint { display: none; }
-  .price-info__header { cursor: default; pointer-events: none; }
-}
-.price-info__tiers { list-style: none; margin: 0; padding: 0; }
-.price-tier {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 16px; padding: 8px 0;
-  border-bottom: 1px solid rgba(31,90,224,.1);
-}
-.price-tier:last-child { border-bottom: none; padding-bottom: 0; }
-.price-tier__desc { font-size: .84rem; color: var(--navy); flex: 1; line-height: 1.45; }
-.price-tier__note { display: block; font-size: .78rem; color: var(--ink-soft); margin-top: 3px; font-style: italic; }
-.price-tier__price {
-  font-family: "Anton", sans-serif; font-size: 1.1rem; letter-spacing: .02em;
-  color: var(--blue); white-space: nowrap; flex-shrink: 0;
-}
-/* Taula 2×2 de preus */
-.price-table {
-  width: 100%; border-collapse: collapse; font-size: .84rem;
-}
-.price-table thead th {
-  font-family: "Hanken Grotesk", sans-serif; font-size: .8rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .04em;
-  color: var(--navy); padding: 0 10px 9px;
-  text-align: center; border-bottom: 2px solid rgba(31,90,224,.15);
-}
-.price-table thead th:first-child { text-align: left; padding-left: 0; min-width: 120px; }
-.price-table tbody td {
-  padding: 10px 10px; border-bottom: 1px solid rgba(31,90,224,.1);
-  text-align: center; vertical-align: middle; line-height: 1.4;
-}
-.price-table tbody td:first-child { text-align: left; padding-left: 0; }
-.price-table tbody tr:last-child td { border-bottom: none; padding-bottom: 0; }
-.price-table__label { font-size: .83rem; color: var(--navy); }
-.price-table__price {
-  font-family: "Anton", sans-serif; font-size: 1.08rem; letter-spacing: .02em;
-  color: var(--navy);
-}
-.price-table__price--rdb { color: var(--blue); }
-
-/* Taula de tarifes apilada (PC + mòbil): cada fila és una targeta amb el títol
-   a dalt i cada preu en una línia "Columna ——— Preu". Ha d'anar DESPRÉS de les
-   regles de taula de dalt perquè en guanyi l'ordre (mateixa especificitat). */
-.price-table { display: block; min-width: 0; font-size: .84rem; }
-.price-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* capçalera només per a lectors */
-.price-table tbody { display: block; }
-.price-table tbody tr {
-  display: block;
-  background: var(--card);
-  border: 1px solid rgba(31,90,224,.14);
-  border-radius: var(--radius-sm);
-  padding: 11px 13px;
-  margin-bottom: 9px;
-  box-shadow: 0 1px 3px rgba(14,42,99,.05);
-}
-.price-table tbody tr:last-child { margin-bottom: 0; }
-.price-table tbody td { display: block; padding: 0; border: none; text-align: left; }
-.price-table tbody td.price-table__label {
-  font-size: .92rem; font-weight: 700; color: var(--navy); line-height: 1.35;
-  padding-bottom: 9px; margin-bottom: 7px;
-  border-bottom: 1px solid rgba(31,90,224,.12);
-}
-.price-table tbody td[data-label] {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 4px 0;
-}
-.price-table tbody td[data-label]::before {
-  content: attr(data-label);
-  font-family: "Hanken Grotesk", sans-serif;
-  font-size: .84rem; font-weight: 600; color: var(--ink-soft);
-  text-transform: none; letter-spacing: 0;
-}
-.price-table__price { font-size: 1.12rem; }
-
 /* ============================================================
    Secció de setmanes com a panell (PC + mòbil, idèntic)
    ============================================================ */
@@ -1043,111 +918,86 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .04em;
   font-size: 1.04rem; line-height: 1.1; font-weight: 400; color: var(--navy);
 }
-/* El desplegable de preus dins el panell no és una caixa pròpia sinó una fila
-   integrada. Al PC (pointer:fine) la taula es manté sempre desplegada i sense
-   botó de plegar (vegeu el bloc @media (pointer: fine)). */
-.child-weeks .price-info {
-  background: transparent; border: none; border-radius: 0;
-  padding: 0; margin: 0 0 9px;   /* mateix ritme que el gap entre setmanes */
+/* ---------- Setmanes: targetes ----------
+   Una targeta prima per setmana: el nom en Anton —la mateixa veu tipogràfica
+   que el preu—, les dates a sota en to suau, el preu com a fitxa i la casella
+   rodona a la dreta. En triar-la s'omple de blau i el text passa a blanc. */
+.weeks { display: grid; gap: 8px; }
+.week {
+  position: relative; display: flex; align-items: center; gap: 13px;
+  border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm);
+  padding: 10px 14px; background: var(--card); cursor: pointer;
+  box-shadow: 0 2px 7px -4px rgba(14,42,99,.14);
+  transition: border-color .18s, background .18s, transform .15s, box-shadow .2s;
+  -webkit-tap-highlight-color: transparent;
 }
-.child-weeks .price-info__header { gap: 9px; }
-.child-weeks .price-info__icon { width: 24px; height: 24px; font-size: .82rem; }
-.child-weeks .price-info__title { font-size: .8rem; }
-.child-weeks .price-info__body-inner { padding-top: 11px; }
-
-/* Targetes "calendari": la DATA és la protagonista (és pel que es tria),
-   l'etiqueta fa d'eyebrow a sobre, el número és un token rodó i les places una
-   pastilla. En triar-la s'omple de blau i el text passa a blanc. */
-.child-weeks .weeks { gap: 9px; }
-.child-weeks .week {
-  align-items: center; gap: 14px; padding: 13px 14px; border-radius: var(--radius);
-  background: var(--card); border-color: var(--line-ink);
-  box-shadow: 0 2px 7px -4px rgba(14,42,99,.16);
-  transition: border-color .18s, background .18s, transform .12s, box-shadow .22s;
+@media (hover: hover) {
+  .week:not(.is-full):not(.is-selected):hover {
+    border-color: var(--rink-line);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px -9px rgba(31,90,224,.4);
+  }
 }
-.child-weeks .week__num {
-  width: 44px; height: 44px; border-radius: 50%; font-size: 1.16rem;
-  background: linear-gradient(140deg, var(--navy) 0%, #1A3D85 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
-  transition: background .18s, color .18s, box-shadow .18s;
+.week:not(.is-full):active { transform: scale(.99); }
+.week input { position: absolute; opacity: 0; pointer-events: none; }
+.week__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.week__label {
+  font-family: "Anton", sans-serif; font-weight: 400;
+  font-size: 1.02rem; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--navy); transition: color .18s;
 }
-.child-weeks .week__body { gap: 3px; }
-.child-weeks .week__label {
-  font-size: .67rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+/* Dates: mateixa veu que l'eyebrow "Tria" de la capçalera del panell */
+.week__meta {
+  font-size: .67rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
   color: var(--blue); transition: color .18s;
 }
-.child-weeks .week__meta {
-  font-size: 1.04rem; font-weight: 700; color: var(--navy); transition: color .18s;
-}
-.child-weeks .week__places {
-  align-self: flex-start; margin-top: 5px;
-  display: inline-flex; align-items: center; gap: 6px;
+.week__places {
+  align-self: flex-start; margin-top: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
   font-size: .72rem; font-weight: 600; color: #157a4a;
-  background: rgba(34,160,90,.13); border-radius: 999px; padding: 2px 9px;
+  background: rgba(34,160,90,.13); border-radius: 999px; padding: 1px 8px;
   transition: background .18s, color .18s;
 }
-.child-weeks .week__places::before {
-  content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
+.week__places::before {
+  content: ""; flex: 0 0 auto; width: 5px; height: 5px; border-radius: 50%;
   background: #22a05a; transition: background .18s;
 }
-.child-weeks .week__check {
-  width: 24px; height: 24px; border-width: 2px;
+/* Fitxa de preu: Anton en pastilla suau */
+.week__price {
+  flex: 0 0 auto; white-space: nowrap;
+  font-family: "Anton", sans-serif; font-weight: 400;
+  font-size: 1rem; letter-spacing: .02em; line-height: 1;
+  color: var(--navy);
+  background: rgba(31,90,224,.08); border-radius: 10px; padding: 6px 10px;
+  transition: background .18s, color .18s, box-shadow .18s;
+}
+.week__price[hidden] { display: none; }
+.week__check {
+  width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%;
+  border: 2px solid var(--line-ink); background: var(--card);
+  display: grid; place-items: center; color: #fff; font-size: .75rem;
   transition: background .18s, border-color .18s, color .18s, transform .18s;
 }
-/* Estat triat: ompliment blau + text blanc + halo */
-.child-weeks .week.is-selected {
+/* Estat triat: ompliment blau + text blanc */
+.week.is-selected {
   border-color: var(--blue);
   background: linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 100%);
-  box-shadow: 0 9px 22px -9px rgba(31,90,224,.6);
+  box-shadow: 0 8px 20px -9px rgba(31,90,224,.55);
 }
-.child-weeks .week.is-selected .week__label  { color: rgba(255,255,255,.85); }
-.child-weeks .week.is-selected .week__meta   { color: #fff; }
-.child-weeks .week.is-selected .week__places { color: #fff; background: rgba(255,255,255,.2); }
-.child-weeks .week.is-selected .week__places::before { background: #fff; }
-.child-weeks .week.is-selected .week__num {
-  background: rgba(255,255,255,.18); color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.4);
+.week.is-selected .week__label  { color: #fff; }
+.week.is-selected .week__meta   { color: rgba(255,255,255,.82); }
+.week.is-selected .week__places { color: #fff; background: rgba(255,255,255,.2); }
+.week.is-selected .week__places::before { background: #fff; }
+.week.is-selected .week__price {
+  color: #fff; background: rgba(255,255,255,.16);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
 }
-.child-weeks .week.is-selected .week__check {
+.week.is-selected .week__check {
   background: #fff; border-color: #fff; color: var(--blue);
   transform: scale(1.04);
 }
-
-/* ---------- Setmanes ---------- */
-.weeks { display: grid; gap: 10px; }
-.week {
-  position: relative; display: flex; align-items: center; gap: 14px;
-  border: 1.5px solid var(--line-ink); border-radius: var(--radius-sm);
-  padding: 14px 15px; background: #fff; cursor: pointer; transition: .15s;
-  overflow: hidden; -webkit-tap-highlight-color: transparent;
-}
-/* Només en dispositius amb punter real: al mòbil el :hover s'enganxa després del toc */
-@media (hover: hover) {
-  .week:hover { border-color: var(--blue); }
-}
-.week input { position: absolute; opacity: 0; pointer-events: none; }
-.week__num {
-  font-family: "Anton", sans-serif; font-size: 1.1rem; width: 40px; height: 40px;
-  flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px;
-  background: var(--navy); color: #fff; transition: .15s;
-}
-.week__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.week__label { font-weight: 700; }
-.week__meta { font-size: .85rem; color: var(--ink-soft); }
-.week__places { font-size: .82rem; color: var(--ink-soft); }
-.week__price { display: none; }
-.week__check {
-  width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%;
-  border: 1.5px solid var(--line-ink); display: grid; place-items: center; color: #fff; font-size: .8rem;
-}
-.week.is-selected { border-color: var(--blue); background: var(--blue-soft); }
-.week.is-selected .week__num { background: var(--blue); }
-.week.is-selected .week__check { background: var(--blue); border-color: var(--blue); }
-.week.is-full { opacity: .6; cursor: not-allowed; }
-@media (hover: hover) {
-  .week.is-full:hover { border-color: var(--line-ink); }
-}
-.week.is-full .week__check { display: none; }
+.week.is-full { opacity: .55; cursor: not-allowed; }
+.week.is-full .week__check { visibility: hidden; }
 .week__tag {
   flex: 0 0 auto; white-space: nowrap;
   font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
@@ -1233,11 +1083,6 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .done__summary dt { font-weight: 600; color: var(--ink-soft); font-size: .9rem; }
 .done__summary dd { margin: 0; font-size: .95rem; }
 
-/* ---------- Peu ---------- */
-.foot { background: var(--navy); color: #fff; padding-block: 26px; }
-.foot p { margin: 0 0 4px; }
-.foot p:first-child { font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .04em; }
-.foot__small { font-size: .82rem; color: rgba(255,255,255,.6); }
 
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
@@ -1305,8 +1150,6 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 }
 
 /* ---- Setmana: micro-resposta al clic + halo si seleccionada ---- */
-.week { transition: border-color .15s, background .15s, transform .12s; }
-.week:not(.is-full):active { transform: scale(.985); }
 
 /* ---- Botó principal: elevació + resplendor al hover (només amb ratolí) ---- */
 .btn--primary { transition: background .15s, box-shadow .15s, transform .15s; }
@@ -1442,24 +1285,25 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 /* Targetes de preu apilades en fosc: la targeta (var--card) ja contrasta amb el fons
    del bloc; només ajustem els filets blaus al to clar del tema fosc */
 @media (prefers-color-scheme: dark) {
-  .price-table tbody tr { border-color: rgba(91,142,255,.2); }
-  .price-table tbody td.price-table__label { border-bottom-color: rgba(91,142,255,.18); }
   /* Panell de setmanes: vora i ombra al to clar del tema fosc */
   .child-weeks {
     border-color: rgba(91,142,255,.22);
     box-shadow: 0 9px 24px -16px rgba(0,0,0,.7);
   }
   /* En fosc, --navy/--blue s'aclareixen: forcem blaus prou foscos perquè
-     el text blanc dels badges i de la targeta triada mantingui contrast. */
-  .child-weeks .week__num { background: linear-gradient(140deg, #2E4FA0 0%, #16357a 100%); }
-  .child-weeks .week.is-selected {
+     el text blanc de la targeta triada mantingui contrast. */
+  .week.is-selected {
     background: linear-gradient(135deg, #2E63D6 0%, #3F78E6 100%);
     border-color: #4178E6;
-    box-shadow: 0 9px 22px -10px rgba(0,0,0,.75);
+    box-shadow: 0 8px 20px -10px rgba(0,0,0,.75);
   }
-  .child-weeks .week.is-selected .week__check { color: #2E63D6; }
+  .week.is-selected .week__check { color: #2E63D6; }
+  /* Pastilla de places al to verd del tema fosc */
   .child-weeks .week__places { color: #5fd99a; background: rgba(34,160,90,.16); }
   .child-weeks .week__places::before { background: #4fce8a; }
+  /* Fitxa de preu: pastilla al to del tema fosc; a la triada, sempre blanca */
+  .week__price { color: var(--ink); background: rgba(91,142,255,.14); }
+  .week.is-selected .week__price { color: #fff; background: rgba(255,255,255,.14); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -1652,7 +1496,7 @@ body.pc-summary-on .child-price { display: none !important; }
 
 /* Xifres tabulars a tots els imports: amplada fixa per dígit → columnes de preus
    perfectament alineades i sense salts d'amplada quan el total canvia. */
-.price-tier__price, .price-table__price, .child-price__amount,
+.child-price__amount,
 .price-total__amount, .price-total__week-price,
 .pcsum__amount, .pcsum__week-price, .pcsum__total-amount {
   font-variant-numeric: tabular-nums;
@@ -1675,9 +1519,8 @@ body.pc-summary-on .child-price { display: none !important; }
     justify-content: center;
     align-items: start;
   }
-  /* El hero i el footer s'alineen amb la graella ampla del formulari i el text respira més */
+  /* El hero s'alinea amb la graella ampla del formulari i el text respira més */
   body.pc-summary-on .hero__inner { max-width: 1100px; }
-  body.pc-summary-on .foot .wrap { max-width: 1100px; }
   body.pc-summary-on .hero__title { max-width: 22ch; }
   body.pc-summary-on .hero__lead { max-width: 62ch; }
   /* Columna esquerra: formulari. Columna dreta: un sol contenidor (#pc-aside) que
@@ -1840,7 +1683,6 @@ body.pc-summary-on .child-price { display: none !important; }
 
   /* Setmanes i opcions */
   .choice, .week { background: var(--card); }
-  .week__num { background: var(--blue); }
 
   /* Checkboxes personalitzats */
   .rdb-toggle { background: var(--card); }
@@ -1897,10 +1739,6 @@ body.pc-summary-on .child-price { display: none !important; }
   .form-progress.is-complete .form-progress__label { color: #4ade80; }
 
   /* Targetes de preu */
-  .price-info {
-    background: linear-gradient(135deg, rgba(91,142,255,.1) 0%, rgba(91,142,255,.04) 100%);
-    border-color: rgba(91,142,255,.22);
-  }
   .child-price {
     background: linear-gradient(135deg, rgba(91,142,255,.1) 0%, rgba(91,142,255,.04) 100%);
     border-color: rgba(91,142,255,.22);
@@ -1924,15 +1762,6 @@ body.pc-summary-on .child-price { display: none !important; }
   .price-total__tag { background: var(--card); border-color: var(--line-ink); }
 }
 
-/* ---- 10. Footer contacte ---- */
-.foot__contact {
-  display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 10px;
-}
-.foot__contact-item {
-  color: rgba(255,255,255,.72); text-decoration: none;
-  font-size: .88rem; transition: color .15s;
-}
-.foot__contact-item:hover { color: #fff; text-decoration: underline; }
 
 /* ---- 11. Consentiment dins la secció de protecció de dades ---- */
 .section .consent {
@@ -2259,8 +2088,6 @@ html { scroll-padding-bottom: 84px; }
   .form-progress { display: none !important; }
   /* Menys espai entre el hero i el formulari (el de dalt sobrava). */
   .main { padding-top: 14px; }
-  /* Footer no aporta res al mòbil amb wizard actiu */
-  body.has-wizard .foot { display: none; }
 }
 /* Oculta el wizard-nav a la pantalla d'èxit i durant la càrrega */
 .page--done #wizard-nav,
@@ -2327,7 +2154,7 @@ html { scroll-padding-bottom: 84px; }
 /* ---- Print ---- */
 @media print {
   .topbar, .hero, .returning, .form, #loading, #load-error, #closed,
-  .foot, .done__actions, .confetti-container, #form-progress,
+  .done__actions, .confetti-container, #form-progress,
   #wizard-nav { display: none !important; }
   body { background: #fff; color: #000; -webkit-print-color-adjust: exact; }
   .main { padding-block: 0; }
@@ -2337,4 +2164,95 @@ html { scroll-padding-bottom: 84px; }
   }
   .done__mark { box-shadow: none; animation: none; }
   .done__summary { border: 1px solid #ccc; box-shadow: none; }
+}
+
+/* ============================================================
+   Enviament robust + modal + resum amb preus
+   ============================================================ */
+
+/* ---- Error d'enviament persistent (amb reintent) ---- */
+.send-error {
+  margin: 18px 0 14px; padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(192,57,43,.08) 0%, rgba(192,57,43,.03) 100%);
+  border: 1px solid rgba(192,57,43,.28); border-left: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  animation: rise .3s ease both;
+}
+.send-error__head { display: flex; align-items: center; gap: 8px; }
+.send-error__icon { display: grid; place-items: center; color: var(--danger); flex: 0 0 auto; }
+.send-error__title { font-weight: 800; color: var(--danger); font-size: .98rem; }
+.send-error__body { margin: 8px 0 12px; font-size: .9rem; color: var(--ink-soft); }
+.send-error__retry { padding: 10px 20px; font-size: .92rem; gap: 8px; }
+@media (prefers-color-scheme: dark) {
+  .send-error {
+    background: linear-gradient(135deg, rgba(255,112,112,.1) 0%, rgba(255,112,112,.04) 100%);
+    border-color: rgba(255,112,112,.3);
+  }
+}
+
+/* ---- Modal de confirmacio (substitueix window.confirm) ---- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(9,14,26,.55);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  animation: modal-fade .18s ease both;
+}
+.modal-overlay.is-closing { opacity: 0; transition: opacity .16s ease; }
+.modal-overlay.is-closing .modal { transform: translateY(6px) scale(.98); transition: transform .16s ease; }
+.modal {
+  width: 100%; max-width: 420px;
+  background: var(--card); border-radius: calc(var(--radius) + 4px);
+  box-shadow: 0 30px 70px -20px rgba(0,0,0,.5), 0 4px 16px rgba(0,0,0,.2);
+  padding: 26px 24px 22px; text-align: center;
+  animation: modal-pop .24s cubic-bezier(.2,.9,.3,1.2) both;
+}
+.modal__icon {
+  width: 52px; height: 52px; margin: 0 auto 14px;
+  display: grid; place-items: center; border-radius: 16px;
+  background: var(--blue-soft); color: var(--blue);
+}
+.modal__title {
+  font-family: "Anton", sans-serif; text-transform: uppercase; letter-spacing: .03em;
+  font-weight: 400; font-size: 1.25rem; margin: 0 0 8px; color: var(--navy);
+}
+.modal__body { margin: 0 0 20px; font-size: .93rem; color: var(--ink-soft); }
+.modal__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.modal__actions .btn { padding: 12px 22px; font-size: .95rem; }
+@keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-pop {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- Resum d'exit: total destacat + instruccions de pagament ---- */
+.done__grand {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-ink);
+  font-weight: 800; color: var(--navy); font-size: 1.02rem;
+}
+.done__grand-amount { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.done__pay {
+  display: flex; align-items: flex-start; gap: 12px; text-align: left;
+  max-width: 460px; margin: -8px auto 26px; padding: 15px 17px;
+  background: linear-gradient(135deg, rgba(31,90,224,.07) 0%, rgba(31,90,224,.02) 100%);
+  border: 1px solid rgba(31,90,224,.18); border-left: 4px solid var(--blue);
+  border-radius: var(--radius-sm);
+}
+.done__pay[hidden] { display: none; }
+.done__pay-icon { display: grid; place-items: center; color: var(--blue); flex: 0 0 auto; margin-top: 2px; }
+.done__pay-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.done__pay-title {
+  font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--blue);
+}
+.done__pay-text { font-size: .92rem; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) {
+  .done__pay {
+    background: linear-gradient(135deg, rgba(91,142,255,.1) 0%, rgba(91,142,255,.04) 100%);
+    border-color: rgba(91,142,255,.24);
+  }
+}
+@media print {
+  .done__pay { border: 1px solid #ccc; background: none; }
 }

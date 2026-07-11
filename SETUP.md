@@ -35,6 +35,7 @@ Apps Script (Code.gs) ─► Google Sheet (base de dades)
 | email_intro | Hem rebut la inscripció. Aquí tens el resum: |
 | texto_boton | Enviar inscripció |
 | mensaje_exito | T'hem enviat un correu amb el resum. |
+| instruccions_pagament | Us contactarem amb les indicacions per formalitzar el pagament. |
 | consentimiento | He llegit i accepto la política de protecció de dades del Club Esportiu E7. |
 | setmanes_info | Preu: 1a setmana 80 € · 2a setmana / fam. nombrosa / 2n germà 70 € · jugadors C.P. Riudebitlles 70 € (2a setmana o 2n germà 60 €). |
 | semanas_obligatorias | TRUE |
@@ -48,6 +49,9 @@ Apps Script (Code.gs) ─► Google Sheet (base de dades)
 
 > `form_defecto` = quin formulari es mostra quan s'obre `index.html` sense `?form=`.
 > `setmanes_titulo` = títol de la secció de setmanes/dies (es pot canviar per formulari amb la columna `form`).
+> `instruccions_pagament` = si té valor, la pantalla d'èxit mostra un bloc "Com fer el pagament"
+> amb aquest text (sota el resum amb els imports). Opcional i personalitzable per formulari
+> amb la columna `form`. Els salts de línia del text es respecten.
 
 #### Fitxa de convocatòria (xips del hero)
 
