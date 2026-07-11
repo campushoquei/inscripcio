@@ -414,7 +414,13 @@ async function load() {
     }
     applySettings(CONFIG.settings || {});
     initHeroSlider();
-    if (CONFIG.form && CONFIG.form.habilitado === false) {
+    // Tancat si: el formulari actiu està deshabilitat, o bé —quan hi ha llista de
+    // formularis— cap d'ells està habilitat. Així, si tots són FALSE, es mostra la
+    // pantalla de "no hi ha formularis" encara que el backend n'hagi resolt un per defecte.
+    const formsList = CONFIG.forms || [];
+    const anyFormEnabled = formsList.some(function (f) { return f.id && f.habilitado !== false; });
+    const allFormsDisabled = formsList.length > 0 && !anyFormEnabled;
+    if ((CONFIG.form && CONFIG.form.habilitado === false) || allFormsDisabled) {
       document.body.classList.add("page--no-forms");
       stopHintCycle(); els.loading.hidden = true; els.closed.hidden = false;
       revealHero(); return;
