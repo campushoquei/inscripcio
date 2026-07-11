@@ -395,10 +395,10 @@ body {
 .chip--all {
   background: linear-gradient(140deg, var(--blue) 0%, var(--blue-deep) 100%);
   border-color: transparent; color: #fff; padding-left: 14px;
-  box-shadow: 0 3px 11px rgba(31,90,224,.30);
+  box-shadow: 0 3px 11px rgba(31,90,224,.3);
 }
 @media (hover: hover) {
-  .chip--all:hover { box-shadow: 0 7px 18px rgba(31,90,224,.40); transform: translateY(-1px); }
+  .chip--all:hover { box-shadow: 0 7px 18px rgba(31,90,224,.4); transform: translateY(-1px); }
 }
 .returning__close {
   align-self: start; justify-self: end;
@@ -477,7 +477,7 @@ body {
 .nf-board__cliphole { fill: #0f1623; opacity: .55; }
 
 /* Marques de mitja pista, estil retolador */
-.nf-court { stroke: rgba(31,90,224,.30); stroke-width: 2.5; fill: none; }
+.nf-court { stroke: rgba(31,90,224,.3); stroke-width: 2.5; fill: none; }
 .nf-goal { stroke: rgba(210,53,47,.65); stroke-width: 3; fill: rgba(210,53,47,.10); }
 
 /* Equips: O nostres (blau), X rivals (vermell) */
@@ -509,7 +509,7 @@ body {
   animation: nf-run 7s cubic-bezier(.5,0,.4,1) infinite;
 }
 .nf-goalflash {
-  fill: rgba(31,90,224,.40); opacity: 0;
+  fill: rgba(31,90,224,.4); opacity: 0;
   transform-box: fill-box; transform-origin: center;
   animation: nf-flash 7s linear infinite;
 }
@@ -1804,6 +1804,9 @@ body.pc-summary-on .child-price { display: none !important; }
 .done__actions {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 4px;
 }
+/* Feedback del botó Compartir (descarregat / error), visible sota les accions */
+.done__note { margin: 12px 0 0; font-size: .82rem; color: var(--ink-soft); }
+.done__note[hidden] { display: none; }
 
 /* ---------- Filebox versió mòbil (2 botons) ---------- */
 /* Compacta: sense caixa exterior (vora/fons/padding), només els dos botons en horitzontal.
@@ -2380,4 +2383,12 @@ html { scroll-padding-bottom: 84px; }
   /* Ha de guanyar la regla verda del bloc fosc anterior (va més tard al fitxer) */
   .child-weeks .week__places--low { color: #fbbf24; background: rgba(217,119,6,.2); }
   .child-weeks .week__places--low::before { background: #f59e0b; }
+}
+
+/* ---- View Transitions: fosa curta i suau entre vistes (canvi de formulari,
+   enviament → èxit). Només navegadors compatibles; la resta, canvi normal. ---- */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: .28s;
+  animation-timing-function: ease;
 }

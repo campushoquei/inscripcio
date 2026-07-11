@@ -165,10 +165,12 @@ async function init() {
     if (next) next.focus();
     else t.blur();   // últim camp: tanca el teclat
   });
-  els.another.addEventListener("click", resetForNew);
+  els.another.addEventListener("click", () => withViewTransition(resetForNew));
   els.returningClose.addEventListener("click", dismissReturning);
   if (els.returningToggle) els.returningToggle.addEventListener("click", toggleReturning);
   if (els.printBtn) els.printBtn.addEventListener("click", () => window.print());
+  const shareBtn = document.getElementById("share-pass");
+  if (shareBtn) shareBtn.addEventListener("click", sharePass);
   setupIOSBarFix();
   await load();
 }
@@ -462,11 +464,13 @@ function inferSeason(formId) {
   return "estiu"; // per defecte
 }
 
+let currentSeason = "";   // estació activa (per al passi compartible)
 function applyHeroTheme(estacio) {
   const hero = document.getElementById("hero");
   if (!hero) return;
-  ["estiu", "hivern", "primavera", "tardor"].forEach(function(s) { hero.classList.remove("season-" + s); });
   const s = String(estacio || "").toLowerCase().trim();
+  currentSeason = s;
+  ["estiu", "hivern", "primavera", "tardor"].forEach(function(x) { hero.classList.remove("season-" + x); });
   if (s) hero.classList.add("season-" + s);
   applySeasonBrand(s);
 }
@@ -502,6 +506,16 @@ function applySeasonBrand(estacio) {
   } catch {}
 }
 
+// Executa un canvi de vista amb la View Transitions API (fosa suau) si el
+// navegador la suporta i l'usuari no prefereix menys moviment; si no, directe.
+function withViewTransition(fn) {
+  if (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document.startViewTransition(fn);
+  } else {
+    fn();
+  }
+}
+
 async function switchHeroForm(idx) {
   if (idx === currentFormIdx || !allForms[idx]) return;
   currentFormIdx = idx;
@@ -510,7 +524,14 @@ async function switchHeroForm(idx) {
   const hero = document.getElementById("hero");
   if (hero) hero.classList.add("hero--init");
 
-  await load();
+  // Amb la config en cache el canvi és instantani → val la pena la fosa (morph).
+  // Sense cache hi ha fetch pel mig: la transició congelaria la pàgina, millor no.
+  const cached = !SCRIPT_URL || !!CONFIG_CACHE[activeFormId || "__default"];
+  if (cached && document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document.startViewTransition(() => load());
+  } else {
+    await load();
+  }
 }
 
 // ---- Render ----
@@ -2131,7 +2152,7 @@ async function onSubmit(e) {
     const result = await send(payload);
     submissionDone = true;   // ja no esborrarem les fotos pujades en abandonar
     saveLocal(shared, childrenPayload, campusName);
-    showDone(shared, childrenPayload, campusName, result);
+    withViewTransition(() => showDone(shared, childrenPayload, campusName, result));
   } catch (err) { console.error(err); haptic([10, 45, 10]); showSendError(); }
   finally { setLoading(false); }
 }
@@ -2167,6 +2188,160 @@ function haptic(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
 }
 
+// ---- Passi de confirmació compartible ----
+// Imatge 1080×1350 (4:5, ideal per a WhatsApp/Instagram) generada amb canvas:
+// marca del club + estació + jugadors + setmanes + total + referència.
+let lastPassData = null;
+let passCanvasPromise = null;   // canvas pre-generat en mostrar l'èxit (vegeu showDone)
+
+async function buildPassCanvas(skipLogo) {
+  const d = lastPassData;
+  if (!d) return null;
+  const s = (CONFIG && CONFIG.settings) || {};
+  const accent = SEASON_BRAND[currentSeason] || "#1F5AE0";
+  const W = 1080, H = 1350;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  // Fonts web carregades abans de dibuixar (best-effort)
+  try {
+    await Promise.all([
+      document.fonts.load('400 60px "Anton"'),
+      document.fonts.load('600 30px "Hanken Grotesk"'),
+      document.fonts.ready
+    ]);
+  } catch {}
+
+  // Fons navy amb degradat + línies de pista decoratives
+  const g = x.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#0E2A63"); g.addColorStop(1, "#081638");
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.strokeStyle = "rgba(255,255,255,.07)"; x.lineWidth = 3;
+  x.beginPath(); x.arc(W, 40, 420, 0, Math.PI * 2); x.stroke();
+  x.beginPath(); x.arc(0, H, 520, 0, Math.PI * 2); x.stroke();
+  x.beginPath(); x.arc(0, H, 340, 0, Math.PI * 2); x.stroke();
+  // Barra d'accent de l'estació
+  x.fillStyle = accent; x.fillRect(0, 0, W, 14);
+
+  // Logo en cercle
+  if (!skipLogo) {
+    try {
+      const img = await new Promise((res, rej) => {
+        const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = "logo.png";
+      });
+      x.save();
+      x.beginPath(); x.arc(124, 152, 56, 0, Math.PI * 2); x.closePath(); x.clip();
+      x.drawImage(img, 68, 96, 112, 112);
+      x.restore();
+    } catch {}
+  }
+
+  // Capçalera
+  x.textBaseline = "middle";
+  x.fillStyle = "#fff"; x.font = '400 50px "Anton", sans-serif';
+  x.fillText(String(s.nombre_campus || "Campus Hoquei").toUpperCase(), 210, 134);
+  x.fillStyle = "rgba(255,255,255,.55)"; x.font = '600 30px "Hanken Grotesk", sans-serif';
+  x.fillText(d.formName || "", 212, 184);
+
+  // Segell de confirmació
+  x.fillStyle = accent; x.font = '400 42px "Anton", sans-serif';
+  x.fillText("INSCRIPCIÓ CONFIRMADA", 72, 300);
+  x.strokeStyle = accent; x.lineWidth = 5; x.lineCap = "round";
+  x.beginPath(); x.moveTo(72, 340); x.lineTo(240, 340); x.stroke();
+
+  // Jugadors i setmanes (limitat perquè càpiga amb marge)
+  let y = 425;
+  const maxY = H - 260;
+  for (const ch of d.children.slice(0, 4)) {
+    if (y > maxY) break;
+    const name = ch.data.nom_jugador || pickName(ch.data) || "Jugador/a";
+    x.fillStyle = "#fff"; x.font = '400 56px "Anton", sans-serif';
+    x.fillText(name.toUpperCase(), 72, y);
+    y += 58;
+    x.fillStyle = "rgba(255,255,255,.75)"; x.font = '600 30px "Hanken Grotesk", sans-serif';
+    for (const wl of (ch.weekLabels || []).slice(0, 6)) {
+      if (y > maxY) break;
+      x.fillText("•  " + wl, 84, y);
+      y += 44;
+    }
+    if (ch.preu != null) {
+      x.fillStyle = accent; x.font = '700 32px "Hanken Grotesk", sans-serif';
+      x.fillText(`${ch.preu} €`, 84, y);
+      y += 46;
+    }
+    y += 34;
+  }
+
+  // Peu: total + referència + lema del club
+  x.strokeStyle = "rgba(255,255,255,.18)"; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(72, H - 200); x.lineTo(W - 72, H - 200); x.stroke();
+  const totalPreu = d.children.reduce((sum, ch) => sum + (ch.preu || 0), 0);
+  if (totalPreu > 0) {
+    x.fillStyle = "#fff"; x.font = '400 54px "Anton", sans-serif';
+    x.fillText(`TOTAL  ${totalPreu} €`, 72, H - 128);
+  }
+  if (d.refId) {
+    x.textAlign = "right";
+    x.fillStyle = "rgba(255,255,255,.5)"; x.font = '600 26px "Hanken Grotesk", sans-serif';
+    x.fillText(`Ref. ${d.refId}`, W - 72, H - 128);
+    x.textAlign = "left";
+  }
+  x.fillStyle = "rgba(255,255,255,.45)"; x.font = '600 26px "Hanken Grotesk", sans-serif';
+  x.fillText(String(s.club || ""), 72, H - 62);
+
+  // Canvas "contaminat"? Passa en obrir el web en local (file://): el logo es
+  // tracta com d'origen creuat i el canvas no es pot exportar (SecurityError a
+  // toBlob/toDataURL). El refem un cop sense logo, que sí que és exportable.
+  if (!skipLogo) {
+    try { x.getImageData(0, 0, 1, 1); }
+    catch { return buildPassCanvas(true); }
+  }
+  return c;
+}
+
+async function sharePass() {
+  const btn = document.getElementById("share-pass");
+  const note = document.getElementById("done-note");
+  // El feedback ha de ser VISIBLE a la pantalla d'èxit: flashNote escriu dins
+  // del formulari, que aquí està ocult, i semblaria que el botó no fa res.
+  const say = (msg) => { if (note) { note.textContent = msg; note.hidden = false; } };
+  if (note) note.hidden = true;
+  if (btn) btn.disabled = true;
+  try {
+    // Canvas pre-generat a showDone: el clic gairebé no espera i l'activació
+    // d'usuari segueix viva quan arriba navigator.share (si no, alguns
+    // navegadors el rebutgen en silenci).
+    const c = (passCanvasPromise ? await passCanvasPromise : null) || await buildPassCanvas();
+    if (!c) { say("No s'ha pogut generar el passi."); return; }
+    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    if (blob && navigator.canShare) {
+      const file = new File([blob], "inscripcio-campus.png", { type: "image/png" });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: "Inscripció confirmada" });
+          return;
+        } catch (e) {
+          if (e && e.name === "AbortError") return;   // l'usuari ha tancat el diàleg
+          // Qualsevol altre error (p. ex. activació caducada) → passem a descàrrega
+        }
+      }
+    }
+    // Sense API de compartir (PC) o share fallit: descàrrega directa
+    const a = document.createElement("a");
+    a.href = c.toDataURL("image/png");
+    a.download = "inscripcio-campus.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    say("Passi desat a les descàrregues com a imatge.");
+  } catch (err) {
+    console.error(err);
+    say("No s'ha pogut generar el passi.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ---- Èxit ----
 function showDone(shared, children, campusName, result) {
   hideSendError();
@@ -2175,6 +2350,17 @@ function showDone(shared, children, campusName, result) {
   haptic([14, 60, 14, 60, 26]); // petita celebració tàctil
   launchConfetti();
   const s = CONFIG.settings || {};
+  // Dades per al passi compartible (botó "Compartir el passi")
+  lastPassData = {
+    children,
+    refId: result && result.id && !result.demo ? result.id : "",
+    formName: (CONFIG.form && CONFIG.form.nombre) || s.hero_titulo || ""
+  };
+  // Pre-generem el passi ara (fonts + logo + dibuix): quan l'usuari cliqui
+  // "Compartir" el canvas ja serà a punt i el diàleg s'obrirà a l'instant.
+  passCanvasPromise = buildPassCanvas().catch(() => null);
+  const doneNote = document.getElementById("done-note");
+  if (doneNote) doneNote.hidden = true;
   els.doneText.textContent = (s.mensaje_exito || "Inscripció rebuda correctament.") + (result && result.demo ? "  (mode demo: encara no s'ha guardat enlloc)" : "");
   const refEl = document.getElementById("done-ref");
   if (refEl) {
