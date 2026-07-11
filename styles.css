@@ -2064,10 +2064,17 @@ body.has-wizard { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
   font-size: 1.05rem; font-weight: 800; color: var(--blue);
   font-variant-numeric: tabular-nums; letter-spacing: -.01em;
 }
-/* Indicador de progrés amb punts; el pas actiu s'allarga en una píndola */
+/* Indicador de progrés: nom del pas + punts (el pas actiu s'allarga en píndola) */
 .wizard-nav__indicator {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; min-width: 0;
 }
+.wzstep {
+  font-size: .64rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-soft); max-width: 128px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wzdots { display: flex; align-items: center; gap: 6px; }
 .wzdot {
   width: 7px; height: 7px; border-radius: 999px;
   background: var(--line-ink); flex-shrink: 0;
@@ -2243,7 +2250,36 @@ html { scroll-padding-bottom: 84px; }
   font-weight: 400; font-size: 1.25rem; margin: 0 0 8px; color: var(--navy);
 }
 .modal__body { margin: 0 0 20px; font-size: .93rem; color: var(--ink-soft); }
+.modal__body[hidden] { display: none; }
 .modal__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+/* Contingut ric del modal (pas de revisió): resum per jugador amb imports */
+.modal__extra { text-align: left; margin: -6px 0 20px; }
+.modal__extra[hidden] { display: none; }
+.rev {
+  background: var(--paper); border: 1px solid var(--line-ink);
+  border-radius: var(--radius-sm); padding: 4px 14px;
+  max-height: 46vh; overflow-y: auto;
+}
+.rev__child { padding: 11px 0; }
+.rev__child + .rev__child { border-top: 1px solid var(--line-ink); }
+.rev__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.rev__name { font-weight: 800; color: var(--navy); font-size: .95rem; }
+.rev__amount {
+  font-weight: 800; color: var(--navy); font-size: .95rem;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.rev__week {
+  display: flex; justify-content: space-between; gap: 12px;
+  font-size: .85rem; color: var(--ink-soft); margin-top: 3px;
+}
+.rev__wprice { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rev__total {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 10px 0 11px; border-top: 1px solid var(--line-ink);
+  font-weight: 800; color: var(--navy);
+}
+.rev__email { margin: 12px 2px 0; font-size: .84rem; color: var(--ink-soft); }
+.rev__email strong { color: var(--ink); overflow-wrap: anywhere; }
 .modal__actions .btn { padding: 12px 22px; font-size: .95rem; }
 @keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-pop {

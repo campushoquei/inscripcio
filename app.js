@@ -286,12 +286,20 @@ async function load() {
   }
 }
 
-async function fetchConfig() {
+// Cache en memòria de les configs per formulari: tornar a un formulari ja
+// visitat (pills/swipe del hero) és instantani en lloc de repetir el fetch.
+// Les places poden quedar antigues, però checkPlacesBeforeSend() les reverifica
+// amb `fresh: true` just abans d'enviar.
+const CONFIG_CACHE = {};
+async function fetchConfig(fresh) {
   if (!SCRIPT_URL) return structuredClone(DEMO_CONFIG);
+  const key = activeFormId || "__default";
+  if (!fresh && CONFIG_CACHE[key]) return structuredClone(CONFIG_CACHE[key]);
   const res = await fetch(`${SCRIPT_URL}?action=config&form=${encodeURIComponent(activeFormId)}`, { method: "GET" });
   if (!res.ok) throw new Error("config HTTP " + res.status);
   const data = await res.json();
   if (data.error) throw new Error(data.error);
+  CONFIG_CACHE[key] = structuredClone(data);
   return data;
 }
 function enabledCampuses() { return (CONFIG.campuses || []).filter((c) => c.habilitado !== false); }
@@ -643,7 +651,7 @@ function initWizard() {
         `<button type="button" class="wizard-nav__children" id="wizard-children-info" hidden>` +
           PEOPLE_SVG +
           `<span id="wizard-children-label"></span>` +
-          `<span class="wc__price" id="wizard-children-price" hidden></span>` +
+          `<span class="wc__price" id="wizard-children-price" aria-live="polite" hidden></span>` +
           CHEVRON_UP +
         `</button>` +
       `</div>` +
@@ -694,6 +702,13 @@ function renderWizardStep(scrollTop, dir) {
     active.classList.remove("section--enter-next", "section--enter-prev");
     void active.offsetWidth; // força el reinici de l'animació
     active.classList.add(dir < 0 ? "section--enter-prev" : "section--enter-next");
+    // Accessibilitat: focus al títol del pas nou, perquè el lector de pantalla
+    // anunciï on som (si no, el focus es queda al botó Següent/Enrere de la barra).
+    const heading = active.querySelector(".section__title");
+    if (heading) {
+      heading.setAttribute("tabindex", "-1");
+      try { heading.focus({ preventScroll: true }); } catch {}
+    }
   }
 
   renderWizardNav();
@@ -781,13 +796,18 @@ function renderWizardNav() {
   // next i submit comparteixen la mateixa cel·la (.wizard-nav__action): un a la vegada
   if (nextBtn)   nextBtn.hidden   = isLast;
   if (submitBtn) submitBtn.hidden = !isLast;
-  // Indicador de progrés amb punts: el pas actiu s'allarga en una píndola.
+  // Indicador de progrés: nom del pas actual + punts (el pas actiu s'allarga).
   if (indicator) {
     const n = wizardSteps.length;
-    indicator.innerHTML = Array.from({ length: n }, (_, i) =>
+    const titleEl = wizardSteps[wizardStep] && wizardSteps[wizardStep].querySelector(".section__title");
+    const stepTitle = titleEl ? titleEl.textContent.trim() : "";
+    const dots = Array.from({ length: n }, (_, i) =>
       `<span class="wzdot${i < wizardStep ? " is-done" : i === wizardStep ? " is-active" : ""}"></span>`
     ).join("");
-    indicator.setAttribute("aria-label", `Pas ${wizardStep + 1} de ${n}`);
+    indicator.innerHTML =
+      (stepTitle ? `<span class="wzstep">${escapeHtml(stepTitle)}</span>` : "") +
+      `<span class="wzdots">${dots}</span>`;
+    indicator.setAttribute("aria-label", `Pas ${wizardStep + 1} de ${n}${stepTitle ? ": " + stepTitle : ""}`);
   }
 }
 
@@ -1376,7 +1396,23 @@ function fieldEl(f, scope) {
       else { sug.hidden = true; }
     };
     control.addEventListener("blur", refreshSug);
-    control.addEventListener("input", () => { if (!sug.hidden) sug.hidden = true; });
+    // Si el correu canvia (teclejat o autocompletat) i la confirmació ja té valor,
+    // la revalidem a l'instant: si ara coincideixen, l'avís "no coincideixen" marxa
+    // sol (abans quedava enganxat fins a un altre blur, un fals error molest).
+    const syncConfirm = () => {
+      const sc = control.dataset.scope;
+      const sel = (sc != null && sc !== "")
+        ? `[data-field="email_confirm"][data-scope="${sc}"]`
+        : '[data-field="email_confirm"]:not([data-scope])';
+      const confirmEl = document.querySelector(sel);
+      if (!confirmEl || !confirmEl.value.trim()) return;
+      const cw = confirmEl.closest(".field");
+      if (!cw) return;
+      const ok = validateSingleField(cw);
+      cw.classList.toggle("field--valid", ok);
+    };
+    control.addEventListener("input", () => { if (!sug.hidden) sug.hidden = true; syncConfirm(); });
+    control.addEventListener("change", syncConfirm);
     sug.addEventListener("click", () => {
       control.value = sug.dataset.fix; sug.hidden = true;
       control.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1653,7 +1689,18 @@ function buildEmailConfirmField(scope, sfx) {
     const ok = validateSingleField(wrap);
     wrap.classList.toggle("field--valid", ok && !!input.value.trim());
   });
-  input.addEventListener("input", () => wrap.classList.remove("field--valid"));
+  input.addEventListener("input", () => {
+    wrap.classList.remove("field--valid");
+    // Si estava marcat com a "no coincideixen" i ara ja quadra (p. ex. en
+    // autocompletar), treu l'avís a l'instant sense esperar el blur.
+    if (wrap.classList.contains("field--invalid")) validateSingleField(wrap);
+  });
+  // L'autocompletar del navegador dispara "change" sense blur: validem igualment
+  input.addEventListener("change", () => {
+    if (!input.value.trim()) return;
+    const ok = validateSingleField(wrap);
+    wrap.classList.toggle("field--valid", ok);
+  });
   wrap.appendChild(input);
   const err = document.createElement("p"); err.className = "field__error"; err.textContent = "Els correus no coincideixen.";
   wrap.appendChild(err);
@@ -1758,28 +1805,40 @@ function revealField(wrap) {
 // ---- Modal de confirmació (substitueix window.confirm, que trenca el disseny) ----
 // Retorna una promesa amb true (confirmar) o false (cancel·lar). Es tanca amb els
 // botons, la tecla Escape o clicant fora de la targeta.
-function showConfirmModal({ title, body, confirmLabel, cancelLabel }) {
+function showConfirmModal({ title, body, html, icon, confirmLabel, cancelLabel }) {
   return new Promise((resolve) => {
+    const ICONS = {
+      history: `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>`,
+      review:  `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>`,
+      warn:    `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+    };
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     overlay.innerHTML =
       `<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-body">` +
-        `<div class="modal__icon" aria-hidden="true">` +
-          `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>` +
-        `</div>` +
+        `<div class="modal__icon" aria-hidden="true">${ICONS[icon] || ICONS.history}</div>` +
         `<h3 class="modal__title" id="modal-title"></h3>` +
         `<p class="modal__body" id="modal-body"></p>` +
+        `<div class="modal__extra" id="modal-extra" hidden></div>` +
         `<div class="modal__actions">` +
           `<button type="button" class="btn btn--ghost modal__cancel"></button>` +
           `<button type="button" class="btn btn--primary modal__confirm"></button>` +
         `</div>` +
       `</div>`;
     overlay.querySelector(".modal__title").textContent = title;
-    overlay.querySelector(".modal__body").textContent = body;
+    const bodyEl = overlay.querySelector(".modal__body");
+    if (body) bodyEl.textContent = body; else bodyEl.hidden = true;
+    // Contingut ric opcional (p. ex. el resum de revisió). El construeix el
+    // codi que crida, sempre amb escapeHtml als valors de l'usuari.
+    if (html) {
+      const extra = overlay.querySelector(".modal__extra");
+      extra.innerHTML = html; extra.hidden = false;
+    }
     const confirmBtn = overlay.querySelector(".modal__confirm");
     const cancelBtn  = overlay.querySelector(".modal__cancel");
     confirmBtn.textContent = confirmLabel || "Continuar";
-    cancelBtn.textContent  = cancelLabel || "Cancel·lar";
+    if (cancelLabel === null) cancelBtn.hidden = true;   // modal només informatiu
+    else cancelBtn.textContent = cancelLabel || "Cancel·lar";
 
     let done = false;
     const close = (val) => {
@@ -1795,7 +1854,7 @@ function showConfirmModal({ title, body, confirmLabel, cancelLabel }) {
     overlay.addEventListener("pointerdown", (ev) => { if (ev.target === overlay) close(false); });
     document.addEventListener("keydown", onKey);
     document.body.appendChild(overlay);
-    cancelBtn.focus();   // per defecte, la sortida segura
+    (cancelLabel === null ? confirmBtn : cancelBtn).focus();   // per defecte, la sortida segura
   });
 }
 
@@ -1857,6 +1916,94 @@ function hideSendError() {
   box.remove();
 }
 
+// ---- Pas de revisió: resum per al modal de confirmació ----
+function buildReviewHtml(shared, children) {
+  const summary = computePriceSummary();
+  const byIdx = {};
+  if (summary) summary.children.forEach((c) => { byIdx[c.childIdx] = c; });
+  const all = weeksForCampus();
+  const blocks = children.map((ch, i) => {
+    const name = pickName(ch.data) || `Jugador/a ${i + 1}`;
+    const d = byIdx[i];
+    let weeksHtml = "";
+    if (d && d.weekBreakdown.length) {
+      weeksHtml = d.weekBreakdown.map((w) =>
+        `<div class="rev__week"><span>${escapeHtml(w.label)}</span><span class="rev__wprice">${w.price} €</span></div>`
+      ).join("");
+    } else {
+      weeksHtml = (ch.weeks || []).map((id) => {
+        const w = all.find((x) => x.id === id);
+        const label = w ? (w.fechas ? `${w.etiqueta} · ${w.fechas}` : w.etiqueta) : id;
+        return `<div class="rev__week"><span>${escapeHtml(label)}</span></div>`;
+      }).join("");
+    }
+    const amount = d && d.total > 0 ? `<span class="rev__amount">${d.total} €</span>` : "";
+    return `<div class="rev__child">` +
+        `<div class="rev__head"><span class="rev__name">${escapeHtml(name)}</span>${amount}</div>` +
+        weeksHtml +
+      `</div>`;
+  }).join("");
+  const total = (summary && summary.grandTotal > 0 && summary.priced.length > 1)
+    ? `<div class="rev__total"><span>Total</span><span class="rev__amount">${summary.grandTotal} €</span></div>`
+    : "";
+  const email = findEmail(shared);
+  const emailHtml = email
+    ? `<p class="rev__email">Enviarem la confirmació a <strong>${escapeHtml(email)}</strong></p>`
+    : "";
+  return `<div class="rev">${blocks}${total}</div>${emailHtml}`;
+}
+
+// ---- Places d'última hora ----
+// Entre començar el formulari i enviar-lo poden passar molts minuts: refem el
+// fetch de config (saltant la cache) i comprovem que les setmanes triades encara
+// tinguin plaça. Retorna les etiquetes de les que s'han omplert, o null si tot bé.
+async function checkPlacesBeforeSend(children) {
+  if (!SCRIPT_URL) return null;   // mode demo
+  let fresh;
+  try { fresh = await fetchConfig(true); } catch { return null; }   // si falla, no bloquegem l'enviament
+  if (!fresh || !Array.isArray(fresh.weeks) || !fresh.weeks.length) return null;
+  CONFIG.weeks = fresh.weeks;
+  const fullIds = new Set(fresh.weeks
+    .filter((w) => w.plazas_restantes != null && Number(w.plazas_restantes) <= 0)
+    .map((w) => w.id));
+  const conflicts = [...new Set(children.flatMap((ch) => (ch.weeks || []).filter((id) => fullIds.has(id))))];
+  syncWeeksAvailability();   // repinta disponibilitat i desmarca les plenes
+  if (!conflicts.length) return null;
+  return conflicts.map((id) => {
+    const w = fresh.weeks.find((x) => x.id === id);
+    return w ? w.etiqueta : id;
+  });
+}
+
+// Actualitza l'estat de disponibilitat de les targetes de setmana amb el
+// CONFIG.weeks vigent, sense refer el DOM (les seleccions vàlides es conserven).
+function syncWeeksAvailability() {
+  document.querySelectorAll(".child-block .weeks .week").forEach((lab) => {
+    const input = lab.querySelector("input");
+    if (!input) return;
+    const w = (CONFIG.weeks || []).find((x) => x.id === input.value);
+    if (!w) return;
+    const n = w.plazas_restantes != null ? Number(w.plazas_restantes) : null;
+    const full = n != null && n <= 0;
+    lab.classList.toggle("is-full", full);
+    input.disabled = full;
+    if (full && input.checked) { input.checked = false; lab.classList.remove("is-selected"); }
+    if (full && !lab.querySelector(".week__tag")) {
+      const t = document.createElement("span");
+      t.className = "week__tag"; t.textContent = "Complet";
+      const check = lab.querySelector(".week__check");
+      if (check) lab.insertBefore(t, check); else lab.appendChild(t);
+    }
+    const pill = lab.querySelector(".week__places");
+    if (pill) {
+      if (full || n == null || !showPlacesLeft(w)) { pill.remove(); return; }
+      const low = n <= 5;
+      pill.classList.toggle("week__places--low", low);
+      pill.textContent = low ? (n === 1 ? "Última plaça!" : `Últimes ${n} places!`) : `${n} places`;
+    }
+  });
+}
+
 // ---- Enviament ----
 async function onSubmit(e) {
   e.preventDefault();
@@ -1881,10 +2028,23 @@ async function onSubmit(e) {
   const hp = document.getElementById("hp-extra");
   if (hp && hp.value.trim()) { console.warn("Enviament descartat (honeypot)."); return flashNote("No s'ha pogut enviar. Torna-ho a provar."); }
   if (Date.now() - FORM_OPENED_AT < MIN_SUBMIT_MS) return flashNote("Espera uns segons i torna-ho a provar.");
+  const preview = collect();
+  // Dos germans amb el mateix nom i naixement al MATEIX enviament: gairebé
+  // segur que és un despiste amb el botó "Afegir un germà".
+  const seenIds = new Set();
+  for (const ch of preview.children) {
+    const id = childIdentityKey(ch.data);
+    if (!id) continue;
+    if (seenIds.has(id)) {
+      haptic([10, 45, 10]);
+      return flashNote(`Hi ha dos jugadors amb el mateix nom i naixement (${pickName(ch.data)}). Revisa els germans.`);
+    }
+    seenIds.add(id);
+  }
   // Guàrdia anti-duplicats: ho preguntem ABANS d'engegar l'enviament (així el botó
   // no queda girant mentre el modal està obert). El servidor substituirà la fila
   // anterior de la mateixa família, no en crearà una de nova.
-  const dup = findLocalDuplicate(collect().children);
+  const dup = findLocalDuplicate(preview.children);
   if (dup) {
     const when = new Date(dup.ts).toLocaleDateString("ca-ES", { day: "numeric", month: "long" });
     const proceed = await showConfirmModal({
@@ -1895,6 +2055,16 @@ async function onSubmit(e) {
     });
     if (!proceed) return;
   }
+  // Pas de revisió: resum del que s'enviarà (jugadors, setmanes, imports i correu).
+  // L'última oportunitat de veure-ho tot junt abans que arribi al full de càlcul.
+  const okReview = await showConfirmModal({
+    title: "Revisa la inscripció",
+    icon: "review",
+    html: buildReviewHtml(preview.shared, preview.children),
+    confirmLabel: "Confirmar i enviar",
+    cancelLabel: "Tornar a revisar"
+  });
+  if (!okReview) return;
   setLoading(true);
   try {
     // Espera les pujades en segon pla que encara estiguin en curs (normalment ja fetes,
@@ -1906,6 +2076,23 @@ async function onSubmit(e) {
     if (pendingUploads.length) await Promise.allSettled(pendingUploads);
 
     const { shared, children } = collect();
+
+    // Places d'última hora: si una setmana triada s'ha omplert mentre l'usuari
+    // omplia el formulari, avisem i no enviem (les plenes queden desmarcades).
+    const fullNow = await checkPlacesBeforeSend(children);
+    if (fullNow) {
+      setLoading(false);
+      updateAllPrices(); updateProgress();
+      await showConfirmModal({
+        title: "Una setmana s'ha omplert",
+        icon: "warn",
+        body: `Mentre omplies el formulari s'han acabat les places de: ${fullNow.join(", ")}. ` +
+          `L'hem desmarcat de la selecció; revisa les setmanes i torna a enviar.`,
+        confirmLabel: "D'acord",
+        cancelLabel: null
+      });
+      return;
+    }
 
     // Mida total només dels fitxers que s'envien inline (els ja pujats no compten).
     const totalBytes = children.reduce((sum, ch) =>
@@ -2103,6 +2290,15 @@ function buildLocalEntry(shared, children, campusName, source) {
   };
 }
 
+// Identitat d'un jugador/a: nom + data de naixement normalitzats. La fan servir
+// la guàrdia de reenviaments i la de germans duplicats al mateix enviament.
+function childIdentityKey(data) {
+  const name = normalizeKey(pickName(data || {}));
+  const birthKey = Object.keys(data || {}).find((k) => /naixement|nacimiento|birth/i.test(k));
+  const birth = normalizeKey(birthKey ? data[birthKey] : "");
+  return name && birth ? name + "|" + birth : "";
+}
+
 // Guàrdia anti-duplicats: busca si des d'aquest dispositiu ja es va ENVIAR (source
 // "saved") una inscripció del mateix jugador/a (nom + naixement) per a aquest
 // formulari. Les entrades antigues sense .form no es consideren (no podem saber-ho).
@@ -2111,17 +2307,11 @@ function findLocalDuplicate(children) {
   try { store = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return null; }
   const sent = (store.families || []).filter((f) => f && f.source === "saved" && f.form === activeFormId);
   if (!sent.length) return null;
-  const idOf = (data) => {
-    const name = normalizeKey(pickName(data || {}));
-    const birthKey = Object.keys(data || {}).find((k) => /naixement|nacimiento|birth/i.test(k));
-    const birth = normalizeKey(birthKey ? data[birthKey] : "");
-    return name && birth ? name + "|" + birth : "";
-  };
   for (const ch of children) {
-    const id = idOf(ch.data);
+    const id = childIdentityKey(ch.data);
     if (!id) continue;
     for (const f of sent) {
-      if ((f.children || []).some((c) => idOf(c.data) === id)) {
+      if ((f.children || []).some((c) => childIdentityKey(c.data) === id)) {
         return { name: pickName(ch.data), ts: f.ts };
       }
     }
