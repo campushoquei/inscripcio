@@ -121,6 +121,9 @@ function init() {
     b.addEventListener("click", () => bulkAction(b.dataset.bulk)));
   $("tabbar").querySelectorAll(".tabbar__btn").forEach((b) =>
     b.addEventListener("click", () => setMobileView(b.dataset.view)));
+  const vnav = $("viewnav");
+  if (vnav) vnav.querySelectorAll(".viewnav__btn").forEach((b) =>
+    b.addEventListener("click", () => setMobileView(b.dataset.view)));
   setMobileView("resum");
   $("drawer-close").addEventListener("click", closeDrawer);
   $("drawer-backdrop").addEventListener("click", closeDrawer);
@@ -133,13 +136,14 @@ function init() {
   else { $("pin").focus(); }
 }
 
-// Navegació inferior (mòbil): canvia quina secció es veu. A PC no té efecte visible
-// perquè la tab bar i l'ocultació de seccions només s'activen per media query.
+// Canvia quina secció del panell es veu (resum / grups / inscrits). El mateix mecanisme
+// serveix a escriptori (selector .viewnav) i a mòbil (barra inferior .tabbar): totes dues
+// criden aquesta funció, que fixa #dash[data-view] i sincronitza els dos jocs de botons.
 function setMobileView(view) {
   const dash = $("dash");
   if (!dash) return;
   dash.dataset.view = view;
-  document.querySelectorAll("#tabbar .tabbar__btn").forEach((b) => {
+  document.querySelectorAll("#tabbar .tabbar__btn, #viewnav .viewnav__btn").forEach((b) => {
     const on = b.dataset.view === view;
     b.classList.toggle("is-active", on);
     b.setAttribute("aria-selected", on ? "true" : "false");
@@ -367,7 +371,7 @@ function renderKpisSkeleton() {
 const ICONS = {
   players: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   family: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87"/><path d="M4 21v-2a4 4 0 0 1 3-3.87"/><circle cx="12" cy="7" r="4"/></svg>',
-  euro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.5a6.5 6.5 0 1 0 0 15M4 9h7M4 14h6"/></svg>',
+  euro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.2 7a6 7 0 1 0 0 10"/><path d="M13 10H5"/><path d="M13 14H5"/></svg>',
   clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
 };
 
@@ -640,20 +644,19 @@ function renderGroupsBoard() {
       // del grup que li tocaria per edat.
       const manual = !!(r.grups && r.grups[week]) && r.grups[week] !== autoGroupColor(Number(r.edat));
       const noSwim = r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim());
-      const opts = groups.map((gg) => `<option value="${esc(gg.color)}"${gg.color === g.color ? " selected" : ""}>${esc(gg.label)}</option>`).join("");
       // 🐠 a l'esquerra del nom (si no sap nedar) i l'edat sempre a la dreta.
       const ns = noSwim ? '<span class="gchip__noswim" title="No sap nedar">🐠</span>' : "";
-      // Marca discreta (un punt del color del grup) per als moguts manualment. El selector
-      // <select> es manté com a alternativa accessible i per a tàctil (on no s'arrossega).
+      // Marca discreta (un punt del color del grup) per als moguts manualment.
       const mk = manual ? '<span class="gchip__moved" title="Mogut manualment"></span>' : "";
       // Identifiquem la fitxa per la fila del full (data-row), que és única, i NO per l'ID:
       // dos germans poden compartir ID (mateixa inscripció / mateix mil·lisegon) i això feia
       // que moure'n un mogués sempre l'altre, de manera que no es podien posar al mateix grup.
+      // Es mou només arrossegant (ratolí, llapis o dit); ja no hi ha selector de color.
       return `<div class="gchip${manual ? " gchip--manual" : ""}" data-row="${esc(String(r.row))}" title="${manual ? "Mogut manualment · arrossega per moure" : "Assignat per edat · arrossega per moure"}">
         ${mk}${ns}
         <span class="gchip__name" title="${esc(r.nom || "")}">${esc(r.nom || "—")}</span>
         <span class="gchip__age">${r.edat !== "" ? r.edat + "a" : ""}</span>
-        <select class="gchip__move" aria-label="Mou de grup">${opts}</select>
+        <span class="gchip__grip" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
       </div>`;
     }).join("");
     const noSwimCount = list.filter((r) => r.sapNedar && !/^(s|y|1|tru|ok)/i.test(String(r.sapNedar).trim())).length;
@@ -666,9 +669,7 @@ function renderGroupsBoard() {
   }).join("");
 
   const board = $("groups-board");
-  board.querySelectorAll(".gchip__move").forEach((sel) =>
-    sel.addEventListener("change", () => setGroup(sel.closest(".gchip").dataset.row, week, sel.value)));
-  // Arrossegar fitxes entre columnes (ratolí/llapis).
+  // Arrossegar fitxes entre columnes (ratolí, llapis o dit).
   board.querySelectorAll("[data-row]").forEach((chip) =>
     chip.addEventListener("pointerdown", (e) => onChipPointerDown(e, chip)));
 }
@@ -695,14 +696,12 @@ async function setGroup(rowNum, week, color) {
 }
 
 /* ---------- Arrossegar per moure de grup (drag & drop) ----------
-   Funciona amb ratolí o llapis. En tàctil es manté el selector <select> de cada fitxa
-   (l'arrossegament nadiu xoca amb el desplaçament del dit). Mentre s'arrossega, la columna
-   sota el punter es marca amb un contorn discontinu; en deixar-la anar, el contorn desapareix. */
+   Funciona amb ratolí, llapis o dit. Les fitxes tenen touch-action:none (via CSS) perquè
+   el gest d'arrossegar no faci desplaçar la pàgina. Mentre s'arrossega, la columna sota el
+   punter es marca amb un contorn discontinu; en deixar-la anar, el contorn desapareix. */
 let _chipDrag = null;
 function onChipPointerDown(e, chip) {
-  if (e.pointerType === "touch") return;            // tàctil → fa servir el selector
   if (e.button != null && e.button !== 0) return;   // només botó principal
-  if (e.target.closest(".gchip__move")) return;     // clic al selector: no arrosseguem
   const rowNum = chip.dataset.row;
   if (!rowNum) return;
   const rect = chip.getBoundingClientRect();
@@ -713,6 +712,7 @@ function onChipPointerDown(e, chip) {
   };
   window.addEventListener("pointermove", onChipPointerMove);
   window.addEventListener("pointerup", onChipPointerUp, { once: true });
+  window.addEventListener("pointercancel", onChipPointerUp, { once: true });
 }
 function onChipPointerMove(e) {
   const d = _chipDrag; if (!d) return;
@@ -741,6 +741,8 @@ function onChipPointerMove(e) {
 }
 function onChipPointerUp() {
   window.removeEventListener("pointermove", onChipPointerMove);
+  window.removeEventListener("pointerup", onChipPointerUp);
+  window.removeEventListener("pointercancel", onChipPointerUp);
   const d = _chipDrag; _chipDrag = null;
   if (!d) return;
   document.body.classList.remove("is-dragging-chip");
