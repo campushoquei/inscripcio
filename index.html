@@ -63,10 +63,13 @@
         <span class="topbar__camp" data-camp-name>Campus Hoquei Riudebitlles</span>
         <span class="topbar__club" data-club>El plaer de jugar!</span>
       </span>
-      <a class="topbar__contact" data-contact-link href="#">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.61 4.87 2 2 0 0 1 3.6 2.69h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.31a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        Contacte
-      </a>
+      <!-- Xip de resum (wizard mòbil, passos ≥2): jugadors + total; obre el desglossament -->
+      <button class="topbar__price" id="topbar-price" type="button" hidden aria-label="Resum de la inscripció">
+        <svg class="wc__people" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        <span id="topbar-price-count"></span>
+        <span class="wc__price" id="topbar-price-amount" hidden></span>
+        <svg class="wc__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
     </div>
   </header>
 
@@ -229,12 +232,7 @@
       <div class="done__actions">
         <button class="btn btn--ghost" id="another">Inscriure un altre jugador/a</button>
         <button class="btn btn--ghost" id="print-btn" type="button">Imprimir comprovant</button>
-        <button class="btn btn--ghost" id="share-pass" type="button">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          Compartir
-        </button>
       </div>
-      <p class="done__note" id="done-note" role="status" hidden></p>
     </section>
   </main>
 
