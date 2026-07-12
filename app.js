@@ -13,6 +13,27 @@ let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzhbXl-KTAslBLSHY1l5b5
 // Buit = formulari per defecte (les files del full sense columna "form").
 const FORM_ID = (new URLSearchParams(location.search).get("form") || "").trim();
 
+// ---- Mode PREVISUALITZACIÓ (per al panell d'administració) ----
+// Amb ?preview=1 el formulari s'incrusta en un iframe dins del panell i rep la
+// configuració EN DIRECTE per postMessage, sense xarxa ni enviaments. Així
+// l'administrador veu com queda el web mentre edita, a l'instant.
+const PREVIEW_MODE = new URLSearchParams(location.search).get("preview") === "1";
+let PREVIEW_CONFIG = null;
+if (PREVIEW_MODE) {
+  document.documentElement.classList.add("is-preview");
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.type !== "campus-preview-config") return;
+    PREVIEW_CONFIG = d.config;
+    SCRIPT_URL = "";                    // res de xarxa ni enviaments en preview
+    if (d.formId != null) activeFormId = String(d.formId);
+    const y = window.scrollY;           // conserva la posició d'scroll entre re-renders
+    load().then(() => window.scrollTo(0, y));
+  });
+  // Avisa el pare que ja estem preparats per rebre la primera configuració.
+  try { window.parent.postMessage({ type: "campus-preview-ready" }, "*"); } catch (e) {}
+}
+
 const STORAGE_KEY = "casal_hoquei_v1";
 const DRAFT_KEY = "casal_hoquei_draft_v1";
 const RETURNING_DISMISSED_KEY = "casal_hoquei_returning_dismissed";
@@ -397,6 +418,8 @@ function renderSkeleton() {
 
 // ---- Càrrega ----
 async function load() {
+  // En preview, esperem la primera config del pare abans de renderitzar res.
+  if (PREVIEW_MODE && !PREVIEW_CONFIG) { els.loading.hidden = false; els.form.hidden = true; return; }
   document.body.classList.remove("page--no-forms");
   els.loading.hidden = false; els.loadError.hidden = true; els.closed.hidden = true;
   els.form.hidden = true; els.done.hidden = true;
@@ -452,6 +475,7 @@ async function load() {
 // amb `fresh: true` just abans d'enviar.
 const CONFIG_CACHE = {};
 async function fetchConfig(fresh) {
+  if (PREVIEW_MODE) return structuredClone(PREVIEW_CONFIG || DEMO_CONFIG);
   if (!SCRIPT_URL) return structuredClone(DEMO_CONFIG);
   const key = activeFormId || "__default";
   if (!fresh && CONFIG_CACHE[key]) return structuredClone(CONFIG_CACHE[key]);
@@ -2202,6 +2226,7 @@ function syncWeeksAvailability() {
 // ---- Enviament ----
 async function onSubmit(e) {
   e.preventDefault();
+  if (PREVIEW_MODE) return;   // el preview no envia res
   clearNote();
   hideSendError();
   const consentInput = document.getElementById("consent");
@@ -2518,7 +2543,7 @@ function findLocalDuplicate(children) {
   return null;
 }
 function scheduleDraftSave() {
-  if (!CONFIG || els.form.hidden) return;
+  if (PREVIEW_MODE || !CONFIG || els.form.hidden) return;
   if (draftSaveTimer) clearTimeout(draftSaveTimer);
   draftSaveTimer = setTimeout(saveDraftFromForm, 250);
 }
@@ -2613,6 +2638,7 @@ function saveLocal(shared, children, campusName) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch {}
 }
 function maybeShowReturning() {
+  if (PREVIEW_MODE) { hideReturning(); return; }
   if (returningDismissed) { hideReturning(); return; }
   const store = loadLocal();
   // Només mostrem inscripcions anteriors amb dades útils (nom o correu).

@@ -325,6 +325,11 @@ body {
 .main { padding-block: 28px 64px; }
 
 /* ---------- Barra de retorn ---------- */
+/* En previsualització (dins del panell d'administració) amaguem elements que
+   només tenen sentit per a l'usuari final, perquè la vista quedi neta. */
+html.is-preview .returning,
+html.is-preview .send-error { display: none !important; }
+
 .returning {
   position: relative;
   display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px;
@@ -633,8 +638,9 @@ body {
   border-radius: 50%; animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-/* Hero fora del flow durant loading → el loader queda centrat a pantalla */
-.page--loading .hero { display: none; }
+/* Hero i topbar fora durant loading → només es veu la pantalla de càrrega */
+.page--loading .hero,
+.page--loading .topbar { display: none; }
 /* Pantalla d'èxit → amaguem l'hero i el bloc "ja t'hem vist" perquè només es vegi la confirmació */
 .page--done .hero,
 .page--done .returning { display: none; }

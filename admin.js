@@ -71,6 +71,17 @@ function init() {
   $("refresh-btn").addEventListener("click", () => loadAll(true));
   $("config-btn").addEventListener("click", () => showConfigView($("config-view").hidden));
   $("cfg-close").addEventListener("click", () => showConfigView(false));
+  // L'iframe de preview avisa quan ha carregat → li enviem la config del moment.
+  window.addEventListener("message", (e) => { if (e.data && e.data.type === "campus-preview-ready") pushPreviewNow(); });
+  // Selector de mida de la previsualització (escriptori / mòbil).
+  document.querySelectorAll("#cfg-preview-pane .cfg-dev").forEach((b) =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#cfg-preview-pane .cfg-dev").forEach((x) => x.classList.toggle("is-active", x === b));
+      const stage = $("cfg-preview-stage");
+      if (stage) stage.dataset.dev = b.dataset.dev;
+      cfgFitPreview();
+    }));
+  window.addEventListener("resize", () => { clearTimeout(window._cfgFitT); window._cfgFitT = setTimeout(cfgFitPreview, 120); });
   $("form-select").addEventListener("change", (e) => { state.form = e.target.value; state.selected.clear(); saveView(); loadAll(); });
   document.querySelectorAll("#form-scope .form-scope__btn").forEach((b) =>
     b.addEventListener("click", () => setFormScope(b.dataset.scope)));
@@ -1557,9 +1568,9 @@ const CFG_SETTINGS_META = {
   hero_horari: { label: "Xip d'horari", help: "P. ex. «9 – 13 h». Buit = no surt.", group: "Portada" },
   hero_edats: { label: "Xip d'edats", help: "P. ex. «De 4 a 16 anys». Buit = no surt.", group: "Portada" },
   hero_lloc: { label: "Xip de lloc", help: "P. ex. «Sant Pere de Riudebitlles». Buit = no surt.", group: "Portada" },
-  setmanes_titulo: { label: "Títol de la secció de setmanes", group: "Formulari" },
-  setmanes_info: { label: "Nota de preus", help: "Text sota el títol de setmanes explicant preus i descomptes.", long: true, group: "Formulari" },
-  semanas_obligatorias: { label: "Cal triar almenys una setmana", bool: true, group: "Formulari" },
+  setmanes_titulo: { label: "Títol de la secció de setmanes", group: "Setmanes" },
+  setmanes_info: { label: "Nota de preus", help: "Text sota el títol de setmanes explicant preus i descomptes.", long: true, group: "Setmanes" },
+  semanas_obligatorias: { label: "Cal triar almenys una setmana", bool: true, group: "Setmanes" },
   texto_boton: { label: "Text del botó d'enviar", group: "Formulari" },
   consentimiento: { label: "Text del consentiment", help: "La casella de protecció de dades que cal acceptar.", long: true, group: "Formulari" },
   mensaje_exito: { label: "Missatge d'inscripció rebuda", long: true, group: "Confirmació" },
@@ -1572,14 +1583,25 @@ const CFG_SETTINGS_META = {
   admin_pin: { label: "PIN d'accés al panell", help: "Si el canvies, el proper login demanarà el nou.", group: "Avançat", scope: "general" },
   SCRIPT_URL: { label: "URL del servidor (Apps Script)", help: "No la toquis si tot funciona.", group: "Avançat", scope: "general" }
 };
-const CFG_SETTINGS_GROUPS = ["General", "Portada", "Formulari", "Confirmació", "Correu", "Avançat", "Altres ajustos"];
+// Grups d'ajustos, EN L'ORDRE EN QUÈ APAREIXEN AL FORMULARI (portada → setmanes →
+// botó → confirmació → correu → general/avançat), amb icona i títol de panell.
+// "Setmanes" no és un panell propi: aquestes claus s'integren al panell de setmanes.
+const CFG_GROUPS = [
+  { name: "Portada", icon: "🖼️", title: "Portada" },
+  { name: "Formulari", icon: "📝", title: "Botó i consentiment" },
+  { name: "Confirmació", icon: "✅", title: "Pantalla de confirmació" },
+  { name: "Correu", icon: "✉️", title: "Correu de confirmació" },
+  { name: "General", icon: "🏫", title: "Dades generals" },
+  { name: "Avançat", icon: "🛠️", title: "Avançat" },
+  { name: "Altres ajustos", icon: "🔧", title: "Altres ajustos" }
+];
 
 // Estació d'un formulari (columna estacio o deduïda del nom) → emoji + color.
 const CFG_SEASONS = {
   estiu: { emoji: "☀️", color: "#F59E0B", label: "Estiu" },
   tardor: { emoji: "🍂", color: "#C2410C", label: "Tardor / Setembre" },
   hivern: { emoji: "❄️", color: "#2563EB", label: "Hivern / Nadal" },
-  primavera: { emoji: "🌸", color: "#DB2777", label: "Primavera" },
+  primavera: { emoji: "🌼", color: "#16A34A", label: "Primavera" },
   "": { emoji: "🏑", color: "#0E2A63", label: "Automàtica (segons el nom)" }
 };
 // Identificador automàtic a partir del nom: estació (o primera paraula útil) + any.
@@ -1626,6 +1648,7 @@ function cfgMarkDirty(sheet) {
   if (!sheet._dirty) { sheet._dirty = true; renderCfgTabs(); }
   sheet._rev = (sheet._rev || 0) + 1;   // per saber si hi ha edicions durant un desat en curs
   scheduleCfgSave();
+  schedulePreview();                    // reflecteix el canvi al preview en directe
 }
 function cfgRowSet(sheet, rIdx, name, val) {
   let i = cfgColIdx(sheet, name);
@@ -1666,6 +1689,111 @@ function cfgNumVal(v) {
 }
 function cfgAnyDirty() { return CFG_SHEET_NAMES.some((n) => cfgSheet(n) && cfgSheet(n)._dirty); }
 
+/* ============================================================
+   Previsualització en directe: convertim el model (fulls de l'Excel) al
+   format que consumeix el formulari públic (app.js) i l'hi enviem per
+   postMessage a un iframe. Rèplica de buildConfig/readSettings/readWeeks/
+   readFields del backend, però amb les dades que s'estan editant ara mateix.
+   ============================================================ */
+function cfgTruthy(v) { return /^(true|sí|si|x|1|yes)$/i.test(String(v == null ? "" : v).trim()); }
+function cfgNum(v) { const s = cfgNumVal(v); return s === "" ? null : Number(s); }
+function cfgRowScopeMatches(sheet, row, formId) {
+  const f = cfgRowGet(sheet, row, "form").trim();
+  return f === "" || f === formId;   // buit = compartida; igual a l'id = pròpia
+}
+function cfgDefaultFormId() {
+  const fs = cfgSheet("Formularios");
+  if (!fs || !fs.rows.length) return "";
+  for (const row of fs.rows) if (cfgBool(cfgRowGet(fs, row, "habilitado"), true)) return cfgRowGet(fs, row, "id").trim();
+  return cfgRowGet(fs, fs.rows[0], "id").trim();
+}
+function cfgPreviewSettings(formId) {
+  const as = cfgSheet("Ajustes");
+  const out = {};
+  // General primer (form buit), després sobreescriu amb les del formulari.
+  as.rows.forEach((row) => { if (cfgRowGet(as, row, "form").trim() === "") { const k = cfgRowGet(as, row, "Clave").trim(); if (k) out[k] = cfgRowGet(as, row, "Valor"); } });
+  as.rows.forEach((row) => { if (cfgRowGet(as, row, "form").trim() === formId) { const k = cfgRowGet(as, row, "Clave").trim(); if (k) out[k] = cfgRowGet(as, row, "Valor"); } });
+  return out;
+}
+function cfgPreviewWeeks(formId) {
+  const ws = cfgSheet("Semanas");
+  return ws.rows.filter((row) => cfgRowGet(ws, row, "id").trim() && cfgRowScopeMatches(ws, row, formId)).map((row) => {
+    const p1 = cfgNum(cfgRowGet(ws, row, "precio"));
+    const p2 = cfgNum(cfgRowGet(ws, row, "precio_dto"));
+    const p1r = cfgNum(cfgRowGet(ws, row, "precio_rdb"));
+    const p2r = cfgNum(cfgRowGet(ws, row, "precio_rdb_dto"));
+    const plazas = cfgNum(cfgRowGet(ws, row, "plazas"));
+    const w = {
+      id: cfgRowGet(ws, row, "id").trim(), etiqueta: cfgRowGet(ws, row, "etiqueta"), fechas: cfgRowGet(ws, row, "fechas"),
+      mostrar_plazas: cfgRowGet(ws, row, "mostrar_plazas"), precio: cfgRowGet(ws, row, "precio"),
+      p1: p1, p2: p2 != null ? p2 : p1, p1_rdb: p1r != null ? p1r : p1, p2_rdb: p2r != null ? p2r : (p2 != null ? p2 : p1)
+    };
+    if (plazas != null) { w.plazas = plazas; w.plazas_restantes = plazas; }
+    return w;
+  });
+}
+function cfgPreviewFields(formId) {
+  const cs = cfgSheet("Campos");
+  return cs.rows.filter((row) => cfgRowGet(cs, row, "id").trim() && cfgRowScopeMatches(cs, row, formId)).map((row) => ({
+    id: cfgRowGet(cs, row, "id").trim(), etiqueta: cfgRowGet(cs, row, "etiqueta"),
+    tipo: cfgRowGet(cs, row, "tipo").trim() || "text", opciones: cfgRowGet(cs, row, "opciones"),
+    obligatorio: cfgTruthy(cfgRowGet(cs, row, "obligatorio")), placeholder: cfgRowGet(cs, row, "placeholder"),
+    ayuda: cfgRowGet(cs, row, "ayuda"), grupo: cfgRowGet(cs, row, "grupo") || "Inscripció",
+    orden: cfgNum(cfgRowGet(cs, row, "orden")) || 0
+  })).sort((a, b) => a.orden - b.orden);
+}
+function cfgBuildPreviewConfig(formId) {
+  const fs = cfgSheet("Formularios");
+  let formRow = null;
+  if (fs) fs.rows.forEach((row) => { if (cfgRowGet(fs, row, "id").trim() === formId) formRow = row; });
+  const form = formRow
+    ? { id: formId, nombre: cfgRowGet(fs, formRow, "nombre"), habilitado: cfgBool(cfgRowGet(fs, formRow, "habilitado"), true), estacio: cfgRowGet(fs, formRow, "estacio").trim() }
+    : { id: formId, nombre: "", habilitado: true, estacio: "" };
+  const forms = fs ? fs.rows.filter((row) => cfgRowGet(fs, row, "id").trim() && cfgBool(cfgRowGet(fs, row, "habilitado"), true))
+    .map((row) => ({ id: cfgRowGet(fs, row, "id").trim(), nombre: cfgRowGet(fs, row, "nombre"), habilitado: true, estacio: cfgRowGet(fs, row, "estacio").trim() })) : [];
+  return { settings: cfgPreviewSettings(formId), campuses: [], weeks: cfgPreviewWeeks(formId), fields: cfgPreviewFields(formId), form, forms };
+}
+
+// Envia la config actual a l'iframe de preview (si existeix).
+function pushPreviewNow() {
+  const iframe = $("cfg-preview-frame");
+  if (!iframe || !iframe.contentWindow || !state.config) return;
+  const formId = state.cfgPreviewForm || cfgDefaultFormId();
+  try { iframe.contentWindow.postMessage({ type: "campus-preview-config", formId, config: cfgBuildPreviewConfig(formId) }, "*"); } catch (e) {}
+}
+let _cfgPreviewTimer = null;
+function schedulePreview() {
+  if (!$("cfg-preview-frame")) return;
+  clearTimeout(_cfgPreviewTimer);
+  _cfgPreviewTimer = setTimeout(pushPreviewNow, 110);
+}
+
+// Escala l'iframe: en mode ESCRIPTORI el renderitzem a 1280px lògics (perquè
+// el formulari agafi el disseny de PC de veritat, no el de mòbil) i l'encongim
+// per encabir-lo al panell; en MÒBIL, a ~402px lògics (mida de telèfon real).
+function cfgFitPreview() {
+  const stage = $("cfg-preview-stage");
+  const device = stage && stage.querySelector(".cfg-preview__device");
+  const scaler = $("cfg-preview-scaler");
+  const frame = $("cfg-preview-frame");
+  if (!stage || !device || !scaler || !frame) return;
+  const dev = stage.dataset.dev === "mobile" ? "mobile" : "desktop";
+  // Marca el mode al contenidor perquè el split canviï (escriptori 50/50, mòbil 75/25).
+  const cv = document.getElementById("config-view");
+  if (cv) cv.dataset.previewDev = dev;
+  const logicalW = dev === "mobile" ? 440 : 1280;
+  const availW = device.clientWidth;   // forçar reflow després de canviar el split
+  const availH = device.clientHeight;
+  if (!availW || !availH) return;
+  const scale = availW / logicalW;
+  const logicalH = Math.ceil(availH / scale);
+  frame.style.width = logicalW + "px";
+  frame.style.height = logicalH + "px";
+  scaler.style.width = logicalW + "px";
+  scaler.style.height = logicalH + "px";
+  scaler.style.transform = `scale(${scale})`;
+}
+
 /* ---- Vista ---- */
 function showConfigView(show) {
   $("dash").hidden = show;
@@ -1700,6 +1828,32 @@ function renderCfg() {
   if (state.cfgEdit) renderCfgEditor();
   else if (state.cfgTab === "campos") renderCfgCampos();
   else renderCfgForms();
+  cfgSyncPreview();
+}
+
+// Mostra/amaga el panell de preview i el sincronitza amb el formulari que s'edita.
+// L'iframe viu FORA de #cfg-body (a l'aside persistent), de manera que re-renderitzar
+// l'editor no el recarrega: només canvia de src quan canvia el formulari previsualitzat.
+function cfgSyncPreview() {
+  const pane = $("cfg-preview-pane");
+  const frame = $("cfg-preview-frame");
+  if (!pane || !frame) return;
+  const inEditor = !!state.cfgEdit;
+  document.getElementById("config-view").classList.toggle("has-preview", inEditor);
+  pane.hidden = !inEditor;
+  if (!inEditor) { state.cfgPreviewForm = null; return; }
+  const formId = state.cfgEdit.form || cfgDefaultFormId();
+  state.cfgPreviewForm = formId;
+  const src = `index.html?form=${encodeURIComponent(formId)}&preview=1`;
+  if (frame.getAttribute("src") !== src) {
+    frame.src = src;                       // recàrrega només en canviar de formulari
+    const open = $("cfg-preview-open");
+    if (open) open.href = `index.html?form=${encodeURIComponent(formId)}`;
+  } else {
+    pushPreviewNow();                      // mateix formulari → només refresca dades
+  }
+  // Ajusta l'escala després que el layout del panell s'hagi aplicat.
+  requestAnimationFrame(cfgFitPreview);
 }
 
 function renderCfgTabs() {
@@ -1748,6 +1902,13 @@ function wireCfgCommon() {
       if (el.type === "checkbox" && /^habilitado$/i.test(el.dataset.col)) {
         const card = el.closest(".cfg-card, .fcard");
         if (card) card.classList.toggle("is-off", !el.checked);
+        // A la pàgina dels formularis, el xip d'estat (obertes/tancat) i el
+        // «Per defecte» depenen d'aquest interruptor —i el «Per defecte» pot
+        // saltar a un altre formulari—, així que refresquem els xips de totes
+        // les targetes en directe després del canvi.
+        if (sheetName === "Formularios" && $("cfg-body").querySelector(".fcards")) {
+          cfgRefreshFormBadges();
+        }
       }
       if (el.dataset.col === "tipo") renderCfg();   // mostra/amaga el camp d'opcions
       // Escriure el nom d'un formulari ho encadena tot sol: si no té identificador,
@@ -1775,6 +1936,37 @@ function wireCfgCommon() {
 }
 
 /* ============ Pàgina principal: ELS FORMULARIS ============ */
+// Refresca en directe els xips de cada targeta (estat obert/tancat i «Per
+// defecte») a partir del model en memòria, sense repintar tota la llista.
+// Es crida quan es toca l'interruptor «Es veu al web» perquè tot quedi
+// coherent a l'instant: el «Per defecte» pot canviar de formulari segons
+// quin sigui el primer que queda obert.
+function cfgRefreshFormBadges() {
+  const sheet = cfgSheet("Formularios");
+  const firstOpen = sheet.rows.findIndex((row) => cfgBool(cfgRowGet(sheet, row, "habilitado"), true));
+  $("cfg-body").querySelectorAll(".fcard").forEach((card) => {
+    const input = card.querySelector('.tgl input[data-col="habilitado"]');
+    if (!input) return;
+    const r = Number(input.dataset.r);
+    const open = cfgBool(cfgRowGet(sheet, sheet.rows[r], "habilitado"), true);
+    card.classList.toggle("is-off", !open);
+    const stateEl = card.querySelector(".fcard__state");
+    if (stateEl) {
+      stateEl.className = `fcard__state ${open ? "is-open" : "is-closed"}`;
+      stateEl.textContent = open ? "Inscripcions obertes" : "Tancat";
+    }
+    const badges = card.querySelector(".fcard__badges");
+    if (badges) {
+      const existing = badges.querySelector(".cfg-chip--default");
+      const shouldHave = r === firstOpen;
+      if (shouldHave && !existing) {
+        badges.insertAdjacentHTML("beforeend", `<span class="cfg-chip cfg-chip--default" title="És el que veu la gent que obre el web sense enllaç concret">Per defecte</span>`);
+      } else if (!shouldHave && existing) {
+        existing.remove();
+      }
+    }
+  });
+}
 function renderCfgForms() {
   const sheet = cfgSheet("Formularios");
   const firstOpen = sheet.rows.findIndex((row) => cfgBool(cfgRowGet(sheet, row, "habilitado"), true));
@@ -1797,21 +1989,29 @@ function renderCfgForms() {
     const dash = dashRaw.trim() === "" ? open : cfgBool(dashRaw, true);
     const hoja = cfgRowGet(sheet, row, "hoja").trim();
     return `<div class="fcard${open ? "" : " is-off"}" style="--fc:${sMeta.color}">
-      <div class="fcard__top">
-        <span class="fcard__emoji" aria-hidden="true">${sMeta.emoji}</span>
-        <div class="fcard__names">
-          <input type="text" class="fcard__name" data-sheet="Formularios" data-r="${r}" data-col="nombre" value="${esc(cfgRowGet(sheet, row, "nombre"))}" placeholder="Nom del formulari" aria-label="Nom del formulari">
-          <span class="fcard__id" data-idline="${r}">${hoja ? esc(hoja) : (id ? `?form=${esc(id)}` : "sense identificador")}</span>
+      <div class="fcard__banner" aria-hidden="true"></div>
+      <div class="fcard__body">
+        <div class="fcard__top">
+          <span class="fcard__emoji" aria-hidden="true">${sMeta.emoji}</span>
+          <div class="fcard__names">
+            <input type="text" class="fcard__name" data-sheet="Formularios" data-r="${r}" data-col="nombre" value="${esc(cfgRowGet(sheet, row, "nombre"))}" placeholder="Nom del formulari" aria-label="Nom del formulari">
+            <span class="fcard__id" data-idline="${r}">${hoja ? esc(hoja) : (id ? `?form=${esc(id)}` : "sense identificador")}</span>
+          </div>
         </div>
-        ${r === firstOpen ? `<span class="cfg-chip cfg-chip--default" title="És el que veu la gent que obre el web sense enllaç concret">Per defecte</span>` : ""}
-      </div>
-      <div class="fcard__controls">
-        ${cfgToggleSheet("Formularios", r, "habilitado", open, "Es veu al web")}
-        ${cfgToggleSheet("Formularios", r, "dashboard_activo", dash, "Actiu al panell")}
-      </div>
-      <div class="fcard__foot">
-        <button class="btn btn--primary fcard__editbtn" data-editform="${esc(id)}" data-editname="${esc(cfgRowGet(sheet, row, "nombre") || id)}" data-editseason="${esc(season)}" data-editrow="${r}">Edita el contingut →</button>
-        <button class="btn btn--ghost btn--sm fcard__dup" data-dupform="${r}" title="Duplicar per a un any nou (còpia amb les mateixes setmanes, preus i textos)">⧉ Duplica</button>
+        <div class="fcard__badges">
+          <span class="fcard__state ${open ? "is-open" : "is-closed"}">${open ? "Inscripcions obertes" : "Tancat"}</span>
+          ${r === firstOpen ? `<span class="cfg-chip cfg-chip--default" title="És el que veu la gent que obre el web sense enllaç concret">Per defecte</span>` : ""}
+        </div>
+        <div class="fcard__controls">
+          ${cfgToggleSheet("Formularios", r, "habilitado", open, "Es veu al web")}
+          ${cfgToggleSheet("Formularios", r, "dashboard_activo", dash, "Actiu al panell")}
+        </div>
+        <div class="fcard__foot">
+          <button class="btn btn--primary fcard__editbtn" data-editform="${esc(id)}" data-editname="${esc(cfgRowGet(sheet, row, "nombre") || id)}" data-editseason="${esc(season)}" data-editrow="${r}">Edita<span class="fcard__arrow" aria-hidden="true">→</span></button>
+          <button class="iconbtn fcard__dup" data-dupform="${r}" title="Duplicar per a un any nou (còpia amb les mateixes setmanes, preus i textos)" aria-label="Duplica el formulari">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          </button>
+        </div>
       </div>
     </div>`;
   }).join("") + `</div>`;
@@ -1936,7 +2136,9 @@ function renderCfgEditor() {
   const scoped = ed.form !== "";
   const sMeta = CFG_SEASONS[ed.season || ""] || CFG_SEASONS[""];
   let html = `<div class="cfg-edhead" style="--fc:${scoped ? sMeta.color : "#0E2A63"}">
-    <button class="btn btn--ghost btn--sm" id="cfg-back">← Formularis</button>
+    <button class="cfg-backbtn" id="cfg-back" title="Torna als formularis" aria-label="Torna als formularis">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
     <span class="cfg-edhead__emoji" aria-hidden="true">${scoped ? sMeta.emoji : "🌐"}</span>
     <div class="cfg-edhead__titles">
       <span class="cfg-edhead__eyebrow">${scoped ? "Editant el formulari" : "Editant"}</span>
@@ -1946,8 +2148,16 @@ function renderCfgEditor() {
   if (scoped) html += `<p class="cfg-hint cfg-hint--tab">Tot el que canviïs aquí només afecta «${esc(ed.name)}». El que estigui marcat com a compartit ve del contingut comú de tots els formularis.</p>`;
   else html += `<p class="cfg-hint cfg-hint--tab">Aquest contingut val per a TOTS els formularis alhora (si un formulari té una versió pròpia d'un text, la seva mana).</p>`;
 
-  html += renderCfgEditorWeeks(ed, scoped);
-  html += renderCfgEditorSettings(ed, scoped);
+  // Ordre igual que al formulari: portada (hero) → setmanes → botó/consentiment →
+  // confirmació → correu → dades generals → avançat → altres.
+  const byGroup = cfgGroupedSettings(ed, scoped);
+  html += renderCfgSettingsPanel(ed, scoped, byGroup, { name: "Portada", icon: "🖼️", title: "Portada" });
+  html += renderCfgEditorWeeks(ed, scoped, byGroup);   // setmanes + opcions de la secció
+  CFG_GROUPS.filter((g) => g.name !== "Portada").forEach((g) => {
+    const addBtn = g.name === "Altres ajustos"
+      ? `<button class="btn btn--ghost btn--sm" id="cfg-addsetting">+ Clau personalitzada</button>` : "";
+    html += renderCfgSettingsPanel(ed, scoped, byGroup, g, addBtn);
+  });
   if (scoped) html += renderCfgEditorTech(ed);
   html += cfgActionsBar();
   $("cfg-body").innerHTML = html;
@@ -2012,15 +2222,18 @@ function cfgVisibleWeeks(ed, scoped) {
     .map((row, r) => ({ row, r, scope: cfgRowGet(ws, row, "form").trim() }))
     .filter((it) => scoped ? (it.scope === ed.form || it.scope === "") : it.scope === "");
 }
-function renderCfgEditorWeeks(ed, scoped) {
+function renderCfgEditorWeeks(ed, scoped, byGroup) {
   const ws = cfgSheet("Semanas");
   const items = cfgVisibleWeeks(ed, scoped);
+  // Opcions de la secció de setmanes (títol, nota de preus, obligatorietat).
+  const optGrid = cfgSettingsGrid(ed, scoped, (byGroup && byGroup["Setmanes"]) || []);
+  const optBlock = optGrid ? `<div class="cfg-subhead">Opcions de la secció</div>${optGrid}` : "";
   let html = `<section class="cfg-panel">
     <div class="cfg-sechead">
       <h3 class="cfg-sec__title"><span class="cfg-sec__icon">📅</span> Setmanes</h3>
       <button class="btn btn--ghost btn--sm" id="cfg-addweek">+ Afegeix una setmana</button>
     </div>`;
-  if (!items.length) return html + `<p class="cfg-loading">Cap setmana ${scoped ? "per a aquest formulari" : "compartida"} encara.</p></section>`;
+  if (!items.length) return html + `<p class="cfg-loading">Cap setmana ${scoped ? "per a aquest formulari" : "compartida"} encara.</p>${optBlock}</section>`;
   html += `<div class="cfg-cards">` + items.map((it, vi) => {
     const { row, r } = it;
     const shared = scoped && it.scope === "";
@@ -2058,7 +2271,7 @@ function renderCfgEditorWeeks(ed, scoped) {
         <span class="cfg-prices__hint">* Reduïda: 2a setmana, germans i família nombrosa. Els buits agafen el preu general.</span>
       </div>
     </div>`;
-  }).join("") + `</div></section>`;
+  }).join("") + `</div>${optBlock}</section>`;
   return html;
 }
 // Identificador automàtic per a setmanes noves (S1, S2… únic a tot el full).
@@ -2085,78 +2298,87 @@ function cfgSettingRows(key, formId) {
   });
   return { general, override };
 }
-function renderCfgEditorSettings(ed, scoped) {
+// Agrupa les claus d'ajust visibles en aquest àmbit (conegudes per grup + extres).
+function cfgGroupedSettings(ed, scoped) {
   const as = cfgSheet("Ajustes");
-  // Claus a mostrar: les conegudes (en ordre de grup) + les desconegudes que
-  // pertoquin a aquest àmbit (form buit al general; form = id al formulari).
   const known = Object.keys(CFG_SETTINGS_META);
-  const extras = [];
-  as.rows.forEach((row) => {
-    const key = cfgRowGet(as, row, "Clave").trim();
-    const f = cfgRowGet(as, row, "form").trim();
-    if (!key || known.includes(key) || extras.includes(key)) return;
-    if (scoped ? f === ed.form : f === "") extras.push(key);
-  });
-
   const byGroup = {};
   known.forEach((key) => {
     const meta = CFG_SETTINGS_META[key];
-    if (scoped && meta.scope === "general") return;   // no personalitzables
+    if (scoped && meta.scope === "general") return;   // no personalitzables per formulari
     (byGroup[meta.group] = byGroup[meta.group] || []).push({ key, meta });
   });
-  extras.forEach((key) => (byGroup["Altres ajustos"] = byGroup["Altres ajustos"] || []).push({ key, meta: null }));
-
-  let html = `<section class="cfg-panel">
-    <div class="cfg-sechead">
-      <h3 class="cfg-sec__title"><span class="cfg-sec__icon">✏️</span> Textos i ajustos</h3>
-      <button class="btn btn--ghost btn--sm" id="cfg-addsetting">+ Clau personalitzada</button>
-    </div>`;
-  CFG_SETTINGS_GROUPS.forEach((g) => {
-    if (!byGroup[g] || !byGroup[g].length) return;
-    html += `<div class="cfg-group"><div class="cfg-group__title">${esc(g)}</div>`;
-    byGroup[g].forEach(({ key, meta }) => {
-      const { general, override } = cfgSettingRows(key, scoped ? ed.form : "");
-      const active = scoped ? (override || general) : general;
-      const val = active ? cfgRowGet(as, active.row, "Valor") : "";
-      const isOwn = scoped ? !!override : true;   // al general tot és "propi"
-      const long = (meta && meta.long) || val.includes("\n") || val.length > 70;
-      let control;
-      if (scoped && !isOwn) {
-        // Valor heretat del compartit: es veu però no es toca; "Personalitza" en fa una còpia pròpia.
-        control = `<div class="cfg-inherit">${val ? esc(val).replace(/\n/g, "<br>") : "<i>(buit)</i>"}</div>
-          <button class="btn btn--ghost btn--sm" data-custom="${esc(key)}">Personalitza</button>`;
-      } else if (meta && meta.bool) {
-        const rIdx = active ? active.r : -1;
-        control = rIdx === -1
-          ? `<button class="btn btn--ghost btn--sm" data-custom="${esc(key)}">Defineix</button>`
-          : cfgToggleSheet("Ajustes", rIdx, "Valor", cfgBool(val, false), "Activat");
-      } else if (active) {
-        control = long
-          ? `<textarea class="cfg-in cfg-in--area" data-sheet="Ajustes" data-r="${active.r}" data-col="Valor" rows="${Math.min(6, Math.max(2, val.split("\n").length))}">${esc(val)}</textarea>`
-          : `<input type="text" class="cfg-in" data-sheet="Ajustes" data-r="${active.r}" data-col="Valor" value="${esc(val)}">`;
-      } else {
-        // La clau encara no té fila en aquest àmbit: es crea en començar a escriure-hi.
-        control = long
-          ? `<textarea class="cfg-in cfg-in--area" data-skey="${esc(key)}" rows="2" placeholder="(buit)"></textarea>`
-          : `<input type="text" class="cfg-in" data-skey="${esc(key)}" placeholder="(buit)">`;
-      }
-      html += `<div class="cfg-setting">
-        <div class="cfg-setting__info">
-          ${meta ? `<span class="cfg-setting__label">${esc(meta.label)}</span>` : `<span class="cfg-setting__label"><code>${esc(key)}</code></span>`}
-          ${meta && meta.help ? `<span class="cfg-setting__help">${esc(meta.help)}</span>` : ""}
-          ${scoped && isOwn && override ? `<span class="cfg-chip cfg-chip--own">Personalitzat</span>` : ""}
-        </div>
-        <div class="cfg-setting__ctrl">
-          ${control}
-          ${scoped && override ? `<button class="iconbtn cfg-tool" data-restore="${esc(key)}" title="Torna al valor compartit">↺</button>` : ""}
-          ${!meta && (scoped ? override : general) ? `<button class="iconbtn cfg-tool cfg-del" data-delsetting="${esc(key)}" title="Elimina la clau">✕</button>` : ""}
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
+  const seen = new Set();
+  as.rows.forEach((row) => {
+    const key = cfgRowGet(as, row, "Clave").trim();
+    const f = cfgRowGet(as, row, "form").trim();
+    if (!key || known.includes(key) || seen.has(key)) return;
+    if (scoped ? f === ed.form : f === "") { seen.add(key); (byGroup["Altres ajustos"] = byGroup["Altres ajustos"] || []).push({ key, meta: null }); }
   });
-  html += `</section>`;
-  return html;
+  return byGroup;
+}
+
+// HTML d'una cel·la d'ajust (etiqueta + ajuda + control), amb la lògica de
+// valor compartit / personalitzat per formulari.
+function cfgSettingCellHtml(ed, scoped, key, meta) {
+  const as = cfgSheet("Ajustes");
+  const { general, override } = cfgSettingRows(key, scoped ? ed.form : "");
+  const active = scoped ? (override || general) : general;
+  const val = active ? cfgRowGet(as, active.row, "Valor") : "";
+  const isOwn = scoped ? !!override : true;
+  const long = (meta && meta.long) || val.includes("\n") || val.length > 70;
+  const wide = long || (scoped && !isOwn);
+  let control;
+  if (scoped && !isOwn) {
+    control = `<div class="cfg-inherit">${val ? esc(val).replace(/\n/g, "<br>") : "<i>(buit)</i>"}</div>
+      <button class="btn btn--ghost btn--sm" data-custom="${esc(key)}">Personalitza</button>`;
+  } else if (meta && meta.bool) {
+    const rIdx = active ? active.r : -1;
+    control = rIdx === -1
+      ? `<button class="btn btn--ghost btn--sm" data-custom="${esc(key)}">Defineix</button>`
+      : cfgToggleSheet("Ajustes", rIdx, "Valor", cfgBool(val, false), "Activat");
+  } else if (active) {
+    control = long
+      ? `<textarea class="cfg-in cfg-in--area" data-sheet="Ajustes" data-r="${active.r}" data-col="Valor" rows="${Math.min(6, Math.max(2, val.split("\n").length))}">${esc(val)}</textarea>`
+      : `<input type="text" class="cfg-in" data-sheet="Ajustes" data-r="${active.r}" data-col="Valor" value="${esc(val)}">`;
+  } else {
+    control = long
+      ? `<textarea class="cfg-in cfg-in--area" data-skey="${esc(key)}" rows="2" placeholder="(buit)"></textarea>`
+      : `<input type="text" class="cfg-in" data-skey="${esc(key)}" placeholder="(buit)">`;
+  }
+  return `<div class="cfg-setting${wide ? " cfg-setting--wide" : ""}">
+    <div class="cfg-setting__info">
+      ${meta ? `<span class="cfg-setting__label">${esc(meta.label)}</span>` : `<span class="cfg-setting__label"><code>${esc(key)}</code></span>`}
+      ${scoped && isOwn && override ? `<span class="cfg-chip cfg-chip--own">Personalitzat</span>` : ""}
+    </div>
+    ${meta && meta.help ? `<span class="cfg-setting__help">${esc(meta.help)}</span>` : ""}
+    <div class="cfg-setting__ctrl">
+      ${control}
+      ${scoped && override ? `<button class="iconbtn cfg-tool" data-restore="${esc(key)}" title="Torna al valor compartit">↺</button>` : ""}
+      ${!meta && (scoped ? override : general) ? `<button class="iconbtn cfg-tool cfg-del" data-delsetting="${esc(key)}" title="Elimina la clau">✕</button>` : ""}
+    </div>
+  </div>`;
+}
+
+// Graella de cel·les d'un grup (buida → "").
+function cfgSettingsGrid(ed, scoped, items) {
+  if (!items || !items.length) return "";
+  return `<div class="cfg-sgrid">${items.map(({ key, meta }) => cfgSettingCellHtml(ed, scoped, key, meta)).join("")}</div>`;
+}
+
+// Panell d'un grup d'ajustos, com a targeta amb icona (buit → "" tret que hi hagi
+// botó d'acció al capçal, cas del panell "Altres ajustos").
+function renderCfgSettingsPanel(ed, scoped, byGroup, gdef, addBtn) {
+  const items = byGroup[gdef.name];
+  if ((!items || !items.length) && !addBtn) return "";
+  const grid = cfgSettingsGrid(ed, scoped, items);
+  return `<section class="cfg-panel">
+    <div class="cfg-sechead">
+      <h3 class="cfg-sec__title"><span class="cfg-sec__icon">${gdef.icon}</span> ${esc(gdef.title)}</h3>
+      ${addBtn || ""}
+    </div>
+    ${grid || `<p class="cfg-loading">Cap ajust personalitzat encara.</p>`}
+  </section>`;
 }
 
 function wireCfgEditor(ed, scoped) {
@@ -2363,16 +2585,17 @@ function cfgRenumberCampos(sheet) {
 let _cfgSaveTimer = null;
 let _cfgSaving = false;
 let _cfgStatusTimer = null;
+// Xip d'estat del desat: una pampallugueta + etiqueta (Pendent / Desant / Desat / Error).
 function cfgSetStatus(txt, kind) {
   const el = $("cfg-status");
   if (!el) return;
   clearTimeout(_cfgStatusTimer);
-  el.textContent = txt;
-  el.className = "cfg-status" + (kind ? ` cfg-status--${kind}` : "");
-  if (kind === "ok") _cfgStatusTimer = setTimeout(() => { el.textContent = ""; el.className = "cfg-status"; }, 2500);
+  el.className = "cfg-status is-shown" + (kind ? ` cfg-status--${kind}` : "");
+  el.innerHTML = `<span class="cfg-status__dot" aria-hidden="true"></span><span class="cfg-status__txt">${esc(txt)}</span>`;
+  if (kind === "ok") _cfgStatusTimer = setTimeout(() => { el.className = "cfg-status"; el.innerHTML = ""; }, 2500);
 }
 function scheduleCfgSave() {
-  cfgSetStatus("Canvis pendents…", "");
+  cfgSetStatus("Canvis pendents", "pending");
   clearTimeout(_cfgSaveTimer);
   _cfgSaveTimer = setTimeout(cfgAutoSave, 1200);
 }
@@ -2403,7 +2626,7 @@ async function cfgAutoSave() {
     _cfgSaveTimer = setTimeout(cfgAutoSave, failed ? 5000 : 800);
     if (failed) cfgSetStatus("Error en desar — es reintentarà", "err");
   } else {
-    cfgSetStatus("✓ Desat", "ok");
+    cfgSetStatus("Desat", "ok");
     loadAll();   // refresca el panell (selector de formularis, setmanes, places…)
   }
 }

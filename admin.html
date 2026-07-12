@@ -209,17 +209,44 @@
       </section>
     </main>
 
-    <!-- ====== Configuració dels formularis (edició de l'Excel de control) ====== -->
-    <main class="amain" id="config-view" hidden>
-      <section class="card cfg-card">
-        <div class="card__head">
-          <h2 class="card__title">Configuració dels formularis</h2>
-          <span class="cfg-status" id="cfg-status" aria-live="polite"></span>
-          <button class="iconbtn iconbtn--text" id="cfg-close">← Torna al panell</button>
+    <!-- ====== Configuració dels formularis (GUI amb previsualització en directe) ====== -->
+    <main class="amain amain--wide" id="config-view" hidden>
+      <div class="cfg-topbar">
+        <div class="cfg-topbar__title">
+          <span class="cfg-topbar__eyebrow">Configuració</span>
+          <h2 class="cfg-topbar__h">Els teus formularis</h2>
         </div>
-        <div class="week-tabs" id="cfg-tabs"></div>
-        <div id="cfg-body"></div>
-      </section>
+        <span class="cfg-status" id="cfg-status" aria-live="polite"></span>
+        <button class="btn btn--ghost btn--sm" id="cfg-close">← Torna al panell</button>
+      </div>
+      <div class="cfg-shell">
+        <section class="cfg-main">
+          <div class="week-tabs" id="cfg-tabs"></div>
+          <div id="cfg-body"></div>
+        </section>
+        <aside class="cfg-preview" id="cfg-preview-pane" hidden>
+          <div class="cfg-preview__bar">
+            <span class="cfg-preview__dot" aria-hidden="true"></span>
+            <span class="cfg-preview__label">Previsualització en directe</span>
+            <div class="cfg-preview__devices" role="group" aria-label="Mida de la previsualització">
+              <button class="cfg-dev is-active" type="button" data-dev="desktop" title="Escriptori">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              </button>
+              <button class="cfg-dev" type="button" data-dev="mobile" title="Mòbil">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+              </button>
+            </div>
+            <a class="cfg-preview__open" id="cfg-preview-open" href="#" target="_blank" rel="noopener" title="Obre en una pestanya nova">↗</a>
+          </div>
+          <div class="cfg-preview__stage" id="cfg-preview-stage" data-dev="desktop">
+            <div class="cfg-preview__device">
+              <div class="cfg-preview__scaler" id="cfg-preview-scaler">
+                <iframe id="cfg-preview-frame" title="Previsualització del formulari" src="about:blank"></iframe>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
     </main>
 
     <!-- ====== Barra de navegació inferior (només mòbil) ====== -->
