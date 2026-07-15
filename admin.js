@@ -9,7 +9,7 @@
    ============================================================ */
 
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
-let SCRIPT_URL = "https://script.google.com/macros/s/AKfycby4LwybkwbuC5Nb69C2krruP2Whdpg3n51U9lqzn0AwTIe1yvYsRrumBhKa6-EYQjxaRw/exec";
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzhbXl-KTAslBLSHY1l5b5G7CDJYlwXSSrplMgltjRp7JjJ6zGHPRyQGsmIddJVnP6p9w/exec";
 
 const TOKEN_KEY = "casal_admin_token";  // token de sessió UUID (no el PIN)
 const VIEW_KEY  = "casal_admin_view2";  // formulari + filtres + ordre desats (v2: ordre per nom per defecte)
@@ -1069,6 +1069,33 @@ async function resend(id) {
   }
 }
 
+// Genera i descarrega el comprovant PDF d'una inscripció (dades + signatura).
+// El PDF el crea el servidor (Apps Script) i arriba en base64.
+async function downloadPdf(r, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Generant…"; }
+  try {
+    const out = await api("admin_pdf", { id: r.id, row: r.row });
+    downloadBase64(out.dataBase64, out.filename || "inscripcio.pdf", out.mimeType || "application/pdf");
+    toast("PDF generat.");
+  } catch (err) {
+    toast("No s'ha pogut generar el PDF: " + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Descarregar PDF"; }
+  }
+}
+
+// Converteix base64 → Blob i força la descàrrega del fitxer al navegador.
+function downloadBase64(b64, filename, mime) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /* ============================================================
    Confirm modal (pas de seguretat reutilitzable)
    ============================================================ */
@@ -1330,6 +1357,7 @@ function openDrawer(r) {
   });
 
   html += `<div class="drawer__actions">
+    <button class="btn btn--ghost btn--sm" id="dw-pdf">Descarregar PDF</button>
     <button class="btn btn--ghost btn--sm" id="dw-resend">Reenviar correu</button>
     <button class="btn btn--ghost btn--sm" id="dw-editchild">Edita nen/a</button>
   </div>`;
@@ -1339,6 +1367,7 @@ function openDrawer(r) {
   if (payAll) payAll.addEventListener("click", () => toggleAllPaid(r.row, { reopen: true }));
   $("drawer-body").querySelectorAll("[data-payweek]").forEach((b) =>
     b.addEventListener("click", () => toggleWeekPaid(r.row, b.dataset.payweek)));
+  $("dw-pdf").addEventListener("click", (e) => downloadPdf(r, e.currentTarget));
   $("dw-resend").addEventListener("click", () => resend(r.id));
   const dwReceipt = $("dw-receipt");
   if (dwReceipt && !receiptDone) dwReceipt.addEventListener("click", () => sendReceipt(r.id));

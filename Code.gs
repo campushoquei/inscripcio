@@ -1316,6 +1316,7 @@ function handleAdmin(p) {
       case "admin_set_group":   return adminSetGroup(form, p.id, p.week, p.color, p.row);
       case "admin_set_groups_config": return adminSetGroupsConfig(p.config);
       case "admin_resend":      return adminResend(form, p.id);
+      case "admin_pdf":         return adminPdf(form, p.id, p.row);
       case "admin_reminder":    return adminReminder(form, p.ids || (p.id ? [p.id] : []));
       case "admin_receipt":     return adminReceipt(form, p.ids || (p.id ? [p.id] : []));
       case "admin_update":      return adminUpdate(form, p.id, p.patch);
@@ -1432,7 +1433,7 @@ function adminToISODate(v) {
 function adminFileUrls(row) {
   var urls = [];
   for (var k in row) {
-    if (k === "__row") continue;
+    if (k === "__row" || k === "Signatura") continue;   // la signatura és interna: no és un adjunt de la família
     var val = String(row[k] == null ? "" : row[k]);
     if (val.indexOf("http") === 0) {
       val.split(/[\s\n]+/).forEach(function (u) { if (u.indexOf("http") === 0) urls.push(u); });
@@ -1804,6 +1805,134 @@ function adminResend(form, id) {
   var rows = [{ id: id, data: merged, weekLabels: weekLabels, savedFiles: files }];
   sendConfirmation(settings, payload, rows);
   return { ok: true, id: id, to: shared.email };
+}
+
+/* ---------- Comprovant PDF (ús intern) ----------
+   Genera un PDF "oficial" d'una inscripció: totes les dades del formulari + la
+   signatura del tutor/a. Sota demanda des del panell d'admin (botó a la fitxa).
+   Retorna el PDF en base64 perquè el navegador el descarregui. */
+function adminPdf(form, id, rowNum) {
+  var settings = readSettings(form);
+  var data = readSubmissionRows(form);
+  var match = findRowByNumberOrId(data, rowNum, id);
+  if (!match) return { ok: false, error: "row not found" };
+
+  var camp = settings.nombre_campus || "Campus";
+  var labels = fieldLabels(form);
+  var groupsMap = fieldGroups(form);
+  var fields = readFields(form).filter(function (f) { return f.tipo !== "nota"; });
+
+  // Camps agrupats, mantenint l'ordre de configuració i saltant els buits i els fitxers.
+  var order = [], byGroup = {};
+  fields.forEach(function (f) {
+    var v = match[f.id];
+    if (v == null || v === "" || f.tipo === "file") return;
+    var g = groupsMap[f.id] || "Dades de la inscripció";
+    if (!byGroup[g]) { byGroup[g] = []; order.push(g); }
+    byGroup[g].push({ label: labels[f.id] || f.id, value: String(v) });
+  });
+
+  var registered = rowRegisteredWeeks(match, readWeeks(form).map(function (w) { return w.id; }));
+  var paid = rowPaidWeeks(match, registered);
+  var estat = computeEstat(paid, registered);
+  var setmanes = str(match.Setmanes);
+  var preu = num(match.Preu);
+  var descompte = str(match.Descompte);
+  var nom = adminRowName(match, form);
+
+  // Signatura: la columna desa l'URL de Drive; n'extraiem l'ID i incrustem la imatge.
+  var sigImg = "";
+  var sigUrl = str(match.Signatura);
+  if (sigUrl) {
+    try {
+      var m = sigUrl.match(/[-\w]{25,}/);
+      if (m) {
+        var blob = DriveApp.getFileById(m[0]).getBlob();
+        sigImg = "data:" + blob.getContentType() + ";base64," + Utilities.base64Encode(blob.getBytes());
+      }
+    } catch (e) { sigImg = ""; }
+  }
+
+  var genDate = Utilities.formatDate(new Date(), "Europe/Madrid", "dd/MM/yyyy 'a les' HH:mm");
+  var rebutData = match.Timestamp instanceof Date
+    ? Utilities.formatDate(match.Timestamp, "Europe/Madrid", "dd/MM/yyyy HH:mm")
+    : str(match.Timestamp);
+
+  var C = { navy: "#0E2A63", blue: "#1F5AE0", ink: "#16233D", soft: "#4B5C7A", line: "#D6DEEC", paper: "#EEF3FB" };
+
+  function metaRow(k, v) {
+    return "<tr><td style='padding:5px 10px 5px 0;color:" + C.soft + ";font-size:11px;white-space:nowrap;vertical-align:top'>" + esc(k) + "</td>" +
+           "<td style='padding:5px 0;color:" + C.ink + ";font-size:12px;font-weight:600'>" + esc(v) + "</td></tr>";
+  }
+
+  var sections = order.map(function (g) {
+    var rows = byGroup[g].map(function (d) {
+      return "<tr>" +
+        "<td style='width:38%;padding:7px 12px 7px 0;color:" + C.soft + ";font-size:11px;vertical-align:top;border-bottom:1px solid " + C.paper + "'>" + esc(d.label) + "</td>" +
+        "<td style='padding:7px 0;color:" + C.ink + ";font-size:12px;font-weight:600;vertical-align:top;border-bottom:1px solid " + C.paper + "'>" + esc(d.value).replace(/\n/g, "<br>") + "</td>" +
+      "</tr>";
+    }).join("");
+    return "<div style='margin-top:18px'>" +
+      "<div style='font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:" + C.blue + ";border-bottom:2px solid " + C.line + ";padding-bottom:5px;margin-bottom:4px'>" + esc(g) + "</div>" +
+      "<table style='width:100%;border-collapse:collapse'>" + rows + "</table>" +
+    "</div>";
+  }).join("");
+
+  var weeksBlock = (setmanes || preu != null) ?
+    "<div style='margin-top:18px;background:" + C.paper + ";border-radius:10px;padding:14px 16px'>" +
+      "<div style='font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:" + C.blue + ";margin-bottom:8px'>Setmanes i import</div>" +
+      (setmanes ? "<div style='font-size:12px;color:" + C.ink + ";margin-bottom:6px'><b>Setmanes:</b> " + esc(setmanes) + "</div>" : "") +
+      (descompte && descompte !== "-" ? "<div style='font-size:12px;color:" + C.soft + ";margin-bottom:6px'><b>Descompte:</b> " + esc(descompte) + "</div>" : "") +
+      "<div style='font-size:12px;color:" + C.ink + "'><b>Estat del pagament:</b> " + esc(estat) + "</div>" +
+      (preu != null ? "<div style='font-size:20px;font-weight:800;color:" + C.navy + ";margin-top:8px'>" + esc(String(preu)) + " €</div>" : "") +
+    "</div>" : "";
+
+  var sigBlock =
+    "<div style='margin-top:26px;border-top:2px solid " + C.line + ";padding-top:16px'>" +
+      "<div style='font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:" + C.blue + ";margin-bottom:10px'>Signatura del tutor/a</div>" +
+      (sigImg
+        ? "<img src='" + sigImg + "' style='display:block;max-width:280px;max-height:130px'>"
+        : "<div style='color:" + C.soft + ";font-size:12px;font-style:italic'>Sense signatura registrada.</div>") +
+      "<div style='border-top:1px solid " + C.ink + ";width:280px;margin-top:6px;padding-top:6px;font-size:11px;color:" + C.soft + "'>" +
+        esc(pickFirstValue(match, [/nom_tutor/i, /tutor/i]) || nom) +
+      "</div>" +
+    "</div>";
+
+  var html =
+    "<!DOCTYPE html><html lang='ca'><head><meta charset='utf-8'></head>" +
+    "<body style='margin:0;font-family:Arial,Helvetica,sans-serif;color:" + C.ink + "'>" +
+      "<div style='padding:34px 40px'>" +
+        // Capçalera
+        "<div style='background:linear-gradient(135deg," + C.navy + " 0%,#16357C 55%," + C.blue + " 100%);border-radius:12px;padding:22px 26px;color:#fff'>" +
+          "<div style='font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:6px'>🏑 " + esc(camp) + "</div>" +
+          "<div style='font-size:22px;font-weight:800;margin-bottom:4px'>Comprovant d'inscripció</div>" +
+          "<div style='font-size:13px;color:#cfe0ff'>" + esc(nom) + "</div>" +
+        "</div>" +
+        // Meta
+        "<table style='width:100%;border-collapse:collapse;margin-top:16px'>" +
+          metaRow("Referència", str(match.ID)) +
+          metaRow("Data de recepció", rebutData) +
+          metaRow("Formulari", str(match.Formulario) || form) +
+          metaRow("Estat", estat) +
+        "</table>" +
+        sections +
+        weeksBlock +
+        sigBlock +
+        // Peu
+        "<div style='margin-top:28px;border-top:1px solid " + C.line + ";padding-top:10px;font-size:10px;color:" + C.soft + "'>" +
+          "Document intern generat el " + esc(genDate) + " · " + esc(camp) +
+        "</div>" +
+      "</div>" +
+    "</body></html>";
+
+  var safeName = (nom + " - " + str(match.ID)).replace(/[^\w\-\s]+/g, "").trim() || "inscripcio";
+  var pdf = Utilities.newBlob(html, "text/html", safeName + ".html").getAs("application/pdf");
+  return {
+    ok: true,
+    filename: "Inscripcio - " + safeName + ".pdf",
+    mimeType: "application/pdf",
+    dataBase64: Utilities.base64Encode(pdf.getBytes())
+  };
 }
 
 /* ---------- Recordatori de pagament ----------
