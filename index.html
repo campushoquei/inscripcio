@@ -213,6 +213,18 @@
         </label>
       </div>
 
+      <!-- Signatura obligatòria: valida la inscripció. Es dibuixa i s'envia com a imatge. -->
+      <div class="signature" id="signature-field">
+        <label class="signature__label" id="signature-label">Signatura <span class="field__req">*</span></label>
+        <p class="signature__help" id="signature-help">Signa amb el dit (mòbil) o el ratolí per validar la inscripció.</p>
+        <div class="signature__pad" id="signature-pad">
+          <canvas id="signature-canvas"></canvas>
+          <span class="signature__placeholder" id="signature-placeholder" aria-hidden="true">Signa aquí</span>
+          <button type="button" class="signature__clear" id="signature-clear" hidden>Esborrar</button>
+        </div>
+        <p class="field__error" id="signature-error">Cal signar per validar la inscripció.</p>
+      </div>
+
       <div class="submit-row">
         <button type="submit" class="btn btn--primary" id="submit-btn">
           <span class="btn__label" data-submit-text>Enviar inscripció</span>

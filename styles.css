@@ -833,6 +833,39 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
 .consent--invalid .check__box { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.18); }
 .consent--invalid .check__label { color: var(--danger); }
 
+/* ---------- Signatura (valida la inscripció) ---------- */
+.signature { padding: 4px 2px 22px; }
+.signature__label { display: block; font-size: 1.15rem; font-weight: 400; color: var(--navy); }
+.signature__help { font-size: .82rem; color: var(--ink-soft); margin: 6px 0 12px; }
+.signature__pad {
+  position: relative; width: 100%; height: 180px;
+  border: 1.5px dashed var(--line-ink); border-radius: var(--radius-sm);
+  background: #fff; overflow: hidden; touch-action: none;
+}
+.signature__pad canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+/* Text guia al centre; desapareix en començar a signar */
+.signature__placeholder {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--ink-soft); font-size: .95rem; font-weight: 600; pointer-events: none;
+  opacity: .55; letter-spacing: .02em;
+}
+.signature__pad.has-ink .signature__placeholder { display: none; }
+/* Línia base de signatura, estil paper */
+.signature__pad::before {
+  content: ""; position: absolute; left: 16px; right: 16px; bottom: 42px;
+  border-bottom: 1.5px solid var(--line-ink); pointer-events: none;
+}
+.signature__clear {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  font: inherit; font-size: .8rem; font-weight: 700; color: var(--navy);
+  background: var(--paper); border: 1px solid var(--line-ink); border-radius: 999px;
+  padding: 5px 12px; cursor: pointer;
+}
+.signature__clear:hover { background: #fff; }
+.signature .field__error { margin-top: 8px; }
+.signature--invalid .field__error { display: block; }
+.signature--invalid .signature__pad { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.18); }
+
 /* ---------- Blocs de jugador/a (diversos fills) ---------- */
 .children { display: flex; flex-direction: column; gap: 16px; }
 .child-block {
@@ -1777,6 +1810,10 @@ body.pc-summary-on .child-price { display: none !important; }
 .section .consent {
   padding-top: 14px; padding-bottom: 2px;
   border-top: 1px solid var(--line-ink); margin-top: 10px;
+}
+.section .signature {
+  padding-top: 16px; padding-bottom: 2px;
+  border-top: 1px solid var(--line-ink); margin-top: 14px;
 }
 
 /* ---- 12. Referència de confirmació ---- */

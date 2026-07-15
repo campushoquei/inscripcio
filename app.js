@@ -307,6 +307,7 @@ async function init() {
     if (next) next.focus();
     else t.blur();   // últim camp: tanca el teclat
   });
+  initSignature();
   els.another.addEventListener("click", () => withViewTransition(resetForNew));
   els.returningClose.addEventListener("click", dismissReturning);
   if (els.returningToggle) els.returningToggle.addEventListener("click", toggleReturning);
@@ -457,6 +458,7 @@ async function load() {
     currentCampus = open.length ? open[0].id : null;
     renderForm();
     stopHintCycle(); els.loading.hidden = true; els.form.hidden = false;
+    signature._resize?.();   // el canvas ja té mida real: ajusta'l a la densitat de píxels
     revealHero();
     updateProgress();
     updateAllPrices();
@@ -719,6 +721,12 @@ function renderForm() {
   if (consentEl && consentEl.closest("#form-sections")) {
     document.getElementById("price-total-card").insertAdjacentElement("beforebegin", consentEl);
   }
+  // Igual que el consentiment: rescata la signatura de dins de les seccions (re-render)
+  // perquè no s'esborri en buidar #form-sections.
+  const signatureEl = document.getElementById("signature-field");
+  if (signatureEl && signatureEl.closest("#form-sections")) {
+    els.form.querySelector(".submit-row").insertAdjacentElement("beforebegin", signatureEl);
+  }
 
   els.sections.innerHTML = "";
   childCount = Math.max(1, childCount || 1);
@@ -742,9 +750,11 @@ function renderForm() {
     else if (g.fields.length) { n++; els.sections.appendChild(sectionEl(n, g.name, g.fields.map((f) => fieldEl(f)))); }
   }
 
-  // Mou el consentiment dins de l'última secció (Protecció de dades)
+  // Mou el consentiment i la signatura dins de l'última secció (Protecció de dades),
+  // així al wizard (mòbil) surten al pas final i no a tots els passos.
   const lastSection = els.sections.querySelector(".section:last-child");
   if (lastSection && consentEl) lastSection.appendChild(consentEl);
+  if (lastSection && signatureEl) { lastSection.appendChild(signatureEl); signature._resize?.(); }
 
   initWizard();
   setupSectionReveal();
@@ -876,6 +886,9 @@ function renderWizardStep(scrollTop, dir) {
 
   // Mostra només el pas actiu
   wizardSteps.forEach((s, i) => { s.hidden = i !== wizardStep; });
+
+  // El pas amb la signatura acaba de fer-se visible: el canvas ja té mida real.
+  if (wizardSteps[wizardStep]?.contains(signature.pad)) signature._resize?.();
 
   // El hero només acompanya el primer pas: als següents s'amaga (via CSS) i el
   // formulari ocupa tota la pantalla sota el topbar.
@@ -2243,6 +2256,15 @@ async function onSubmit(e) {
     revealField(firstBad);
     return flashNote(`Falta un camp: ${fieldLabel(firstBad)}.`);
   }
+  // Signatura obligatòria: valida la inscripció.
+  if (!signature.hasInk) {
+    haptic([10, 45, 10]);
+    const sigField = document.getElementById("signature-field");
+    sigField?.classList.add("signature--invalid");
+    revealField(sigField);
+    signature._resize?.();   // per si el pad estava amagat en un pas del wizard
+    return flashNote("Cal signar per validar la inscripció.");
+  }
   // Anti-spam: el honeypot (camp invisible) ple o un enviament impossiblement
   // ràpid delaten un bot. Cap dels dos casos pot passar a una persona real.
   const hp = document.getElementById("hp-extra");
@@ -2342,10 +2364,17 @@ async function onSubmit(e) {
       };
     });
     const campusName = campus ? campus.nombre : "";
+    // Signatura de qui fa la inscripció: PNG compartit per a tota la família (viatja
+    // com un fitxer inline; el servidor el desa a Drive i l'enllaça al full).
+    const sigUrl = signatureDataUrl();
+    const signaturePayload = sigUrl
+      ? { name: "signatura.png", mimeType: "image/png", dataBase64: sigUrl.split(",")[1] }
+      : null;
+
     const payload = {
       form: activeFormId, formName: (CONFIG.form && CONFIG.form.nombre) || (CONFIG.settings && CONFIG.settings.hero_titulo) || activeFormId,
       campusId: currentCampus || "", campusName,
-      shared, children: childrenPayload, ts: new Date().toISOString()
+      shared, children: childrenPayload, signature: signaturePayload, ts: new Date().toISOString()
     };
 
     const result = await send(payload);
@@ -2463,6 +2492,8 @@ function resetForNew() {
   document.body.classList.remove("page--done");
   submissionDone = false;   // nova inscripció: torna a netejar fotos si s'abandona
   Object.keys(fileStore).forEach((k) => (fileStore[k] = []));
+  clearSignature();   // esborra la signatura de la inscripció anterior
+  document.getElementById("signature-field")?.classList.remove("signature--invalid");
   childCount = 1;
   returningDismissed = false;
   try { sessionStorage.removeItem(RETURNING_DISMISSED_KEY); } catch {}
@@ -2907,6 +2938,93 @@ function prefillFamilySelection(entry, selectedIdxs) {
   // dades: la refresquem perquè mostri el preu i l'indicador de fills restaurats.
   if (wizardSteps.length) renderWizardNav();
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ---- Signatura ----
+// Un pad de dibuix (canvas) al final del formulari. Valida la inscripció: en enviar,
+// el traç es converteix a PNG i viatja com un fitxer compartit més (payload.signature),
+// que el servidor desa a Drive i enllaça a la columna "Signatura" del full.
+const signature = { canvas: null, ctx: null, pad: null, drawing: false, hasInk: false, last: null };
+
+function initSignature() {
+  const canvas = document.getElementById("signature-canvas");
+  const pad = document.getElementById("signature-pad");
+  if (!canvas || !pad) return;
+  signature.canvas = canvas;
+  signature.ctx = canvas.getContext("2d");
+  signature.pad = pad;
+  const clearBtn = document.getElementById("signature-clear");
+
+  // Ajusta el canvas a la mida CSS real i a la densitat de píxels (traç net a mòbil).
+  // En canviar de mida (rotar el mòbil), preserva el que ja s'hagi dibuixat.
+  const resize = () => {
+    const rect = pad.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const prev = signature.hasInk ? canvas.toDataURL() : null;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = rect.height + "px";
+    const ctx = signature.ctx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    // Tinta fosca fixa (no del tema): la imatge PNG té fons transparent i s'ha de
+    // veure sempre sobre blanc (Drive, correu, comprovant imprès).
+    ctx.strokeStyle = "#0E2A63";
+    if (prev) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height); img.src = prev; }
+  };
+  signature._resize = resize;
+
+  const pos = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const start = (e) => {
+    e.preventDefault();
+    signature.drawing = true;
+    signature.last = pos(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  };
+  const move = (e) => {
+    if (!signature.drawing) return;
+    e.preventDefault();
+    const p = pos(e), ctx = signature.ctx;
+    ctx.beginPath(); ctx.moveTo(signature.last.x, signature.last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    signature.last = p;
+    if (!signature.hasInk) {
+      signature.hasInk = true;
+      pad.classList.add("has-ink");
+      document.getElementById("signature-field")?.classList.remove("signature--invalid");
+      if (clearBtn) clearBtn.hidden = false;
+      scheduleDraftSave();
+    }
+  };
+  const end = () => { signature.drawing = false; signature.last = null; };
+
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+  clearBtn?.addEventListener("click", clearSignature);
+  window.addEventListener("resize", resize);
+  // Mida inicial (i re-mida quan el formulari passa de hidden a visible).
+  resize();
+}
+
+function clearSignature() {
+  const { ctx, canvas, pad } = signature;
+  if (!ctx || !canvas) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  signature.hasInk = false;
+  pad?.classList.remove("has-ink");
+  const clearBtn = document.getElementById("signature-clear");
+  if (clearBtn) clearBtn.hidden = true;
+}
+
+// PNG del traç (dataURL) o "" si encara no s'ha signat.
+function signatureDataUrl() {
+  return signature.hasInk && signature.canvas ? signature.canvas.toDataURL("image/png") : "";
 }
 
 // ---- Helpers ----

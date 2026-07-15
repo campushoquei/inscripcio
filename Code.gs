@@ -129,6 +129,12 @@ function doPost(e) {
 
     removeExistingSubmissionRows(form, shared);
 
+    // Signatura de qui fa la inscripció: es desa un sol cop a Drive i el mateix enllaç
+    // s'escriu a la columna "Signatura" de cada fila (germans inclosos).
+    var signatureUrl = "";
+    try { signatureUrl = saveSignature(payload.signature, settings, { form: form, formName: payload.formName }, baseId); }
+    catch (sigErr) { signatureUrl = ""; }
+
     // Tot SÍNCRON, sense triggers. Els triggers de l'Apps Script NO són immediats (un ".after"
     // pot trigar 1-3 minuts a disparar-se): per això el correu arribava tard. Aquí desem la fila,
     // movem els fitxers i enviem el correu dins la mateixa petició → el correu arriba a l'instant.
@@ -160,7 +166,8 @@ function doPost(e) {
         form: form, formName: payload.formName, campusId: payload.campusId, campusName: payload.campusName,
         weeks: child.weeks || [], weekLabels: child.weekLabels || [],
         preu: child.preu != null ? child.preu : null,
-        descompte: child.descompte || ""
+        descompte: child.descompte || "",
+        signatura: signatureUrl
       };
       saveRow(id, rowPayload, data);
       rows.push({ id: id, data: data, weekLabels: child.weekLabels || [], savedFiles: allFiles });
@@ -346,6 +353,19 @@ function saveFiles(files, settings, payload, id) {
     if (!file) return null;
     return { field: f.field, name: file.getName(), url: file.getUrl() };
   }).filter(function (x) { return x; });
+}
+
+// Desa la signatura (PNG dibuixat pel tutor/a) a la carpeta de fitxers del formulari i
+// en retorna l'URL. És la prova que valida la inscripció. Una per enviament (val per a
+// tots els germans). Si no arriba signatura, retorna "".
+function saveSignature(sig, settings, payload, id) {
+  if (!sig || !sig.dataBase64) return "";
+  var folder = getUploadFolder(settings, payload);
+  var stamp = Utilities.formatDate(new Date(), "Europe/Madrid", "yyyy-MM-dd_HH-mm");
+  var fileName = "Signatura - " + (id || stamp) + ".png";
+  var blob = Utilities.newBlob(Utilities.base64Decode(sig.dataBase64), sig.mimeType || "image/png", fileName);
+  var file = folder.createFile(blob);
+  return file.getUrl();
 }
 
 /* ---------- Staging: pujada en segon pla des del formulari ----------
@@ -643,6 +663,7 @@ function saveRow(id, payload, data) {
   plan.push("Estat");
   plan.push("Setmanes pagades");
   plan.push("Grups");
+  plan.push("Signatura");
 
   // capçalera actual; afegeix les columnes que faltin (al final)
   var lastCol = sheet.getLastColumn();
@@ -671,6 +692,7 @@ function saveRow(id, payload, data) {
     if (col === "Descompte") return payload.descompte || "";
     if (col === "Estat") return payload.estat || "Pendent";
     if (col === "Setmanes pagades") return payload.pagat_setmanes || "";
+    if (col === "Signatura") return payload.signatura || "";
     if (col === "Grups") {
       if (payload.grups) return payload.grups;
       // El grup (vestidor) sempre queda desat: per defecte, el que toca per edat a cada setmana
