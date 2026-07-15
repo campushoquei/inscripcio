@@ -1858,70 +1858,114 @@ function adminPdf(form, id, rowNum) {
     ? Utilities.formatDate(match.Timestamp, "Europe/Madrid", "dd/MM/yyyy HH:mm")
     : str(match.Timestamp);
 
-  var C = { navy: "#0E2A63", blue: "#1F5AE0", ink: "#16233D", soft: "#4B5C7A", line: "#D6DEEC", paper: "#EEF3FB" };
+  // Paleta premium. NOMÉS colors sòlids: el conversor HTML→PDF de l'Apps Script no
+  // renderitza degradats, border-radius, flexbox ni text-transform. Per això el disseny
+  // s'aguanta amb taules, fons sòlids, vores i tipografia (Georgia als títols).
+  var C = {
+    navy:     "#0E2A63",   // marca
+    navyDeep: "#0A1D45",   // capçalera
+    gold:     "#C9A24B",   // accent premium
+    ink:      "#1E2A44",   // text
+    soft:     "#6A7690",   // text secundari
+    line:     "#E4EAF3",   // filets
+    rowline:  "#EFF3F9",   // separadors de fila
+    softbg:   "#F6F9FD"    // fons de blocs
+  };
+  var up = function (s) { return String(s == null ? "" : s).toUpperCase(); };
+  var nl = function (s) { return esc(s).replace(/\n/g, "<br>"); };
 
-  function metaRow(k, v) {
-    return "<tr><td style='padding:5px 10px 5px 0;color:" + C.soft + ";font-size:11px;white-space:nowrap;vertical-align:top'>" + esc(k) + "</td>" +
-           "<td style='padding:5px 0;color:" + C.ink + ";font-size:12px;font-weight:600'>" + esc(v) + "</td></tr>";
+  // Títol de secció: barra daurada + text en majúscules.
+  function sectionTitle(t) {
+    return "<div style='border-left:3px solid " + C.gold + ";padding-left:10px;margin:24px 0 9px'>" +
+      "<span style='font-size:11px;font-weight:700;letter-spacing:.10em;color:" + C.navy + "'>" + esc(up(t)) + "</span></div>";
+  }
+
+  // Cel·la de metadades (etiqueta petita a sobre, valor a sota).
+  function metaCell(k, v) {
+    return "<td style='padding:0 20px 0 0;vertical-align:top'>" +
+      "<div style='font-size:8.5px;font-weight:700;letter-spacing:.11em;color:" + C.soft + "'>" + esc(up(k)) + "</div>" +
+      "<div style='font-size:12px;font-weight:700;color:" + C.ink + ";margin-top:4px'>" + esc(v) + "</div></td>";
   }
 
   var sections = order.map(function (g) {
-    var rows = byGroup[g].map(function (d) {
+    var rows = byGroup[g].map(function (d, i) {
+      var border = i === byGroup[g].length - 1 ? "" : ";border-bottom:1px solid " + C.rowline;
       return "<tr>" +
-        "<td style='width:38%;padding:7px 12px 7px 0;color:" + C.soft + ";font-size:11px;vertical-align:top;border-bottom:1px solid " + C.paper + "'>" + esc(d.label) + "</td>" +
-        "<td style='padding:7px 0;color:" + C.ink + ";font-size:12px;font-weight:600;vertical-align:top;border-bottom:1px solid " + C.paper + "'>" + esc(d.value).replace(/\n/g, "<br>") + "</td>" +
+        "<td style='width:40%;padding:8px 14px 8px 0;color:" + C.soft + ";font-size:10.5px;vertical-align:top" + border + "'>" + esc(d.label) + "</td>" +
+        "<td style='padding:8px 0;color:" + C.ink + ";font-size:12px;font-weight:600;vertical-align:top" + border + "'>" + nl(d.value) + "</td>" +
       "</tr>";
     }).join("");
-    return "<div style='margin-top:18px'>" +
-      "<div style='font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:" + C.blue + ";border-bottom:2px solid " + C.line + ";padding-bottom:5px;margin-bottom:4px'>" + esc(g) + "</div>" +
-      "<table style='width:100%;border-collapse:collapse'>" + rows + "</table>" +
-    "</div>";
+    return sectionTitle(g) + "<table style='width:100%;border-collapse:collapse'>" + rows + "</table>";
   }).join("");
 
+  // Bloc d'import: fons sòlid amb barra daurada i xifra gran en Georgia.
+  var priceLines =
+    (setmanes ? "<div style='font-size:11.5px;color:" + C.ink + ";margin-bottom:5px'><span style='color:" + C.soft + "'>Setmanes:</span> " + esc(setmanes) + "</div>" : "") +
+    (descompte && descompte !== "-" ? "<div style='font-size:11.5px;color:" + C.ink + ";margin-bottom:5px'><span style='color:" + C.soft + "'>Descompte:</span> " + esc(descompte) + "</div>" : "") +
+    "<div style='font-size:11.5px;color:" + C.ink + "'><span style='color:" + C.soft + "'>Estat del pagament:</span> " + esc(estat) + "</div>";
   var weeksBlock = (setmanes || preu != null) ?
-    "<div style='margin-top:18px;background:" + C.paper + ";border-radius:10px;padding:14px 16px'>" +
-      "<div style='font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:" + C.blue + ";margin-bottom:8px'>Setmanes i import</div>" +
-      (setmanes ? "<div style='font-size:12px;color:" + C.ink + ";margin-bottom:6px'><b>Setmanes:</b> " + esc(setmanes) + "</div>" : "") +
-      (descompte && descompte !== "-" ? "<div style='font-size:12px;color:" + C.soft + ";margin-bottom:6px'><b>Descompte:</b> " + esc(descompte) + "</div>" : "") +
-      "<div style='font-size:12px;color:" + C.ink + "'><b>Estat del pagament:</b> " + esc(estat) + "</div>" +
-      (preu != null ? "<div style='font-size:20px;font-weight:800;color:" + C.navy + ";margin-top:8px'>" + esc(String(preu)) + " €</div>" : "") +
-    "</div>" : "";
+    sectionTitle("Setmanes i import") +
+    "<table style='width:100%;border-collapse:collapse'><tr>" +
+      "<td style='background-color:" + C.softbg + ";border-left:4px solid " + C.gold + ";padding:14px 18px;vertical-align:middle'>" + priceLines + "</td>" +
+      (preu != null
+        ? "<td style='background-color:" + C.softbg + ";padding:14px 20px;text-align:right;vertical-align:middle;white-space:nowrap'>" +
+            "<div style='font-size:8.5px;font-weight:700;letter-spacing:.11em;color:" + C.soft + "'>IMPORT</div>" +
+            "<div style='font-family:Georgia,\"Times New Roman\",serif;font-size:26px;font-weight:700;color:" + C.navy + ";margin-top:2px'>" + esc(String(preu)) + " €</div>" +
+          "</td>"
+        : "") +
+    "</tr></table>" : "";
 
+  // Bloc de signatura: marc amb la imatge, línia i nom del signant.
+  var signant = pickFirstValue(match, [/nom_tutor/i, /tutor/i]) || nom;
+  var sigInner = sigImg
+    ? "<img src='" + sigImg + "' style='display:block;max-height:100px;max-width:320px'>"
+    : "<div style='height:96px;color:" + C.soft + ";font-size:11px;font-style:italic;padding-top:38px'>Sense signatura registrada.</div>";
   var sigBlock =
-    "<div style='margin-top:26px;border-top:2px solid " + C.line + ";padding-top:16px'>" +
-      "<div style='font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:" + C.blue + ";margin-bottom:10px'>Signatura del tutor/a</div>" +
-      (sigImg
-        ? "<img src='" + sigImg + "' style='display:block;max-width:280px;max-height:130px'>"
-        : "<div style='color:" + C.soft + ";font-size:12px;font-style:italic'>Sense signatura registrada.</div>") +
-      "<div style='border-top:1px solid " + C.ink + ";width:280px;margin-top:6px;padding-top:6px;font-size:11px;color:" + C.soft + "'>" +
-        esc(pickFirstValue(match, [/nom_tutor/i, /tutor/i]) || nom) +
-      "</div>" +
-    "</div>";
+    sectionTitle("Signatura del tutor/a") +
+    "<table style='width:100%;border-collapse:collapse'><tr>" +
+      "<td style='border:1px solid " + C.line + ";background-color:" + C.softbg + ";padding:16px 20px 10px'>" +
+        sigInner +
+        "<div style='border-top:1px solid " + C.ink + ";margin-top:8px;padding-top:7px'>" +
+          "<span style='font-size:11px;font-weight:700;color:" + C.ink + "'>" + esc(signant) + "</span>" +
+          "<span style='font-size:10px;color:" + C.soft + "'> · Signat en el moment de la inscripció (" + esc(rebutData) + ")</span>" +
+        "</div>" +
+      "</td>" +
+    "</tr></table>";
 
   var html =
     "<!DOCTYPE html><html lang='ca'><head><meta charset='utf-8'></head>" +
     "<body style='margin:0;font-family:Arial,Helvetica,sans-serif;color:" + C.ink + "'>" +
-      "<div style='padding:34px 40px'>" +
-        // Capçalera
-        "<div style='background:linear-gradient(135deg," + C.navy + " 0%,#16357C 55%," + C.blue + " 100%);border-radius:12px;padding:22px 26px;color:#fff'>" +
-          "<div style='font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9DC0FF;font-weight:700;margin-bottom:6px'>🏑 " + esc(camp) + "</div>" +
-          "<div style='font-size:22px;font-weight:800;margin-bottom:4px'>Comprovant d'inscripció</div>" +
-          "<div style='font-size:13px;color:#cfe0ff'>" + esc(nom) + "</div>" +
+      "<div style='padding:38px 46px'>" +
+
+        // ── Capçalera (fons navy sòlid + filet daurat) ──
+        "<table style='width:100%;border-collapse:collapse'><tr>" +
+          "<td style='background-color:" + C.navyDeep + ";border-bottom:3px solid " + C.gold + ";padding:26px 30px'>" +
+            "<div style='font-size:10px;font-weight:700;letter-spacing:.16em;color:" + C.gold + "'>" + esc(up(camp)) + "</div>" +
+            "<div style='font-family:Georgia,\"Times New Roman\",serif;font-size:25px;font-weight:700;color:#ffffff;margin-top:8px'>Comprovant d'inscripció</div>" +
+            "<div style='font-size:12.5px;color:#B9CCEE;margin-top:5px'>" + esc(nom) + "</div>" +
+          "</td>" +
+        "</tr></table>" +
+
+        // ── Metadades ──
+        "<div style='border-bottom:1px solid " + C.line + ";padding-bottom:16px'>" +
+          "<table style='width:100%;border-collapse:collapse;margin-top:20px'><tr>" +
+            metaCell("Referència", str(match.ID)) +
+            metaCell("Data de recepció", rebutData) +
+            metaCell("Formulari", str(match.Formulario) || form) +
+            metaCell("Estat", estat) +
+          "</tr></table>" +
         "</div>" +
-        // Meta
-        "<table style='width:100%;border-collapse:collapse;margin-top:16px'>" +
-          metaRow("Referència", str(match.ID)) +
-          metaRow("Data de recepció", rebutData) +
-          metaRow("Formulari", str(match.Formulario) || form) +
-          metaRow("Estat", estat) +
-        "</table>" +
+
         sections +
         weeksBlock +
         sigBlock +
-        // Peu
-        "<div style='margin-top:28px;border-top:1px solid " + C.line + ";padding-top:10px;font-size:10px;color:" + C.soft + "'>" +
-          "Document intern generat el " + esc(genDate) + " · " + esc(camp) +
+
+        // ── Peu ──
+        "<div style='margin-top:30px;border-top:1px solid " + C.line + ";padding-top:12px'>" +
+          "<span style='font-size:9.5px;color:" + C.soft + "'>Document intern · Generat el " + esc(genDate) + "</span>" +
+          "<span style='font-size:9.5px;color:" + C.soft + ";float:right'>" + esc(camp) + "</span>" +
         "</div>" +
+
       "</div>" +
     "</body></html>";
 
