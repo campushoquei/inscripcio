@@ -7,7 +7,7 @@
 // 🔧 Enganxa aquí la URL del teu Apps Script (acaba en /exec).
 // Buida = MODE DEMO amb dades d'exemple.
 // Si la pestanya Ajustes del full té la clau SCRIPT_URL, s'actualitzarà automàticament.
-let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvVadriaE0MZfsTJf6dfG0jEnwbHneUwmDnOI_hW5ItfAcZqYwoCwjeZgxucRK4qMAdw/exec";
+let SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzhbXl-KTAslBLSHY1l5b5G7CDJYlwXSSrplMgltjRp7JjJ6zGHPRyQGsmIddJVnP6p9w/exec";
 
 // 🔧 Quin formulari es mostra. Es llegeix de la URL: ...index.html?form=primavera
 // Buit = formulari per defecte (les files del full sense columna "form").
@@ -199,7 +199,11 @@ function stopHintCycle() {
 const T_ACTIVITAT = "Autoritzo el meu fill/a a dur a terme les activitats programades al casal (esport, sortides, piscina, etc.), que es realitzaran del 29 de juny al 31 de juliol de 2026, tant a peu com en vehicle privat o públic. La responsabilitat de custòdia del club sobre l'infant serà exclusivament dins l'horari del casal, i passarà als tutors un cop finalitzada l'activitat.";
 const T_VEHICLE = "Autoritzo a usar un vehicle privat per al desplaçament no urgent ni especialitzat en cas de necessitar atenció mèdica. També autoritzo a efectuar petites cures per part de l'equip de monitors.";
 const T_IMATGE = "Autoritzo que la imatge del meu fill/a pugui aparèixer en fotografies i filmacions d'activitats del club, publicades a les pàgines oficials del club E7 i CP Riudebitlles i a Instagram, Twitter i Facebook, amb finalitats esportives i promocionals.";
-const T_LOPD = "D'acord amb la normativa de protecció de dades, t'informem que les dades facilitades es tractaran amb la confidencialitat adequada, s'incorporaran a un fitxer del Club Esportiu E7 i només s'utilitzaran per a la gestió del casal. Pots exercir els drets d'accés, rectificació i cancel·lació adreçant-te al club per escrit.";
+const T_MEDICA = "Indica al·lèrgies, intoleràncies, medicació habitual, malalties o necessitats especials que l'equip hagi de conèixer. Si no n'hi ha cap, deixa-ho en blanc.";
+const T_MEDICACIO = "Autoritzo el personal del casal a administrar la medicació indicada i a prendre les mesures necessàries, incloent-hi l'atenció mèdica, en cas d'urgència, si no s'ha pogut contactar amb la família.";
+// Clàusula informativa de protecció de dades (RGPD art. 13 + LOPDGDD). Substitueix el
+// [NIF] i el [domicili] pels reals del club (fes-ho també a la pestanya Ajustes del full).
+const T_LOPD = "Responsable: Club Esportiu E7 / CP Riudebitlles (NIF [completar]), domicili [completar], correu coordinaciocpriudebitlles@gmail.com. Finalitat: gestionar la inscripció i la participació al casal, comunicar-nos amb les famílies i complir les obligacions legals de l'activitat. Legitimació: l'execució de la inscripció i el teu consentiment; les dades de salut (targeta sanitària, al·lèrgies, medicació) i la imatge es tracten amb el teu consentiment explícit, que pots retirar en qualsevol moment. Destinataris: no se cedeixen dades a tercers, excepte obligació legal o les entitats necessàries per a l'activitat (asseguradora o serveis mèdics en cas d'urgència). Conservació: mentre duri la relació i durant els terminis legalment exigibles; les dades de salut i imatge s'eliminen en acabar la finalitat o si retires el consentiment. Drets: pots exercir l'accés, rectificació, supressió, limitació, portabilitat i oposició, i retirar el consentiment, escrivint a coordinaciocpriudebitlles@gmail.com. També pots presentar una reclamació davant l'Agència Espanyola de Protecció de Dades (www.aepd.es). En signar aquest formulari declares que ets el pare/mare o tutor/a legal de l'infant i que les dades facilitades són certes.";
 
 // ---- Config d'exemple (mode demo) ----
 const DEMO_CONFIG = {
@@ -219,7 +223,7 @@ const DEMO_CONFIG = {
     email_intro: "Hem rebut la inscripció. Aquí tens el resum:",
     texto_boton: "Enviar inscripció",
     mensaje_exito: "T'hem enviat un correu amb el resum. Si has de fer algun canvi, escriu-nos.",
-    consentimiento: "He llegit i accepto la política de protecció de dades del Club Esportiu E7.",
+    consentimiento: "He llegit i accepto la informació sobre protecció de dades i les autoritzacions d'aquest formulari del Club Esportiu E7.",
     semanas_obligatorias: true
   },
   campuses: [],  // un sol casal de moment; els campus s'implementaran després
@@ -235,6 +239,8 @@ const DEMO_CONFIG = {
     { id: "nom_jugador", etiqueta: "Nom i cognoms", tipo: "text", obligatorio: true, grupo: "Dades del jugador/a", orden: 1 },
     { id: "data_naixement", etiqueta: "Data de naixement", tipo: "date", obligatorio: true, ayuda: "Exemple: 18/11/2018", grupo: "Dades del jugador/a", orden: 2 },
     { id: "sap_nedar", etiqueta: "Sap nedar?", tipo: "radio", opciones: "Sí|No", obligatorio: true, grupo: "Dades del jugador/a", orden: 3 },
+    { id: "info_medica", etiqueta: "Informació mèdica rellevant", tipo: "textarea", obligatorio: false, ayuda: T_MEDICA, grupo: "Dades del jugador/a", orden: 3.1 },
+    { id: "aut_medicacio", etiqueta: "Autorització mèdica i de medicació", tipo: "radio", opciones: "Sí|No", obligatorio: true, ayuda: T_MEDICACIO, grupo: "Dades del jugador/a", orden: 3.2 },
     // Dades del pare/mare/tutor
     { id: "nom_tutor", etiqueta: "Nom i cognoms del tutor/a", tipo: "text", obligatorio: true, grupo: "Dades del pare/mare/tutor", orden: 4 },
     { id: "nif", etiqueta: "NIF", tipo: "text", obligatorio: true, grupo: "Dades del pare/mare/tutor", orden: 5 },
@@ -243,6 +249,10 @@ const DEMO_CONFIG = {
     { id: "codi_postal", etiqueta: "Codi postal", tipo: "text", obligatorio: true, grupo: "Dades del pare/mare/tutor", orden: 8 },
     { id: "telefon", etiqueta: "Telèfon", tipo: "tel", obligatorio: true, grupo: "Dades del pare/mare/tutor", orden: 9 },
     { id: "email", etiqueta: "Email", tipo: "email", obligatorio: true, ayuda: "Hi enviarem la confirmació.", grupo: "Dades del pare/mare/tutor", orden: 10 },
+    // Contacte d'emergència i recollida
+    { id: "contacte_emergencia_nom", etiqueta: "Nom del contacte d'emergència", tipo: "text", obligatorio: true, ayuda: "Una persona a qui trucar si no localitzem el tutor/a.", grupo: "Contacte d'emergència", orden: 10.1 },
+    { id: "contacte_emergencia_telefon", etiqueta: "Telèfon d'emergència", tipo: "tel", obligatorio: true, grupo: "Contacte d'emergència", orden: 10.2 },
+    { id: "persones_autoritzades", etiqueta: "Persones autoritzades a recollir l'infant", tipo: "textarea", obligatorio: false, ayuda: "Nom i DNI de les persones (a més del tutor/a) autoritzades a recollir l'infant.", grupo: "Contacte d'emergència", orden: 10.3 },
     // Autoritzacions
     { id: "aut_activitat", etiqueta: "Autorització de l'activitat", tipo: "radio", opciones: "Sí|No", obligatorio: true, ayuda: T_ACTIVITAT, grupo: "Autoritzacions", orden: 11 },
     { id: "aut_vehicle", etiqueta: "Autorització de vehicle i cures", tipo: "radio", opciones: "Sí|No", obligatorio: true, ayuda: T_VEHICLE, grupo: "Autoritzacions", orden: 12 },
@@ -3003,6 +3013,11 @@ function initSignature() {
   canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("pointercancel", end);
+  // El "long-press" al mòbil dispara menú contextual / lupa / selecció: ho bloquegem
+  // al pad perquè signar sigui net (touchmove passiu:false evita també el scroll).
+  pad.addEventListener("contextmenu", (e) => e.preventDefault());
+  pad.addEventListener("selectstart", (e) => e.preventDefault());
+  pad.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
   clearBtn?.addEventListener("click", clearSignature);
   window.addEventListener("resize", resize);
   // Mida inicial (i re-mida quan el formulari passa de hidden a visible).

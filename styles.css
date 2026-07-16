@@ -841,8 +841,16 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; }
   position: relative; width: 100%; height: 180px;
   border: 1.5px dashed var(--line-ink); border-radius: var(--radius-sm);
   background: #fff; overflow: hidden; touch-action: none;
+  /* Evita que en mantenir el dit s'activi la selecció de text / la lupa / el menú
+     contextual d'iOS mentre es signa. */
+  -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
-.signature__pad canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.signature__pad canvas {
+  display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none;
+  -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
 /* Text guia al centre; desapareix en començar a signar */
 .signature__placeholder {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
